@@ -171,7 +171,8 @@ with tempfile.TemporaryDirectory() as tmp:
             assert result['result'] == 'merged', result
             assert code.call_count == int(fixing)
             assert aggregate.call_count == 1 + int(fixing)
-            ci.assert_called_once_with('new', [tests], worktree)
+            assert ci.call_count == 1 + int(fixing)
+            ci.assert_called_with('new', [tests], worktree)
             assert merge.call_count == 1
             args = merge.call_args.args
             assert args[:3] == (repo, 12, 'new') and args[3]['sha'] == 'new', args

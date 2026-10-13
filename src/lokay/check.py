@@ -111,7 +111,10 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
 
     def request(batch):
         internal = questions(kind, batch)
-        internal["state"] = {**state, "kind": kind, "hunks": {
+        internal["state"] = {**state,
+                             "issue_title": (state.get("issue_title") or "")[:4000],
+                             "issue_body": (state.get("issue_body") or "")[:4000],
+                             "kind": kind, "hunks": {
             f"{row['plik']}:{row['linia_od']}-{row['linia_do']}": row.get("body", "")
             for row in batch}}
         return internal

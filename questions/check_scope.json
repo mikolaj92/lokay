@@ -1,6 +1,6 @@
 {
   "id": "scope",
   "type": "bool",
-  "question": "Does this hunk change anything the issue and plan did not ask for?",
+  "question": "Does this hunk change anything the issue and plan did not ask for? Changes the issue explicitly asks for (including deleting files) are in scope, not unrelated changes.",
   "veto": 0.85
 }

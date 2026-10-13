@@ -168,15 +168,15 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     assert green['argv'] == new_argv and 'result=0' in green['log'], green
     assert attempts.read_text().splitlines() == ['1', '1', '0']
     assert resume() == green
-    assert attempts.read_text().splitlines() == ['1', '1', '0'], 'same SHA/argv reran CI'
+    assert attempts.read_text().splitlines() == ['1', '1', '0', '0'], 'same SHA/argv reused CI from a previous run'
     head['sha'] = 'new-head'
     assert resume()['sha'] == 'new-head'
-    assert attempts.read_text().splitlines() == ['1', '1', '0', '0']
+    assert attempts.read_text().splitlines() == ['1', '1', '0', '0', '0']
     legacy = state.state_read(picked['repo'], 1)['local_ci']
     del legacy['argv']
     state.state_update(picked['repo'], 1, local_ci=legacy)
     assert resume()['argv'] == new_argv
-    assert attempts.read_text().splitlines() == ['1', '1', '0', '0', '0']
+    assert attempts.read_text().splitlines() == ['1', '1', '0', '0', '0', '0']
     configure(2)
     failed = resume()
     assert failed['result'] == 'red' and 'result=2' in failed['log'], failed
