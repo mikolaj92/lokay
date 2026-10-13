@@ -7,7 +7,7 @@ import subprocess
 
 def _git(path: Path, *args: str, input: bytes | None = None) -> bytes:
     return subprocess.run(
-        ["git", "-C", str(path), *args], input=input, capture_output=True, check=True, timeout=60,
+        ["git", "--literal-pathspecs", "-C", str(path), *args], input=input, capture_output=True, check=True, timeout=60,
     ).stdout
 
 

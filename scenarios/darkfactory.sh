@@ -47,7 +47,7 @@ def branch():
     return (cwd / ".branch").read_text()
 
 # Host guard snapshots use sets internally; their read order is not a graph operation.
-if not (tool == 'git' and args and args[0] == '-C'):
+if not (tool == 'git' and args and args[0] in ('-C', '--literal-pathspecs')):
     with (root / "calls.jsonl").open("a") as log:
         log.write(json.dumps([tool, args]) + "\n")
 
@@ -63,6 +63,8 @@ if tool == "pi":
         value = 42 if "\n\nUwagi:\n" in prompt else 0
         (cwd / "app.py").write_text(f"value = {value}\n")
 elif tool == "git":
+    if args and args[0] == '--literal-pathspecs':
+        args = args[1:]
     if args and args[0] == '-C':
         if Path(args[1]) == root / 'clone':
             if args[2:] == ['rev-parse', 'HEAD']:
