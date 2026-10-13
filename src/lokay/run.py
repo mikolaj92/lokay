@@ -36,6 +36,7 @@ def run_process(
     cwd: str | Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
+    input: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     # Even callers without a timeout cannot hold a tick indefinitely.
     timeout = 3600 if timeout is None else timeout
@@ -50,7 +51,7 @@ def run_process(
         list(argv),
         cwd=cwd,
         env=None if env is None else dict(env),
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -63,7 +64,10 @@ def run_process(
         tick_limited = remaining is not None and remaining <= timeout
         effective_timeout = timeout if remaining is None else min(timeout, remaining)
         try:
-            stdout, stderr = process.communicate(timeout=effective_timeout)
+            if input is None:
+                stdout, stderr = process.communicate(timeout=effective_timeout)
+            else:
+                stdout, stderr = process.communicate(input=input, timeout=effective_timeout)
         except subprocess.TimeoutExpired as error:
             cleanup_deadline = time.monotonic() + 5
             try:
@@ -81,7 +85,7 @@ def run_process(
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)
     finally:
         # Popen.__exit__ waits without a limit, even if draining pipes timed out.
-        for stream in (process.stdout, process.stderr):
+        for stream in (process.stdin, process.stdout, process.stderr):
             if stream is not None:
                 stream.close()
         # communicate() already reaps the process unless pipe draining failed.

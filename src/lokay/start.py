@@ -72,14 +72,16 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
         base = child.get("LOKAY2_DECISION_BASE_URL") or ("" if api == "chat" else "http://192.168.1.52:8005")
         url = base.rstrip("/") + ("/models" if api == "chat" else "/health")
         args = ["/usr/bin/curl", "-sS", "-m", "5", "-w", "\n%{http_code}"]
-        if child.get("LOKAY2_DECISION_API_KEY"):
-            args.extend(["-H", f"authorization: Bearer {child['LOKAY2_DECISION_API_KEY']}"])
+        key = child.get("LOKAY2_DECISION_API_KEY")
+        if key:
+            args.extend(["-H", "@-"])
         args.append(url)
         try:
             fetched = run_process(
                 args,
                 env=child,
                 timeout=8,
+                input=f"authorization: Bearer {key}\n" if key else None,
             )
             raw, _, code = (fetched.stdout or "").rpartition("\n")
             ready = (fetched.returncode == 0 and code.strip() == "200"
@@ -441,6 +443,17 @@ def _prepare(picked: dict) -> tuple | dict:
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
                        clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
                        **({"build_note": build_note} if build_note else {}))
+    if built.get("result") == "no_changes" or built.get("reason") == "no_changes":
+        pr = open_pr_for(picked["repo"], branch)
+        if pr:
+            build_git(worktree, ["fetch", "origin", "main"])
+            if int(build_git(worktree, ["rev-list", "--count", "origin/main..HEAD"])) > 0:
+                rounds_append(picked["repo"], picked["issue"],
+                              "no_changes: fix already on branch, checking existing PR")
+                built = {**built, "result": "done", "reason": None,
+                         "artifact": build_git(worktree, ["rev-parse", "HEAD"])}
+        if built.get("result") == "no_changes":
+            built = {**built, "result": "failed", "reason": "no_changes"}
     if built.get("result") == "failed":
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
