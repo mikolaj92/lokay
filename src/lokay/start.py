@@ -410,7 +410,8 @@ def _prepare(picked: dict) -> tuple | dict:
             rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
             if verdict["next"] == "ok":
                 state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None,
-                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest())
+                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                             plan_notes=verdict.get("notes", []))
                 break
             fingerprint = hashlib.sha256(json.dumps(verdict["uwagi"], sort_keys=True).encode()).hexdigest()
             repeated = state_read(picked["repo"], picked["issue"]).get("plan_fingerprint") == fingerprint
@@ -432,7 +433,10 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay.setup import prepare_dependencies
 
     prepare_dependencies(worktree, repo, int(picked["issue"]))
-    build_note = state_read(picked["repo"], picked["issue"]).get("build_note")
+    saved = state_read(picked["repo"], picked["issue"])
+    build_note = saved.get("build_note")
+    if saved.get("plan_notes"):
+        build_note = (build_note or "") + "\n\nNon-blocking plan notes:\n" + json.dumps(saved["plan_notes"])
     check_deadline()
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
                        clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
