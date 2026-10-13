@@ -56,7 +56,7 @@ if tool == "pi":
     prompt = args[-1]
     match = re.search(r"Write the plan only to (.+)\.\n$", prompt)
     if match:
-        Path(match[1]).write_text("## Cel\nReturn 42.\n## Pliki\napp.py\n"
+        Path(match[1]).write_text("## Cel\nReturn 42.\n## Pliki\n- app.py\n"
                                  "## Testy\npython verify.py\n## Poza zakresem\nNo other files.\n")
     else:
         # Build is deliberately wrong; Fix must change the code, not the check.

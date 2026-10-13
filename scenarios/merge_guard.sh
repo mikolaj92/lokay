@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as tmp:
             stack.enter_context(patch('lokay.state.RUNS', root / branch / 'runs'))
             state.state_update('example/repo', 1, node='check', issue_title=title, issue_body=body)
             (state.run_dir('example/repo', 1) / 'plan.md').write_text(
-                '## Pliki\ncode.py\npyproject.toml\n' + '\n'.join(artifacts) + '\n## Testy\n')
+                '## Pliki\n- code.py\n- pyproject.toml\n' + '\n'.join('- ' + path for path in artifacts) + '\n## Testy\n')
             stack.enter_context(patch('lokay.start.load_repos', return_value=[
                 {'name': 'example/repo', 'clone_path': str(worktree)}]))
             stack.enter_context(patch('lokay.start.pushed_pr', return_value=True))

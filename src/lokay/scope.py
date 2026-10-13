@@ -37,9 +37,15 @@ def code_scope_issue(files: list[str], plan: str) -> dict | None:
     planned = set()
     if section:
         for line in section[1].splitlines():
-            line = re.sub(r"^\s*(?:[-*+] |\d+[.)] )", "", line).strip()
-            paths = re.findall(r"`([^`]+)`", line) or line.split()[:1]
-            planned.update(path.removeprefix("./").rstrip(":,") for path in paths)
+            item = re.match(r"^\s*(?:[-*+]|\d+[.)])\s+(.+)", line)
+            if not item:
+                continue
+            text = item[1].split("—", 1)[0].strip().removeprefix("**")
+            if not text:
+                continue
+            quoted = re.match(r"`([^`]+)`", text)
+            path = quoted[1] if quoted else text.split()[0]
+            planned.add(path.rstrip(":,").removesuffix("**").rstrip(":,").removeprefix("./"))
     outside = [path for path in files if path not in planned and not is_test(path)
                and not (PurePosixPath(path).name.endswith(".lock") or
                         PurePosixPath(path).name in ("package-lock.json", "npm-shrinkwrap.json"))]
