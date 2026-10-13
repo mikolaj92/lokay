@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     def reset(ci_sha, node='check', **fields):
         state.state_update(picked['repo'], 7, node=node, sha=head,
             local_ci={'sha': ci_sha, 'argv': tests, 'result': 'red', 'log': log,
-                      'failed': [], 'notes': []}, test_log=log,
+                      'failed': [], 'notes': [], 'tested': False, 'tested_cwds': []}, test_log=log,
             verdict={'sha': head, 'result': 'fix', 'uwagi': findings},
             fix_fingerprint=None, issue_title='title', issue_body='', **fields)
 

@@ -870,12 +870,26 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if ci and (ci.get("sha") != sha or ci.get("sha") != head):
             state_update(picked["repo"], picked["issue"], local_ci=None, test_log=None)
             ci = None
-        if not tests or not ci or ci.get("argv") != tests:
+        if not tests or not ci or ci.get("argv") != tests or "tested" not in ci:
             ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
             ci = {**ci, "argv": list(tests)}
             state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
             if ci["notes"]:
                 rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
+        if tests:
+            tested_cwds = set(ci.get("tested_cwds") or [])
+            for row in rows:
+                directory = (Path(worktree) / row["plik"]).parent
+                while directory != Path(worktree) and directory != directory.parent:
+                    if (directory / "pyproject.toml").is_file():
+                        if str(directory.resolve()) not in tested_cwds:
+                            ci = {**ci, "result": "red", "failed": [*ci["failed"], {
+                                "warstwa": "tests", "plik": row["plik"],
+                                "log": f"no test command ran in changed package: {directory}",
+                            }]}
+                        break
+                    directory = directory.parent
+        state_update(picked["repo"], picked["issue"], tested=ci.get("tested", False))
         log = ci["log"]
         directory = run_dir(picked["repo"], picked["issue"])
         directory.mkdir(parents=True, exist_ok=True)
@@ -885,6 +899,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if not pr:
             raise RuntimeError("PR missing during Check")
         remote = _retry(picked, "check", lambda: pr_checks(picked["repo"], pr["number"], sha))
+        state_update(picked["repo"], picked["issue"], ci=remote["result"])
         if remote["result"] == "sha_moved":
             _retry(picked, "check", sync_head)
             sha = remote["sha"]
@@ -899,7 +914,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         ci = {**ci, "failed": ci["failed"] + [
             {"warstwa": "GitHub CI", "plik": "", "log": name}
             for name in remote.get("failed") or []
-        ], "result": "green" if ci["result"] == remote["result"] == "green" else "red"}
+        ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
+            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
         def read_stat():
             stat = run_process(["git", "diff", "--stat", "origin/main...HEAD"], cwd=worktree, timeout=30)
             if stat.returncode != 0:
