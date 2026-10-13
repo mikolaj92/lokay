@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -41,12 +42,12 @@ def _check(internal: Mapping, response: Mapping) -> dict:
     return out
 
 
-def _trim_wire(wire: dict, limit: int = 6000) -> dict:
+def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
     strings = []
 
     def trim(value):
         if isinstance(value, str):
-            return value[:3000]
+            return value[:string_limit]
         if isinstance(value, Mapping):
             value = {key: trim(item) for key, item in value.items()}
         elif isinstance(value, list):
@@ -81,6 +82,40 @@ def _trim_wire(wire: dict, limit: int = 6000) -> dict:
 
 
 def to_wire(api: str, model: str, internal: Mapping) -> dict:
+    if api == "chat":
+        questions = [{key: question[key] for key in ("id", "instructions", "options")}
+                     for question in internal["questions"]]
+        user = _trim_wire({"state": internal.get("state") or {}, "questions": questions},
+                          limit=60000, string_limit=60000)
+        properties = {}
+        for question in internal["questions"]:
+            options = list(question["options"])
+            properties[question["id"]] = {
+                "type": "object",
+                "properties": {
+                    "probabilities": {"type": "object",
+                                      "properties": {option: {"type": "number"} for option in options},
+                                      "required": options, "additionalProperties": False},
+                    "choice": {"type": "string", "enum": options},
+                    "reason": {"type": "string"},
+                },
+                "required": ["probabilities", "choice", "reason"], "additionalProperties": False,
+            }
+        return {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are a careful code reviewer. Answer each question "
+                 "independently based on the given state, including diff hunks. Give a probability "
+                 "distribution over the allowed options for each question. Be specific per question; "
+                 "do not give the same answer to every question by default."},
+                {"role": "user", "content": json.dumps(user)},
+            ],
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "decisions", "strict": True,
+                "schema": {"type": "object", "properties": properties,
+                           "required": list(properties), "additionalProperties": False},
+            }},
+        }
     if api == "tensorfold":
         questions = []
         for question in internal["questions"]:
@@ -126,8 +161,33 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
 
 
 def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict:
-    if api != "mini" and payload.get("model") not in (None, model):
+    if api not in ("mini", "chat") and payload.get("model") not in (None, model):
         raise DecisionError("model mismatch")
+    if api == "chat":
+        try:
+            content = payload["choices"][0]["message"]["content"].strip()
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            answers = json.loads(content)
+            mapped = {}
+            for question in internal["questions"]:
+                qid = question["id"]
+                raw = answers[qid]["probabilities"]
+                if set(raw) != set(question["options"]):
+                    raise DecisionError(f"options {qid}")
+                probs = {option: float(raw[option]) for option in question["options"]}
+                if not all(math.isfinite(p) for p in probs.values()):
+                    raise DecisionError(f"probabilities {qid}")
+                probs = {option: max(0.0, p) for option, p in probs.items()}
+                total = sum(probs.values())
+                if not math.isfinite(total):
+                    raise DecisionError(f"sum {qid}")
+                probs = {option: p / total if total else 1 / len(probs) for option, p in probs.items()}
+                choice = max(probs, key=lambda option: probs[option])
+                mapped[qid] = {"probabilities": probs, "choice": choice, "confidence": probs[choice]}
+        except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
+            raise DecisionError("invalid chat decision response") from exc
+        return _check(internal, mapped)
     if api == "mini":
         mapped = {
             qid: {"choice": answer.get("label"), "probabilities": answer.get("probabilities"),
@@ -177,9 +237,9 @@ def decide(internal: Mapping) -> dict:
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
-    path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone"}[api]
+    path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone", "chat": "/chat/completions"}[api]
     body = json.dumps(to_wire(api, model, internal))
-    timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or 30)))
+    timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or (180 if api == "chat" else 30))))
     cmd = [
         "curl", "-sS", "-m", timeout,
         "-w", "\n%{http_code}",
