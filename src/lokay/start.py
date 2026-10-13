@@ -57,28 +57,9 @@ def guarded_step(step):
     return guarded
 
 
-def skip_file() -> Path:
-    return Path.home() / ".lokay" / "skip-issues.json"
-
-
-def load_skips(repo: str) -> set[int]:
-    path = skip_file()
-    if not path.is_file():
-        return set()
-    try:
-        data = json.loads(path.read_text() or "{}")
-    except json.JSONDecodeError:
-        return set()
-    rows = data.get(repo) if isinstance(data, dict) else None
-    if not isinstance(rows, dict):
-        return set()
-    found: set[int] = set()
-    for key in rows:
-        try:
-            found.add(int(key))
-        except (TypeError, ValueError):
-            continue
-    return found
+def is_task(issue: dict) -> bool:
+    # An epic groups tasks; lokay-stalled is an alarm, not a task.
+    return not issue["title"].lower().startswith("epic") and issue["title"] != "lokay-stalled"
 
 
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -158,22 +139,23 @@ def pick(env: dict[str, str] | None = None) -> dict:
             ])
             if code != 0:
                 raise RuntimeError(err.strip() or "pr list failed")
-            skipped = load_skips(name)
             for row in json.loads(out or "[]"):
                 branch = row["headRefName"]
                 if branch.startswith("lokay/") and branch[6:].isdecimal():
                     number = int(branch[6:])
                     saved = state_read(name, number)
-                    if number not in skipped and (only_issue is None or number == only_issue) and saved.get("failures", 0):
+                    if (only_issue is None or number == only_issue) and saved.get("retry_at", 0) > time.time():
                         blocked.append((name, number, saved))
             prs = [row for row in json.loads(out or "[]")
                    if row["headRefName"].startswith("lokay/")
                    and row["headRefName"][6:].isdecimal()
-                   and int(row["headRefName"][6:]) not in skipped
-                   and state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()
                    and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
             if prs:
-                pr = min(prs, key=lambda row: (
+                ready = [row for row in prs
+                         if state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()]
+                if not ready:
+                    continue
+                pr = min(ready, key=lambda row: (
                     state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
                 issue = int(pr["headRefName"][6:])
                 saved_node = state_read(name, issue).get("node")
@@ -184,12 +166,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                           "node": node, "pr": pr["number"], "held": held}
                 return chosen
             issues = open_issues(name)
-            skipped = load_skips(name)
             issues = [
                 row for row in issues
-                if int(row["number"]) not in skipped
-                and not row["title"].lower().startswith("epic")
-                and row["title"] != "lokay-stalled"
+                if is_task(row)
                 and (only_issue is None or int(row["number"]) == only_issue)
             ]
             for row in issues:
@@ -233,7 +212,8 @@ def refresh_body(repo: str, issue: int) -> dict:
     pr = open_pr_for(repo, f"lokay/{issue}")
     if not pr:
         raise RuntimeError(f"open PR missing for {repo} lokay/{issue}")
-    body = pr_body(worktree, run_dir(repo, issue) / "plan.md")
+    body = pr_body(worktree, run_dir(repo, issue) / "plan.md",
+                   state_read(repo, issue).get("pi_response") or "")
     notes = (state_read(repo, issue).get("verdict") or {}).get("notes") or []
     lens_notes = [note for note in notes if note.get("pytanie")]
     if lens_notes:
@@ -452,7 +432,7 @@ def _prepare(picked: dict) -> tuple | dict:
     if built.get("result") != "done":
         raise RuntimeError(f"unexpected Build outcome: {built}")
     state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0, build_note=None,
-                 previous_head=None)
+                 previous_head=None, pi_response=built.get("pi_response") or "")
     def publish():
         pr = open_pr_for(picked["repo"], branch)
         expected = pr.get("headRefOid") if pr else None
@@ -898,6 +878,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 return fixed
             if fixed["result"] == "failed":
                 return fixed
+            state_update(picked["repo"], picked["issue"], pi_response=fixed.get("pi_response") or "")
             pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
             if pushed["result"] == "failed":
                 return pushed

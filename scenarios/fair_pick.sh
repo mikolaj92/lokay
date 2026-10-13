@@ -20,7 +20,6 @@ with tempfile.TemporaryDirectory() as tmp, \
      patch.object(state, 'RUNS', Path(tmp)), \
      patch('lokay.start.probes', return_value={'fixture': 'ok'}), \
      patch('lokay.start.load_repos', return_value=repos), \
-     patch('lokay.start.load_skips', return_value=set()), \
      patch('lokay.start._gh', side_effect=gh), \
      patch('lokay.start.acquire', return_value={'result': 'held'}), \
      patch('lokay.start.release'):
@@ -71,7 +70,6 @@ with tempfile.TemporaryDirectory() as tmp, \
      patch.object(lock, 'STATE', Path(tmp) / 'locks'), \
      patch('lokay.start.probes', return_value={'fixture': 'ok'}), \
      patch('lokay.start.load_repos', return_value=list(reversed(repos))), \
-     patch('lokay.start.load_skips', return_value=set()), \
      patch('lokay.start._gh', side_effect=gh), \
      patch('lokay.start.open_issues', return_value=[{'number': 44, 'title': 'fix'}]), \
      patch('lokay.start.open_pr_for', return_value=None):

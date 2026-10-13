@@ -58,6 +58,9 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     artifact.parent.mkdir()
     text = '## Cel\nŻółć & <dane>\n\nWiersz drugi.\n## Pliki\napp.py\n'
     artifact.write_text(text, encoding='utf-8')
+    stack.enter_context(patch('lokay.state.RUNS', root / 'runs'))
+    stack.enter_context(patch('lokay.observe.current'))
+    state.state_update('example/repo', 17, pi_response='Implemented value.')
     stack.enter_context(patch('lokay.build._git', side_effect=lambda path, args:
         ' app.py | 1 +' if args[0] == 'diff' else 'Implement value'))
     push = stack.enter_context(patch('lokay.build.push', return_value={'result': 'pushed', 'sha': 'head'}))
@@ -69,7 +72,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     argv = wire.call_args.args[0]
     assert argv[argv.index('--title') + 1] == 'Żółć: "A" & $(echo dane)', argv
     description = argv[argv.index('--body') + 1]
-    assert description == ('## Zmiany\n\n```text\n app.py | 1 +\n```\n\n- Implement value\n\n'
+    assert description == ('## Co zrobiono\n\nImplemented value.\n\n### Zmienione pliki\n\n- ` app.py | 1 +`\n\n'
+                           '## Zmiany\n\n```text\n app.py | 1 +\n```\n\n- Implement value\n\n'
                            '## Plan\n\n## Cel\nŻółć & <dane>\n\nWiersz drugi.\n\n'
                            'Closes #17\n\nOpened by lokay.\n'), description
     assert description.count('Closes #17') == 1, description
@@ -79,7 +83,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     for failure in (FileNotFoundError('missing'), PermissionError('denied'), UnicodeDecodeError('utf-8', b'\xff', 0, 1, 'invalid')):
         push.reset_mock()
         create.reset_mock()
-        with patch.object(Path, 'read_text', side_effect=failure):
+        with patch('lokay.state.state_read', return_value={'pi_response': 'Implemented value.'}), \
+             patch.object(Path, 'read_text', side_effect=failure):
             try:
                 build.build_publish(root, 'lokay/17', None, 'example/repo', 17, 'title', artifact)
             except RuntimeError as exc:

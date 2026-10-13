@@ -37,7 +37,6 @@ with tempfile.TemporaryDirectory() as tmp:
     def reset(**fields):
         path = state.run_dir(repo, 7) / 'state.json'
         path.unlink(missing_ok=True)
-        start.skip_file().unlink(missing_ok=True)
         if fields:
             state.state_update(repo, 7, **{'issue_title': 'Fix code', 'issue_body': '', **fields})
 
@@ -58,7 +57,6 @@ with tempfile.TemporaryDirectory() as tmp:
         assert 'Previous plan:' in saved['plan_prompt'] and reason in saved['plan_prompt']
         assert 'Uwagi:' in saved['plan_prompt'] and 'Rounds:' in saved['plan_prompt']
         assert saved['plan_evaluations'] == 0 and saved['plan_accepted_sha'] is None
-        assert not start.skip_file().exists()
 
     with ExitStack() as stack:
         stack.enter_context(patch('lokay.start.load_repos', return_value=[
@@ -110,7 +108,6 @@ with tempfile.TemporaryDirectory() as tmp:
             saved = state.state_read(repo, 7)
             assert saved['node'] == 'check'
             assert saved['failures'] == 0 and saved['retry_at'] == 0
-            assert 7 not in start.load_skips(repo)
             if kind == 'missing':
                 worktree.mkdir()
         git_mock.side_effect = git
@@ -379,7 +376,6 @@ with tempfile.TemporaryDirectory() as tmp:
                     assert saved['plan_accepted_sha'] is None
                     assert result['reason'] in saved['plan_prompt']
                 assert result['reason'] in (state.run_dir(repo, 7) / 'rounds.md').read_text()
-                assert 7 not in start.load_skips(repo)
         code.side_effect = None; publish.side_effect = None
         # Publication during main synchronization must not loop either.
         for failure in ({'result': 'failed'}, RuntimeError('sync publish')):
