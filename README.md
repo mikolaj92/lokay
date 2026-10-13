@@ -72,6 +72,25 @@ repository's wait as about 2700 seconds + cleanup + the service interval.
 This is not a one-hour guarantee for arbitrary budgets, more repositories, host
 failures or unbounded filesystem I/O. Production timing has not been measured.
 
+## Dashboard
+
+Read-only LAN dashboard: <http://192.168.1.52:8010/>. HTML refreshes every 60
+seconds; `/api/state.json` exposes the same snapshot and `/healthz` returns `ok`.
+GitHub reads run in the background every 300 seconds, with a persistent cache.
+No runtime LLM calls. Keep this unauthenticated page on a trusted LAN.
+
+Run `bash scripts/lokay-dashboard.sh`, or install the LaunchAgent (the checkout
+must be available at `~/.lokay/host`, with its dependencies installed):
+
+```sh
+cp scripts/ai.mikolaj.lokay2-dashboard.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/ai.mikolaj.lokay2-dashboard.plist
+```
+
+Overrides: `LOKAY_HOME`, `LOKAY_REPOS_YAML`, `LOKAY_DASHBOARD_REFRESH` (seconds),
+`LOKAY_DASHBOARD_PORT`, `LOKAY2_PROVIDER`, and `LOKAY2_MODEL`.
+Times and ETA dates use Europe/Warsaw. GitHub list limits can undercount busy
+repositories; the page states the limits.
+
 ## Dark factory proof
 
 Run the complete local suite (no package unit tests):
