@@ -206,10 +206,12 @@ def _decision_batches(rows, request, decide_request, api, model):
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.run import run_process
+    from lokay.build import generated_cleanup
 
     def execute(argv):
         try:
-            return run_process(argv, cwd=cwd, timeout=timeout)
+            with generated_cleanup(Path(cwd)):
+                return run_process(argv, cwd=cwd, timeout=timeout)
         except (TimeoutExpired, OSError) as exc:
             return CompletedProcess(argv, 1, "", str(exc))
 

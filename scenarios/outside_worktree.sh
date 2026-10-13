@@ -75,6 +75,18 @@ protected = build_code(wt, 'plan', 'title', None, env,
                        expected_branch='lokay/7', clone_path=outside)
 assert protected['reason'] == 'outside_worktree', protected
 assert 'restored. Work only inside' in protected['explanation'], protected
+assert protected['files'] == [str(outside.resolve() / 'f')], protected
+from unittest.mock import patch
+from lokay import state
+from lokay.start import replan_prompt, fix_step
+with patch('lokay.state.RUNS', repo.parent / 'runs'):
+    picked = {'repo': 'example/repo', 'issue': 7}
+    state.state_update('example/repo', 7, issue_title='title', issue_body='', node='build')
+    replan_prompt(picked, protected['explanation'], [protected], before)
+    assert str(outside.resolve() / 'f') in (state.run_dir('example/repo', 7) / 'rounds.md').read_text()
+    redirected = fix_step(picked, 'fix_code', lambda: protected, before)
+    assert redirected['next'] == 'plan'
+    assert str(outside.resolve() / 'f') in state.state_read('example/repo', 7)['plan_prompt']
 assert __import__('subprocess').check_output(
     ['git', 'rev-parse', 'HEAD'], cwd=outside, text=True).strip() == outside_after
 assert not __import__('subprocess').check_output(

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import re
+import hashlib
+from contextlib import contextmanager
 from pathlib import Path
 
 from lokay.git import push, worktree_add
@@ -25,17 +27,64 @@ def _git(repo: Path, args: list[str]) -> str:
     return (proc.stdout or "").strip()
 
 
-def tidy_and_commit(worktree: Path, message: str) -> tuple[list[str], list[str]]:
-    """Restore incidental edits, remove untracked artifacts, commit the rest."""
+def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
+    """Snapshot dirty paths, including edits with unchanged status codes."""
+    _git(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
+    names = set()
+    for args in (["ls-files", "-m", "-d", "--others", "--exclude-standard", "-z"],
+                 ["diff", "--cached", "--name-only", "-z"]):
+        names.update(filter(None, _git(worktree, args).split("\0")))
+    result = {}
+    for name in names:
+        file = worktree / name
+        content = (os.readlink(file).encode() if file.is_symlink() else
+                   file.read_bytes() if file.is_file() else b"")
+        result[name] = (hashlib.sha256(content).hexdigest(),
+                        _git(worktree, ["diff", "--cached", "--binary", "--", name]))
+    return result
+
+
+@contextmanager
+def generated_cleanup(worktree: Path):
+    """Keep ignored environments; discard setup/CI output and lock rewrites."""
+    from lokay.merge_guard import LOCKFILES
+
+    if not (worktree / ".git").exists():
+        yield
+        return
+    before = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
+    locks = [name for name in _git(worktree, ["ls-files", "-z"]).split("\0")
+             if Path(name).name in LOCKFILES]
+    try:
+        yield
+    finally:
+        if locks:
+            _git(worktree, ["checkout", "HEAD", "--", *locks])
+        after = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
+        if after - before:
+            _git(worktree, ["--literal-pathspecs", "clean", "-fd", "--", *sorted(after - before)])
+
+
+def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) -> tuple[list[str], list[str]]:
+    """Restore incidental edits, remove untracked artifacts, commit pi's paths."""
     def names(args: list[str]) -> set[str]:
         return set(filter(None, _git(worktree, args).split("\0")))
 
     modified = names(["diff", "--name-only", "-z", "HEAD"])
     manifests = (modified | names(["diff", "--name-only", "-z", "origin/main..HEAD"])
                  | names(["ls-files", "--others", "--exclude-standard", "-z"]))
-    siblings = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
-                "package-lock.json": "package.json"}
-    junk = sorted(path for path in modified if Path(path).name in siblings
+    from lokay.merge_guard import LOCKFILES
+
+    siblings = LOCKFILES
+    branch_changes = names(["diff", "--name-only", "-z", "origin/main...HEAD"])
+    stale_locks = sorted(path for path in branch_changes if Path(path).name in siblings
+                         and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
+    for path in stale_locks:
+        if path in names(["ls-tree", "-r", "--name-only", "-z", "origin/main"]):
+            _git(worktree, ["checkout", "origin/main", "--", path])
+        else:
+            _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
+    junk = sorted(path for path in modified if path not in stale_locks and Path(path).name in siblings
                   and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     tracked = names(["ls-tree", "-r", "--name-only", "-z", "HEAD"])
     artifacts = {path for path in modified if is_artifact(path)
@@ -72,10 +121,16 @@ def tidy_and_commit(worktree: Path, message: str) -> tuple[list[str], list[str]]
             directory.rmdir()
         except OSError:
             pass  # Keep directories containing tracked files.
-    _git(worktree, ["add", "-A"])
-    committed = sorted(names(["diff", "--cached", "--name-only", "-z"]))
+    after = worktree_status(worktree)
+    selected = sorted(path for path in after if path in stale_locks or before is None or before.get(path) != after[path])
+    index_paths = names(["ls-files", "-z"])
+    stage = [path for path in selected if path in index_paths or (worktree / path).exists()
+             or (worktree / path).is_symlink()]
+    if stage:
+        _git(worktree, ["--literal-pathspecs", "add", "-A", "--", *stage])
+    committed = sorted(set(selected) & names(["diff", "--cached", "--name-only", "-z"]))
     if committed:
-        _git(worktree, ["commit", "-m", message])
+        _git(worktree, ["--literal-pathspecs", "commit", "--only", "-m", message, "--", *committed])
     return committed, junk
 
 
@@ -104,6 +159,8 @@ def build_code(
 ) -> dict:
     previous_head = previous_head or _git(worktree, ["rev-parse", "HEAD"])
     clean = child_env(env)
+    clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
+    before = worktree_status(worktree)
     prompt = (
         Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
         + "\n\nPlan:\n" + plan
@@ -126,7 +183,7 @@ def build_code(
     if changes["changed"]:
         return failure(changes, worktree)
     if proc.returncode != 0:
-        tidy_and_commit(worktree, "lokay build")
+        tidy_and_commit(worktree, "lokay build", before)
         explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
         return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}
     from lokay.scope import is_test
@@ -143,7 +200,7 @@ def build_code(
         file = worktree / path
         if file.exists() or file.is_symlink():
             file.unlink()
-    tidy_and_commit(worktree, "lokay build")
+    tidy_and_commit(worktree, "lokay build", before)
     if removed:
         remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
         deleted = set(_git(worktree, ["diff", "--name-only", "--diff-filter=D", previous_head, "HEAD"]).splitlines())
