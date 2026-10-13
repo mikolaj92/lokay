@@ -100,8 +100,9 @@ def build_code(
     expected_branch: str | None = None,
     clone_path: Path | str | None = None,
     build_note: str | None = None,
+    previous_head: str | None = None,
 ) -> dict:
-    previous_head = _git(worktree, ["rev-parse", "HEAD"])
+    previous_head = previous_head or _git(worktree, ["rev-parse", "HEAD"])
     clean = child_env(env)
     prompt = (
         Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
@@ -150,7 +151,7 @@ def build_code(
             return {"result": "failed", "reason": "tests_only",
                     "explanation": "Build added only tests: " + ", ".join(removed) + ". Implement the production change."}
     branch_now = _git(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])
-    log = _git(worktree, ["log", "--oneline", "origin/main..HEAD"])
+    log = _git(worktree, ["log", "--oneline", f"{previous_head}..HEAD"])
     head = _git(worktree, ["rev-parse", "HEAD"])
     wrong = expected_branch is not None and branch_now != expected_branch
     pi_tail = (proc.stdout or proc.stderr or "")[-1500:]

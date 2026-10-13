@@ -6,6 +6,7 @@ scenarios='
 build check ci ci_not_run docs_only_fix no_new_tests setup_deps darkfactory darkfactory_canary decision_contract fix host_down host_guard
 issue_flow lock merge merge_sha no_legacy_imports observability outside_worktree plan
 push_guard safety start_pick start_plan start_resume step_outputs suite worktree
+check_followup decision_batches fair_pick fix_to_build merge_guard resume_push stale_ci tidy
 '
 required=0
 for name in $scenarios; do

@@ -293,6 +293,40 @@ def advance(picked: dict) -> dict:
     return _finish(picked, worktree, branch, sha, tests, plan_rounds)
 
 
+def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = None) -> str:
+    from lokay.plan import prompt_for
+
+    repo, issue = picked["repo"], picked["issue"]
+    saved = state_read(repo, issue)
+    if head is None:
+        configured = next((row for row in load_repos() if row["name"] == repo), None)
+        if configured:
+            root = Path(os.path.expanduser(configured["clone_path"]))
+            worktree = root.parent / f"{root.name}-wt-{issue}"
+            if worktree.exists():
+                from lokay.git import _git
+
+                code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+                if code != 0:
+                    raise RuntimeError(err or "HEAD lookup failed")
+                head = out.strip()
+    history = saved.get("plan_history", []) + [{"reason": reason, "uwagi": findings}]
+    state_update(repo, issue, plan_history=history,
+                 **({"previous_head": head} if head else {}))
+    directory = run_dir(repo, issue)
+    art = directory / "plan.md"
+    rounds = directory / "rounds.md"
+    prompt = prompt_for(saved.get("issue_title") or "", saved.get("issue_body")) + (
+        "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
+        + "\n\nUwagi:\n" + json.dumps(history, ensure_ascii=False)
+        + "\n\nFix history:\n" + json.dumps(saved.get("fix_history", []), ensure_ascii=False)
+        + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
+        + "\n\n" + reason + "\n"
+    )
+    rounds_append(repo, issue, "Re-Plan prompt:\n" + prompt)
+    return prompt
+
+
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
     from lokay.gh import _gh
@@ -315,14 +349,20 @@ def _prepare(picked: dict) -> tuple | dict:
         state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body)
         saved = state_read(picked["repo"], picked["issue"])
     title, body = saved["issue_title"], saved["issue_body"]
+    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    root = Path(os.path.expanduser(repo["clone_path"]))
+    worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
+    from lokay.build import _git as build_git
+
+    if saved.get("node", picked["node"]) == "plan" and worktree.exists() and not saved.get("previous_head"):
+        state_update(picked["repo"], picked["issue"], previous_head=build_git(worktree, ["rev-parse", "HEAD"]))
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = saved.get("plan_rounds", 0)
     accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
         art.parent.mkdir(parents=True, exist_ok=True)
-        original_prompt = saved.get("plan_prompt") or plan.prompt_for(title, body)
-        prompt = original_prompt
+        prompt = saved.get("plan_prompt") or plan.prompt_for(title, body)
         phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
         evaluations = saved.get("plan_evaluations", 0) if saved.get("plan_phase") else 0
         while True:
@@ -349,19 +389,17 @@ def _prepare(picked: dict) -> tuple | dict:
                 state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None,
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest())
                 break
-            uwagi = ", ".join(
-                ": ".join(str(row[field]) for field in ("kryterium", "text", "notes") if row.get(field))
-                for row in verdict["uwagi"]
-            )
-            prompt = original_prompt + f"\nUwagi: {uwagi or 'revise the plan'}.\n"
+            fingerprint = hashlib.sha256(json.dumps(verdict["uwagi"], sort_keys=True).encode()).hexdigest()
+            repeated = state_read(picked["repo"], picked["issue"]).get("plan_fingerprint") == fingerprint
+            state_update(picked["repo"], picked["issue"], plan_fingerprint=fingerprint)
+            prompt = replan_prompt(picked, "Repeated plan rejection" if repeated else "Revise the plan",
+                                   verdict["uwagi"],
+                                   build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None)
             evaluations = 0
             phase = "write"
             state_update(picked["repo"], picked["issue"], plan_evaluations=0,
                          plan_phase=phase, plan_prompt=prompt)
             time.sleep(20)
-    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
-    root = Path(os.path.expanduser(repo["clone_path"]))
-    worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
     branch = f"lokay/{picked['issue']}"
     if not worktree.exists():
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
@@ -372,21 +410,23 @@ def _prepare(picked: dict) -> tuple | dict:
     prepare_dependencies(worktree, repo, int(picked["issue"]))
     build_note = state_read(picked["repo"], picked["issue"]).get("build_note")
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
-                       clone_path=root, **({"build_note": build_note} if build_note else {}))
+                       clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
+                       **({"build_note": build_note} if build_note else {}))
     if built.get("result") == "failed":
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
         rounds_append(picked["repo"], picked["issue"], f"Build → Plan: {reason}")
         state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
                      plan_evaluations=0, plan_accepted_sha=None,
-                     plan_prompt=plan.prompt_for(title, body) + f"\nUwagi (Build): {reason}: {explanation}\n"
-                     + "Previous Build made no changes. Make the plan concrete and self-contained so it can be implemented now in this repo; if a dependency is missing, plan to implement the minimal part needed.\n",
+                     plan_prompt=replan_prompt(picked, f"Uwagi (Build): {reason}: {explanation}", [built],
+                                               build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None),
                      result="failed", reason=reason,
                      failures=state_read(picked["repo"], picked["issue"]).get("failures", 0) + 1, retry_at=0)
         return {**built, "next": "plan"}
     if built.get("result") != "done":
         raise RuntimeError(f"unexpected Build outcome: {built}")
-    state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0, build_note=None)
+    state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0, build_note=None,
+                 previous_head=None)
     def publish():
         pr = open_pr_for(picked["repo"], branch)
         expected = pr.get("headRefOid") if pr else None
@@ -402,7 +442,7 @@ def _prepare(picked: dict) -> tuple | dict:
         picked["repo"], picked["issue"], pr=published.get("pr"),
         sha=published.get("sha"), result=published["result"],
     )
-    state_update(picked["repo"], picked["issue"], node="check", verdict=None, fix_fingerprint=None)
+    state_update(picked["repo"], picked["issue"], node="check", verdict=None)
     return worktree, branch, published["sha"], repo.get("test") or [], plan_rounds
 
 
@@ -413,14 +453,10 @@ def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
     delay = min(3600, 60 * 2 ** min(failures - 1, 6))
     fields = {"node": "check"}
     if reason.startswith("fix_code"):
-        from lokay.plan import prompt_for
-
-        prompt = saved.get("plan_prompt") or prompt_for(
-            saved.get("issue_title") or "", saved.get("issue_body"))
         fields.update(node="plan", plan_phase="write", plan_evaluations=0,
                       plan_accepted_sha=None,
-                      plan_prompt=prompt + f"\nUwagi (Fix): {reason}\n"
-                      + "Previous Fix made no changes. Revise the plan so it can be implemented now.\n")
+                      plan_prompt=replan_prompt(picked, f"Uwagi (Fix): {reason}",
+                                                (saved.get("verdict") or {}).get("uwagi", [])))
     state_update(repo, issue, **fields, result="failed", reason=reason,
                  failures=failures, retry_at=time.time() + delay,
                  pr=saved.get("pr", picked.get("pr")),
@@ -580,7 +616,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.check import aggregate, check_state, decide_batches, hunks, local_ci
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
-    from lokay import plan
     from lokay.git import _git
     from lokay.gh import _gh, open_pr_for, pr_checks, check_comment
     from lokay.merge import merge_sha
@@ -716,7 +751,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             return out.strip()
         head = _retry(picked, "check", read_head)
         diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
-        state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
             uwagi = verdict["uwagi"]
             if not uwagi:
@@ -725,15 +759,28 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                              result="check")
                 return {"result": "check", "sha": sha}
             findings = {
-                json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")),
-                            row.get("linia", row.get("linia_od")), row.get("linia_do")])
+                json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")), row.get("zmiana")])
                 for row in uwagi
             }
             fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
+            # Hunk content is evidence independent of shifted line numbers.
+            hunk_text = "\n".join(line for line in (diff.stdout or "").splitlines()
+                                  if not line.startswith(("@@", "index ")))
+            hunk_fingerprint = hashlib.sha256(hunk_text.encode()).hexdigest()
             saved = state_read(picked["repo"], picked["issue"])
+            counts = (saved.get("fix_counts", []) + [len(uwagi)])[-3:]
+            history = saved.get("fix_history", []) + [uwagi]
+            state_update(picked["repo"], picked["issue"], fix_counts=counts, fix_history=history)
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Fix progress: findings={fingerprint}, hunk={hunk_fingerprint}, "
+                          f"diff={diff_fingerprint}, counts={counts}")
+            stalled = (saved.get("diff_fingerprint") == diff_fingerprint
+                       or (saved.get("fix_fingerprint") == fingerprint
+                           and saved.get("fix_hunk_fingerprint") == hunk_fingerprint)
+                       or (len(counts) == 3 and min(counts[1:]) >= counts[0]))
             test_log = (saved.get("test_log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-            if saved.get("fix_fingerprint") == fingerprint:
+            if stalled:
                 redirected = fix_to_build(picked, worktree)
                 if redirected:
                     return redirected
@@ -748,13 +795,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         return json.loads(raw)
                     issue = _retry(picked, "plan", read_issue)
                     title, body = issue["title"], issue.get("body")
-                prompt = plan.prompt_for(title, body) + (
-                    "\n\nUwagi:\n" + json.dumps(uwagi)
-                    + "\n\nRounds:\n" + (art.parent / "rounds.md").read_text()
-                    + "\n\nTest log:\n" + test_log
-                    + "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
-                    + "\nFix made no progress; revise the plan.\n"
-                )
+                state_update(picked["repo"], picked["issue"], issue_title=title, issue_body=body,
+                             fix_counts=[], diff_fingerprint=None)
+                prompt = replan_prompt(picked, "Fix made no progress; revise the plan.", uwagi, head)
+                prompt += "\n\nTest log:\n" + test_log
+                rounds_append(picked["repo"], picked["issue"], "Re-Plan test log:\n" + test_log)
                 state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
                              plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
                 prepared = _prepare({**picked, "node": "plan"})
@@ -797,7 +842,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 if not pushed_pr(picked["repo"], branch, sha):
                     return needs_help(picked, "sha mismatch after push", sha)
                 _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
-            state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint)
+            state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint,
+                         fix_hunk_fingerprint=hunk_fingerprint, diff_fingerprint=diff_fingerprint)
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
             continue

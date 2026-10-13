@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as tmp:
              _git(root, ['diff', '--name-status', '--diff-filter=A', 'origin/main...HEAD']).splitlines()}
     scope = code_scope_issue(files, 'Implement feature', '', added=added)
     assert scope and scope['warstwa'] == 'scope'
-with tempfile.TemporaryDirectory() as tmp:
+with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as runs:
     root = Path(tmp)
     _git(root, ['init', '-b', 'main'])
     _git(root, ['config', 'user.name', 'fixture'])
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert 'fix' in events, 'docs-only PR reached Merge'
         return {'result': 'merged', 'merge_sha': head['sha']}
     with ExitStack() as stack:
-        stack.enter_context(patch('lokay.state.RUNS', root / 'runs'))
+        stack.enter_context(patch('lokay.state.RUNS', Path(runs)))
         stack.enter_context(patch('lokay.start.load_repos', return_value=[repo]))
         stack.enter_context(patch('lokay.start.refresh_body', return_value={'result': 'updated'}))
         stack.enter_context(patch('lokay.git._git', side_effect=git))

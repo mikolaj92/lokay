@@ -159,6 +159,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         'result': 'merged', 'merge_sha': 'merged'}))
     fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
     stack.enter_context(patch('lokay.start._retry', side_effect=lambda picked, node, action, *args: action()))
+    stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={'removed': [], 'reset': []}))
     kinds = 'correctness alignment architecture security production scope tests'
     from lokay.check import lens
     for choice, exit_code in (('ok', 0), ('issue', 0), ('ok', 1), ('ok', None)):
@@ -169,7 +170,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
                              f'    clone_path: {clone}\n    test: []\n    merge: on\n')
         cached = ({'sha': head['sha'], 'argv': [], 'result': 'green',
                    'failed': [], 'notes': [], 'log': ''} if exit_code is None else None)
-        state.state_update(picked['repo'], 1, node='check', verdict=None, local_ci=cached)
+        state.state_update(picked['repo'], 1, node='check', verdict=None, local_ci=cached,
+                           issue_title='fixture', issue_body='')
         merge.reset_mock(); fix.reset_mock()
         calls = []
         def model(request):
