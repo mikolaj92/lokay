@@ -19,7 +19,7 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             path = Path(directory)
             depth = len(path.relative_to(worktree).parts)
             dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules") if depth < 2 else []
-            for lock, argv in (("uv.lock", ["uv", "sync", "--frozen"]),
+            for lock, argv in (("uv.lock", ["uv", "sync", "--frozen", "--all-extras"]),
                                ("package-lock.json", ["npm", "ci"])):
                 if lock in files:
                     commands.append((path, argv))
