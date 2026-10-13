@@ -248,12 +248,13 @@ def decide(internal: Mapping) -> dict:
     ]
     key = os.environ.get("LOKAY2_DECISION_API_KEY")
     if key:
-        cmd.extend(["-H", f"authorization: Bearer {key}"])
+        cmd.extend(["-H", "@-"])
     cmd.append(base + path)
     size = len(body.encode("utf-8"))
     print(f"decide: request bytes={size} approx_tokens={size // 3}", file=sys.stderr)
     try:
-        proc = run_process(cmd, timeout=float(timeout) + 2)
+        proc = run_process(cmd, timeout=float(timeout) + 2,
+                           input=f"authorization: Bearer {key}\n" if key else None)
     except (OSError, subprocess.TimeoutExpired):
         raise DecisionError("decision request failed or timed out") from None
     if proc.returncode != 0:
