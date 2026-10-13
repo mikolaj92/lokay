@@ -93,7 +93,7 @@ elif tool == "git":
         target = Path(args[4])
         target.mkdir()
         (target / ".branch").write_text(args[3])
-        (target / "verify.py").write_text("from app import value\nassert value == 42, value\n")
+        (target / "verify.py").write_text("from app import value\nassert value == 42, value\nprint('1 passed')\n")
         data["heads"][str(target)] = "base"
         data["contents"][str(target)] = ""
         save()
@@ -168,8 +168,8 @@ elif tool == "gh":
         assert option("--match-head-commit") == data["remote"][f"lokay/{n}"]
         assert n not in data["merged"]
         checks = [body for issue, body in data['comments'] if issue == n]
-        assert len(checks) == 2 and '**fix** · CI: **red**' in checks[0]
-        assert '**merge** · CI: **green**' in checks[1], 'merge without green check'
+        assert len(checks) == 2 and '**fix** · CI: **no_ci** · tests: **red**' in checks[0]
+        assert '**merge** · CI: **no_ci** · tests: **green** · tested=true' in checks[1], 'merge without green check'
         assert data['contents'][str(root / f'clone-wt-{n}')] == 'value = 42\n'
         data["merged"].append(n)
         save()
@@ -364,8 +364,8 @@ for line in sys.stdin:
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
             assert len(comments) == 2, comments
-            assert "**fix** · CI: **red**" in comments[0], comments
-            assert "**merge** · CI: **green**" in comments[1], comments
+            assert "**fix** · CI: **no_ci** · tests: **red**" in comments[0], comments
+            assert "**merge** · CI: **no_ci** · tests: **green** · tested=true" in comments[1], comments
         calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
         assert sum(tool == "pi" for tool, _ in calls) == 6, calls
         for issue in (1, 2):

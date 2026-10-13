@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from lokay.decide import DecisionError, from_wire
@@ -96,6 +97,7 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
     log.write_text(ci["log"])
     return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
             "test_log_path": str(log), "test_result": ci["result"],
+            "tested": ci.get("tested", False), "ci": ci.get("ci"),
             "failures": [{**item, "log": item.get("log", "")[-800:]}
                          for item in ci.get("failed") or []]}
 
@@ -215,26 +217,42 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
         log = (proc.stdout or "") + (proc.stderr or "")
         markers = ("collected 0 items", "no tests ran", "error: failed to", "no solution found",
                    "modulenotfounderror", "command not found", "no such file or directory")
-        return proc.returncode == 0 and not any(marker in log.lower() for marker in markers)
+        if "LOKAY_TEST_CWD=" in log:
+            segments = re.split(r"^LOKAY_TEST_CWD=.+$", log, flags=re.MULTILINE)[1:]
+            if not all(did_run(CompletedProcess(proc.args, 0, segment, "")) for segment in segments):
+                return False
+        summary = re.search(
+            r"\b[1-9]\d* passed\b|\bRan [1-9]\d* tests?\b|\bExecuted [1-9]\d* tests?\b"
+            r"|\btests? [1-9]\d*\b|\bscenarios: [1-9]\d*/[1-9]\d*; errors=0", log)
+        return (proc.returncode == 0 and summary is not None
+                and not re.search(r"\b0 passed\b", log)
+                and not any(marker in log.lower() for marker in markers))
 
     failed = []
     notes = []
     logs = []
+    tested_cwds = set()
     if not tests:
         notes.append({"warstwa": "tests", "plik": "", "log": "no tests configured"})
     for argv in tests:
         proc = execute(argv)
         log = (proc.stdout or "") + (proc.stderr or "")
-        if not did_run(proc):
+        ran = did_run(proc)
+        if not ran:
             retry = execute(argv)
             retry_log = (retry.stdout or "") + (retry.stderr or "")
             flaky = did_run(retry)
+            ran = flaky
             item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
                     "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log}
             (notes if flaky else failed).append(item)
             log = item["log"]
+        if ran:
+            directories = re.findall(r"^LOKAY_TEST_CWD=(.+)$", log, re.MULTILINE)
+            tested_cwds.update(str(Path(path).resolve()) for path in directories or [cwd])
         logs.append(log)
     return {"result": "red" if failed else "green", "sha": sha,
+            "tested": bool(tested_cwds), "tested_cwds": sorted(tested_cwds),
             "failed": failed, "notes": notes, "log": "\n".join(logs)}
 
 
