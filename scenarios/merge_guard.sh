@@ -24,13 +24,21 @@ with tempfile.TemporaryDirectory() as tmp:
     (worktree / 'code.py').write_text('pass\n')
     (worktree / 'pyproject.toml').write_text('[project]\n')
     (worktree / 'uv.lock').write_text('original\n')
+    (worktree / 'tracked.log').write_text('baseline\n')
     local('add', '.')
     local('commit', '-m', 'fixture')
     local('push', 'origin', 'main')
     base = local('rev-parse', 'HEAD')
 
-    def finish(branch, title, body, dirty):
+    def finish(branch, title, body, dirty, artifacts=()):
         local('checkout', '-b', branch, base)
+        if artifacts:
+            for name in artifacts:
+                file = worktree / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text('junk\n')
+            local('add', '.')
+            local('commit', '-m', 'earlier artifacts')
         if dirty:
             (worktree / 'tests').mkdir(exist_ok=True)
             (worktree / 'tests' / 'new test.py').write_text('assert True\n')
@@ -59,7 +67,19 @@ with tempfile.TemporaryDirectory() as tmp:
                 'result': 'merged', 'merge_sha': sha}))
             outcome = start._finish(picked, worktree, branch, sha, ['true'])
             saved = state.state_read('example/repo', 1)
-            if dirty and 'test' not in title:
+            if artifacts:
+                assert outcome['result'] == 'check', outcome
+                merge.assert_not_called()
+                assert saved['node'] == 'check' and saved['verdict'] is None and saved['local_ci'] is None
+                assert not any((worktree / name).exists() for name in artifacts)
+                assert local('log', '-1', '--format=%s') == 'lokay merge-guard: drop artifacts'
+                assert local('rev-parse', 'HEAD') == local('rev-parse', f'origin/{branch}')
+                assert not local('status', '--porcelain')
+                assert merge_guard(worktree, title, body) == {'removed': [], 'reset': []}
+                outcome = start._finish(picked, worktree, branch, local('rev-parse', 'HEAD'), ['true'])
+                assert outcome['result'] == 'merged', outcome
+                merge.assert_called_once()
+            elif dirty and 'test' not in title:
                 assert outcome['result'] == 'check', outcome
                 merge.assert_not_called()
                 assert saved['node'] == 'check' and saved['verdict'] is None and saved['local_ci'] is None
@@ -88,6 +108,11 @@ with tempfile.TemporaryDirectory() as tmp:
     local('commit', '-m', 'requested test')
     assert merge_guard(worktree, 'Dodaj testy', '') == {'removed': [], 'reset': []}
     assert merge_guard(worktree, '', 'Add regression coverage') == {'removed': [], 'reset': []}
+    finish('artifacts', 'Add test coverage', '', False, (
+        'tracked.log', 'nested/suite.log', '.check-local/suite.log',
+        '.check-local/validation.log', '.check-local/tmp/uv-1.lock',
+        '.check-local/bin/gh', '.check-local/ignore', 'tmp/uv-2.lock',
+        'tmp/nested/uv-3.lock', 'tmp/uv.lock', 'bin/gh', 'nested/bin/gh'))
     finish('clean', 'Fix code', '', False)
 print('merge guard: removed/reset → committed/pushed → Check; requested tests kept; clean → Merge OK')
 PY
