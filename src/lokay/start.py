@@ -927,21 +927,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if code != 0:
             raise RuntimeError(err or "scope diff failed")
         files = changed.splitlines()
-        code, added, err = _git(worktree, ["diff", "--name-status", "--diff-filter=A", "origin/main...HEAD"])
-        if code != 0:
-            raise RuntimeError(err or "scope added diff failed")
-        added_files = {line.split("\t", 1)[1] for line in added.splitlines() if "\t" in line}
-        saved = state_read(picked["repo"], picked["issue"])
-        if files and not saved.get("issue_title"):
-            code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
-            if code != 0:
-                raise RuntimeError(err or "issue view failed")
-            issue = json.loads(raw)
-            state_update(picked["repo"], picked["issue"], issue_title=issue["title"], issue_body=issue.get("body"))
-            saved = state_read(picked["repo"], picked["issue"])
-        scope = code_scope_issue(files, saved.get("issue_title") or "", saved.get("issue_body"), added=added_files)
+        plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
+        scope = code_scope_issue(files, plan_path.read_text() if plan_path.is_file() else "")
         if scope:
             verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
+            rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
         rounds += 1
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
