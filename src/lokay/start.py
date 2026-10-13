@@ -235,11 +235,11 @@ def refresh_body(repo: str, issue: int) -> dict:
     saved = state_read(repo, issue)
     notes = (saved.get("verdict") or {}).get("notes") or []
     lens_notes = [note for note in notes if note.get("pytanie")]
-    lens_notes += [{**note, "note": f"{note['plik']}:{note['linia_od']}-{note['linia_do']}: {note['zmiana']}"}
+    lens_notes += [{**note, "note": f"{note.get('plik', '')}:{note.get('linia_od', '')}-{note.get('linia_do', '')}: {note.get('zmiana', '')}"}
                    for note in saved.get("check_notes", [])]
     if lens_notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
-            f"- {note['pytanie']}: {note['note']}" for note in lens_notes)
+            f"- {note.get('pytanie', '')}: {note.get('note', '')}" for note in lens_notes)
     return pr_set_body(repo, pr["number"], body, issue)
 
 
@@ -1013,14 +1013,14 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         groups = {}
         for decision in decisions:
             for finding in decision["uwagi"]:
-                key = tuple(finding[field] for field in ("plik", "linia_od", "linia_do", "zmiana"))
+                key = tuple(finding.get(field, "") for field in ("plik", "linia_od", "linia_do", "zmiana"))
                 groups.setdefault(key, []).append(finding)
         degenerate = {key for key, findings in groups.items()
-                      if len({finding["pytanie"] for finding in findings}) >= 5}
+                      if len({finding.get("pytanie") or "" for finding in findings}) >= 5}
         check_notes = state_read(picked["repo"], picked["issue"]).get("check_notes", [])
-        for key in sorted(degenerate):
+        for key in sorted(degenerate, key=lambda row: tuple("" if value is None else str(value) for value in row)):
             findings = groups[key]
-            categories = sorted({finding["pytanie"] for finding in findings})
+            categories = sorted({finding.get("pytanie") or "" for finding in findings})
             for finding in findings:
                 if finding not in check_notes:
                     check_notes.append(finding)
@@ -1036,7 +1036,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         for decision in decisions:
             original = decision["uwagi"]
             decision["uwagi"] = [finding for finding in original
-                                 if tuple(finding[field] for field in ("plik", "linia_od", "linia_do", "zmiana"))
+                                 if tuple(finding.get(field, "") for field in ("plik", "linia_od", "linia_do", "zmiana"))
                                  not in degenerate]
             if original and not decision["uwagi"] and not decision.get("replan"):
                 decision["next"] = "ok"
@@ -1066,7 +1066,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked["repo"], picked["issue"],
             f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}",
         )
-        lens_notes = [note["pytanie"] for note in verdict.get("notes", []) if note.get("pytanie")]
+        lens_notes = [note.get("pytanie", "") for note in verdict.get("notes", []) if note.get("pytanie")]
         if lens_notes:
             rounds_append(picked["repo"], picked["issue"], f"Check {rounds}: notes=" + ", ".join(lens_notes))
         _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"], rounds, verdict, ci))
