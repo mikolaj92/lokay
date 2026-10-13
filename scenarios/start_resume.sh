@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory() as tmp:
         if fields:
             state.state_update(repo, 7, **{'issue_title': 'Fix code', 'issue_body': '', **fields})
 
-    # Backoff grows once per failed tick, caps at one hour, and never writes skips.
+    # Fix failures go to Plan immediately, without backoff or skips.
     for failures in (0, 1, 6, 7, 20):
         reset(node='fix', failures=failures, plan_prompt='original prompt',
               plan_evaluations=3, plan_accepted_sha='accepted')
@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory() as tmp:
             assert failed_tick(picked) == {'result': 'failed', 'reason': reason}
         saved = state.state_read(repo, 7)
         assert saved['failures'] == failures + 1, saved
-        assert saved['retry_at'] == 1000 + min(3600, 60 * 2 ** min(failures, 6)), saved
+        assert saved['retry_at'] == 0, saved
         assert saved['node'] == 'plan' and saved['plan_phase'] == 'write'
         assert 'Previous plan:' in saved['plan_prompt'] and reason in saved['plan_prompt']
         assert 'Uwagi:' in saved['plan_prompt'] and 'Rounds:' in saved['plan_prompt']
@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert state.state_read(repo, 7)['sha'] == 'new'
         prepare.assert_not_called()
 
-        # Reject unsafe worktrees before any Check, Fix, fetch or Merge.
+        # Restore missing or mismatched worktrees before Check.
         git_mock.reset_mock()
         for kind in ('missing', 'branch'):
             reset(node='fix', verdict={'result': 'fix', 'sha': 'old', 'uwagi': []})
@@ -92,21 +92,24 @@ with tempfile.TemporaryDirectory() as tmp:
             def unsafe_git(path, args):
                 if kind == 'branch' and args == ['branch', '--show-current']:
                     return 0, 'user/branch', ''
+                if path == clone:
+                    return 0, '', ''
                 return git(path, args)
             git_mock.side_effect = unsafe_git
-            with patch('lokay.start._finish') as finish:
+            with patch('lokay.start._finish', return_value={'result': 'pending'}) as finish:
                 result = start.resume(picked)
-                assert result['result'] == 'failed', (kind, result)
+                assert result['result'] == 'pending', (kind, result)
                 saved = state.state_read(repo, 7)
                 assert saved['pr'] == 12 and saved['sha'] == 'new'
-                assert kind in result['reason'], result
-                finish.assert_not_called()
-            assert not any(call.args[1][0] in ('fetch', 'merge', 'reset', 'worktree')
-                           for call in git_mock.call_args_list), git_mock.call_args_list
+                finish.assert_called_once()
+            assert any(call.args == (clone, ['fetch', 'origin', 'lokay/7'])
+                       for call in git_mock.call_args_list), git_mock.call_args_list
+            assert any(call.args[1][:2] == ['worktree', 'add']
+                       for call in git_mock.call_args_list), git_mock.call_args_list
             git_mock.reset_mock()
             saved = state.state_read(repo, 7)
-            assert saved['result'] == 'failed' and saved['node'] == 'check'
-            assert saved['failures'] == 1 and saved['retry_at'] > start.time.time()
+            assert saved['node'] == 'check'
+            assert saved['failures'] == 0 and saved['retry_at'] == 0
             assert 7 not in start.load_skips(repo)
             if kind == 'missing':
                 worktree.mkdir()
@@ -299,13 +302,13 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert failing.call_count == 1
                 merge.assert_not_called()
                 assert saved['result'] == 'failed' and saved['failures'] == 1, saved
-                assert saved['retry_at'] > start.time.time()
+                assert saved['retry_at'] == 0
                 assert saved['node'] == ('plan' if node == 'fix_code' else 'check'), saved
                 if node == 'fix_code':
                     assert saved['plan_phase'] == 'write' and saved['plan_evaluations'] == 0
                     assert saved['plan_accepted_sha'] is None
                     assert result['reason'] in saved['plan_prompt']
-                assert result['reason'] + ' → retry later' in (state.run_dir(repo, 7) / 'rounds.md').read_text()
+                assert result['reason'] in (state.run_dir(repo, 7) / 'rounds.md').read_text()
                 assert 7 not in start.load_skips(repo)
         code.side_effect = None; publish.side_effect = None
         # Publication during main synchronization must not loop either.

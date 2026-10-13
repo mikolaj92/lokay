@@ -77,7 +77,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert result['reason'] == ('sha diverged: conflict' if case == 'conflict' else 'sha mismatch after push'), result
                 finish.assert_not_called()
                 saved = state.state_read(repo, 7)
-                assert saved['failures'] == 1 and saved['retry_at'] > start.time.time(), saved
+                assert saved['failures'] == 1 and saved['retry_at'] == 0, saved
                 if case == 'stale_pr':
                     assert pr_calls == 7 and sleep.call_count == 5
                 if case == 'conflict':
