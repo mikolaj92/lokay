@@ -39,7 +39,7 @@ mkdir -p "$HOME"
 uv run python - "$src" <<'PY'
 import os, sys
 from pathlib import Path
-from lokay.build import build_code, build_publish, child_env
+from lokay.build import build_code, build_publish, child_env, tidy_and_commit, _git
 from lokay.state import state_update, state_read, run_dir
 from lokay.start import refresh_body
 from unittest.mock import patch
@@ -65,6 +65,49 @@ state_update('mikolaj92/lokay-sandbox', 7, pi_response=done['pi_response'])
 published = build_publish(wt, "lokay/7", None, "mikolaj92/lokay-sandbox", 7, "title", plan_path)
 assert published["result"] == "pr_open", published
 assert published["sha"] == done["artifact"]
+# No new pi commit: publish all eight commits left by earlier attempts.
+assert build_code(wt, 'plan', 'title', 'body', env, expected_branch='lokay/7')['reason'] == 'no_changes'
+remote_head = published['sha']
+for number in range(8):
+    (wt / 'pending.py').write_text(f'pending = {number}\n')
+    _git(wt, ['add', 'pending.py'])
+    _git(wt, ['commit', '-m', f'pending {number}'])
+assert _git(wt, ['rev-list', '--count', 'origin/lokay/7..HEAD']) == '8'
+recovered = build_code(wt, 'plan', 'title', 'body', env, expected_branch='lokay/7')
+assert recovered == {'result': 'done', 'artifact': _git(wt, ['rev-parse', 'HEAD']),
+                     'pi_response': done['pi_response']}, recovered
+republished = build_publish(wt, 'lokay/7', remote_head, 'mikolaj92/lokay-sandbox', 7, 'title', plan_path)
+assert republished['result'] == 'pr_open', republished
+assert republished['sha'] == recovered['artifact']
+assert _git(wt, ['rev-list', '--count', 'origin/lokay/7..HEAD']) == '0'
+assert build_code(wt, 'plan', 'title', 'body', env, expected_branch='lokay/7')['reason'] == 'no_changes'
+# A linked worktree stores MERGE_HEAD outside its .git file.
+_git(wt, ['checkout', '-b', 'merge-fixture'])
+(wt / 'merged.py').write_text('merged = True\n')
+_git(wt, ['add', 'merged.py'])
+_git(wt, ['commit', '-m', 'merge fixture'])
+_git(wt, ['checkout', 'lokay/7'])
+_git(wt, ['merge', '--no-ff', '--no-commit', 'merge-fixture'])
+(wt / 'partial.py').write_text('partial = True\n')
+assert tidy_and_commit(wt, 'partial')[0] == ['partial.py']
+assert not (wt / _git(wt, ['rev-parse', '--git-path', 'MERGE_HEAD'])).exists()
+assert len(_git(wt, ['rev-list', '--parents', '-n', '1', 'HEAD~1']).split()) == 3
+# Conflicted merges are aborted before committing pi's paths.
+_git(wt, ['checkout', 'merge-fixture'])
+(wt / 'f').write_text('theirs\n')
+_git(wt, ['commit', '-am', 'theirs'])
+_git(wt, ['checkout', 'lokay/7'])
+(wt / 'f').write_text('ours\n')
+_git(wt, ['commit', '-am', 'ours'])
+try:
+    _git(wt, ['merge', '--no-ff', 'merge-fixture'])
+except RuntimeError:
+    pass
+assert _git(wt, ['ls-files', '-u'])
+(wt / 'after_abort.py').write_text('recovered = True\n')
+assert tidy_and_commit(wt, 'after abort')[0] == ['after_abort.py']
+assert (wt / 'f').read_text() == 'ours\n'
+assert not (wt / _git(wt, ['rev-parse', '--git-path', 'MERGE_HEAD'])).exists()
 log = Path(os.environ['GH_LOG']).read_text()
 assert '## Co zrobiono' in log and 'Dodano a.py z implementacją.' in log
 assert '- `a.py`' in log and '- `f`' not in log

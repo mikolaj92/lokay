@@ -123,8 +123,8 @@ elif tool == "git":
         print(branch())
     elif args == ["rev-parse", "HEAD"]:
         print(head())
-    elif args == ["rev-parse", "--git-path", "info/exclude"]:
-        print(".git/info/exclude")
+    elif args[:2] == ["rev-parse", "--git-path"]:
+        print(".git/" + args[2])
     elif args[:2] == ["log", "--oneline"] and args[2].endswith('..HEAD'):
         if args[2].removesuffix('..HEAD') != head():
             print(head() + " scenario commit")
