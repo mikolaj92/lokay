@@ -233,8 +233,11 @@ def refresh_body(repo: str, issue: int) -> dict:
         raise RuntimeError(f"open PR missing for {repo} lokay/{issue}")
     body = pr_body(worktree, run_dir(repo, issue) / "plan.md",
                    state_read(repo, issue).get("pi_response") or "")
-    notes = (state_read(repo, issue).get("verdict") or {}).get("notes") or []
+    saved = state_read(repo, issue)
+    notes = (saved.get("verdict") or {}).get("notes") or []
     lens_notes = [note for note in notes if note.get("pytanie")]
+    lens_notes += [{**note, "note": f"{note['plik']}:{note['linia_od']}-{note['linia_do']}: {note['zmiana']}"}
+                   for note in saved.get("check_notes", [])]
     if lens_notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
             f"- {note['pytanie']}: {note['note']}" for note in lens_notes)
@@ -990,6 +993,36 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             rounds_append(picked["repo"], picked["issue"],
                           f"Check lens {kind}, round={rounds + 1}: next={decision['next']}, "
                           f"p={json.dumps(decision.get('probabilities', []))}")
+        groups = {}
+        for decision in decisions:
+            for finding in decision["uwagi"]:
+                key = tuple(finding[field] for field in ("plik", "linia_od", "linia_do", "zmiana"))
+                groups.setdefault(key, []).append(finding)
+        degenerate = {key for key, findings in groups.items()
+                      if len({finding["pytanie"] for finding in findings}) >= 5}
+        check_notes = state_read(picked["repo"], picked["issue"]).get("check_notes", [])
+        for key in sorted(degenerate):
+            findings = groups[key]
+            categories = sorted({finding["pytanie"] for finding in findings})
+            for finding in findings:
+                if finding not in check_notes:
+                    check_notes.append(finding)
+            file, first, last, change = key
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Check degenerate answer: categories={','.join(categories)}, "
+                          f"plik={file}, range={first}-{last}, zmiana={change}")
+            import sys
+
+            print(json.dumps({"event": "check_degenerate_answer", "categories": categories,
+                              "plik": file, "linia_od": first, "linia_do": last, "zmiana": change}),
+                  file=sys.stderr, flush=True)
+        for decision in decisions:
+            original = decision["uwagi"]
+            decision["uwagi"] = [finding for finding in original
+                                 if tuple(finding[field] for field in ("plik", "linia_od", "linia_do", "zmiana"))
+                                 not in degenerate]
+            if original and not decision["uwagi"] and not decision.get("replan"):
+                decision["next"] = "ok"
         verdict = aggregate(sha, ci, decisions)
         from lokay.scope import code_scope_issue
 
@@ -1006,6 +1039,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
             check_rounds=rounds, result=verdict["result"], verdict=verdict, test_log=log,
+            check_notes=check_notes,
         )
         counts = ", ".join(
             f"{kind}={len(decision['uwagi'])}"
