@@ -173,14 +173,20 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
 def _decision_batches(rows, request, decide_request, api, model):
     from lokay.decide import _trim_wire, to_wire
 
+    limit = 60000 if api == "chat" else 5500
+
+    def review_wire(internal):
+        wire = to_wire(api, model, internal)
+        return json.loads(wire["messages"][1]["content"]) if api == "chat" else wire
+
     batches = []
     batch = []
     for row in rows:
         candidate = batch + [row]
         try:
             internal = request(candidate)
-            wire = to_wire(api, model, internal)
-            fits = (len(json.dumps(wire)) < 5500
+            wire = review_wire(internal)
+            fits = (len(json.dumps(wire)) < limit
                     and wire.get("state", wire.get("input")) == internal["state"])
         except DecisionError:
             fits = False
@@ -193,7 +199,8 @@ def _decision_batches(rows, request, decide_request, api, model):
     for batch in batches:
         internal = request(batch)
         # Last resort for a single oversized row or unusually large state.
-        wire = _trim_wire(to_wire(api, model, internal), limit=5500)
+        wire = _trim_wire(review_wire(internal), limit=limit,
+                          string_limit=limit if api == "chat" else 3000)
         internal["state"] = wire.get("state", wire.get("input"))
         wire_questions = wire["questions"]
         for question, item in zip(internal["questions"],
