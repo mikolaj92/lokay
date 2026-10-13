@@ -5,7 +5,7 @@ uv run --offline python - <<'PY'
 import subprocess
 import tempfile
 from pathlib import Path
-from lokay.build import tidy_and_commit, pr_body
+from lokay.build import tidy_and_commit, pr_body, worktree_status, generated_cleanup
 from lokay.gh import pr_set_body
 from lokay.start import refresh_body
 from unittest.mock import patch
@@ -69,6 +69,36 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (root / 'tmp/tracked.lock').read_text() == 'original\n'
     assert git('status', '--porcelain') == ''
     assert tidy_and_commit(root, 'artifact noop') == ([], [])
+    # Only pi edits enter the commit, not earlier staged or untracked files.
+    (root / 'earlier.txt').write_text('keep staged\n')
+    git('add', 'earlier.txt')
+    (root / 'setup.txt').write_text('keep untracked\n')
+    before = worktree_status(root)
+    (root / 'code.py').write_text('pi edit\n')
+    (root / '.validation/current-fix').mkdir(parents=True)
+    (root / '.validation/current-fix/output').write_text('generated\n')
+    assert tidy_and_commit(root, 'pi only', before)[0] == ['code.py']
+    assert git('diff', '--cached', '--name-only') == 'earlier.txt'
+    assert (root / 'setup.txt').exists()
+    assert not (root / '.validation/current-fix/output').exists()
+    # CI restores the accepted lock even when dependencies changed in this PR.
+    lock = (root / 'uv.lock').read_text()
+    with generated_cleanup(root):
+        (root / 'uv.lock').write_text('CI rewrite\n')
+        (root / 'ci-output.txt').write_text('generated\n')
+    assert (root / 'uv.lock').read_text() == lock
+    assert not (root / 'ci-output.txt').exists()
+    assert (root / 'setup.txt').exists()
+    git('reset', '-q', '--', 'earlier.txt')
+    (root / 'earlier.txt').unlink(); (root / 'setup.txt').unlink()
+    # A lock committed by pi without its manifest is reset before publishing.
+    main = git('rev-parse', 'origin/main')
+    git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    (root / 'uv.lock').write_text('pi rewrite\n')
+    git('add', 'uv.lock'); git('commit', '-qm', 'pi lock')
+    assert tidy_and_commit(root, 'reset pi lock')[0] == ['uv.lock']
+    assert (root / 'uv.lock').read_text() == lock
+    git('update-ref', 'refs/remotes/origin/main', main)
     plan = Path(tmp).parent / (root.name + '-plan.md')
     try:
         plan.write_text('# Plan\n\n## Cel\nShip the change.\n\n## Kroki\nSECRET\n')

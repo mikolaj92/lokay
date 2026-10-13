@@ -523,6 +523,12 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
         return needs_help(picked, f"{node}: {type(exc).__name__}: {exc}", sha)
     if node == "fix_code" and outcome.get("next") == "build":
         return outcome
+    if node == "fix_code" and outcome.get("reason") == "outside_worktree":
+        prompt = replan_prompt(picked, outcome.get("explanation") or "outside_worktree", [outcome], sha)
+        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+                     plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None,
+                     result="failed", reason="outside_worktree", retry_at=0)
+        return {**outcome, "next": "plan"}
     expected = "done" if node == "fix_code" else "pushed"
     if outcome.get("result") != expected and not (
         node == "fix_publish" and outcome.get("result") == "remote_moved" and outcome.get("sha")
@@ -845,7 +851,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         return redirected
                 return outcome
             fixed = fix_step(picked, "fix_code", fix_action, sha)
-            if fixed.get("next") == "build":
+            if fixed.get("next") in ("build", "plan"):
                 return fixed
             if fixed["result"] == "failed":
                 return fixed

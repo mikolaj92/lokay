@@ -69,9 +69,17 @@ elif tool == "git":
                 print('base')
             raise SystemExit(0)
         os.execv('/usr/bin/git', ['git', *args])
+    if args and args[0] == '--literal-pathspecs':
+        args = args[1:]
     if args[:3] == ['diff', '--name-status', '--diff-filter=A'] or args[:4] == ['diff', '--cached', '--name-status', '--diff-filter=A'] or args == ['ls-files', '--others', '--exclude-standard']:
         pass
-    elif args in (['diff', '--name-only', '-z', 'HEAD'],
+    elif args == ['ls-files', '-m', '-d', '--others', '--exclude-standard', '-z']:
+        if (cwd / 'app.py').exists() and (cwd / 'app.py').read_text() != data['contents'][str(cwd)]:
+            print('app.py\0', end='')
+    elif args == ['diff', '--cached', '--binary', '--', 'app.py']:
+        pass
+    elif args in (['ls-files', '-z'], ['diff', '--name-only', '-z', 'origin/main...HEAD'],
+                  ['diff', '--name-only', '-z', 'HEAD'],
                   ['diff', '--name-only', '-z', 'origin/main..HEAD'],
                   ['diff', '--cached', '--name-only', '-z'],
                   ['ls-tree', '-r', '--name-only', '-z', 'HEAD']):
@@ -99,12 +107,12 @@ elif tool == "git":
         save()
     elif args[:3] == ["worktree", "remove", "--force"]:
         shutil.rmtree(args[3])
-    elif args == ["status", "--porcelain"]:
-        if (cwd / "app.py").read_text() != data["contents"][str(cwd)]:
+    elif args[:2] == ["status", "--porcelain"]:
+        if (cwd / "app.py").exists() and (cwd / "app.py").read_text() != data["contents"][str(cwd)]:
             print(" M app.py")
-    elif args in (["add", "-A"], ["reset", "-q", "--", "__pycache__"]):
+    elif args[:2] == ["add", "-A"] or args == ["reset", "-q", "--", "__pycache__"]:
         pass
-    elif args[:2] == ["commit", "-m"]:
+    elif args[:2] in (["commit", "-m"], ["commit", "--only"]):
         content = (cwd / "app.py").read_text()
         data["heads"][str(cwd)] = hashlib.sha1((branch() + content).encode()).hexdigest()
         data["contents"][str(cwd)] = content

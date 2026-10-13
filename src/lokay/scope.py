@@ -7,7 +7,7 @@ from pathlib import PurePosixPath
 
 def is_artifact(path: str) -> bool:
     parts = PurePosixPath(path).parts
-    return (path.endswith(".log") or path.startswith(".check-local/")
+    return (path.endswith(".log") or path.startswith((".check-local/", ".validation/"))
             or (path.startswith("tmp/") and path.endswith(".lock"))
             or parts[-2:] == ("bin", "gh"))
 
