@@ -96,8 +96,10 @@ start.release(got["held"])
 from lokay.state import state_update
 import time
 state_update('example/second', 2, retry_at=time.time() + 3600, failures=1, reason='fixture')
-assert pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'}) == {
-    'result': 'idle', 'reason': 'no_work'}
+idle = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
+assert idle['result'] == 'idle' and idle['reason'] == 'idle_backoff', idle
+assert idle['failures'] == 1 and idle['last_error'] == 'fixture', idle
+assert idle['issue_since'] == saved['issue_since'], idle
 state_update('example/second', 2, node='plan', retry_at=0, failures=0, reason=None)
 got = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
 assert got['node'] == 'plan' and got['pr'] == 10, got

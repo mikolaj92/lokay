@@ -18,6 +18,10 @@ It parses the entire script before running, so an update cannot change a running
 - `lokay status` prints runs from `~/.lokay/runs/*/*/state.json`.
 - `~/.lokay/heartbeat.json` records UTC time, result, version, current repo/issue/node
   and node start time every tick, including during long steps and retries.
+  It also reports `idle_reason` (`idle_backoff`, `host_down`, `no_work`),
+  `issue_since` (first pick until Merge), `failures` and `last_error`.
+  The monitor alarms on blocked idle, at least three failures, an old issue,
+  or queued work without a merge past the configured threshold.
 - Each Check round posts its result, findings and CI outcome on the PR.
 - The separate `ai.mikolaj.lokay2.monitor` LaunchAgent runs `lokay monitor` every
   60 seconds, even when the factory stops. It opens one `lokay-stalled` issue while
@@ -33,7 +37,8 @@ return HTTP 200 with `"ready": true`.
 
 Environment overrides can go in `~/.config/lokay/env`:
 `LOKAY_TICK_SECONDS` (60), `LOKAY_HEARTBEAT_MINUTES` (5),
-`LOKAY_NODE_MINUTES` (60), `LOKAY_ALARM_REPO` (`mikolaj92/lokay`).
+`LOKAY_NODE_MINUTES` (60), `LOKAY_ISSUE_MINUTES` (60),
+`LOKAY_MERGE_HOURS` (1), `LOKAY_ALARM_REPO` (`mikolaj92/lokay`).
 The service uses the checkout SHA as the heartbeat version after self-update;
 manual runs use the installed package version.
 

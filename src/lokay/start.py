@@ -36,10 +36,11 @@ def guarded_step(step):
         if outcome.get("result") in ("pending", "pr_open"):
             return outcome
         if outcome.get("result") == "merged":
-            state_update(repo, issue, failures=0, retry_at=0, reason=None)
+            state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
             from lokay.observe import current
 
-            current(result="merged", node=None, node_since=None)
+            current(result="merged", node=None, node_since=None, issue_since=None,
+                    idle_reason=None, last_merge=time.time())
             return outcome
         state = state_read(repo, issue)
         if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
@@ -119,7 +120,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     report = probes(env)
     if not host_ready(report):
         failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
-        return {"result": "idle", "reason": "host", "failed": failed}
+        return {"result": "idle", "reason": "host_down", "failed": failed}
     child = os.environ if env is None else env
     repos_file = child.get("LOKAY2_REPOS_FILE")
     only_repo = child.get("LOKAY2_REPO")
@@ -127,6 +128,15 @@ def pick(env: dict[str, str] | None = None) -> dict:
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
              if not only_repo or repo["name"] == only_repo]
     candidates = []
+    blocked = []
+
+    def idle():
+        if blocked:
+            name, issue, saved = max(blocked, key=lambda row: row[2].get("failures", 0))
+            return {"result": "idle", "reason": "idle_backoff", "repo": name, "issue": issue,
+                    "issue_since": saved.get("issue_since"), "failures": saved.get("failures", 0),
+                    "last_error": saved.get("reason") or saved.get("last_error")}
+        return {"result": "idle", "reason": "no_work"}
     for repo in repos:
         name = repo["name"]
         code, out, err = _gh([
@@ -136,6 +146,13 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if code != 0:
             raise RuntimeError(err.strip() or "pr list failed")
         skipped = load_skips(name)
+        for row in json.loads(out or "[]"):
+            branch = row["headRefName"]
+            if branch.startswith("lokay/") and branch[6:].isdecimal():
+                number = int(branch[6:])
+                saved = state_read(name, number)
+                if number not in skipped and (only_issue is None or number == only_issue) and saved.get("failures", 0):
+                    blocked.append((name, number, saved))
         prs = [row for row in json.loads(out or "[]")
                if row["headRefName"].startswith("lokay/")
                and row["headRefName"][6:].isdecimal()
@@ -162,7 +179,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         return {"result": "picked", "repo": name, "issue": issue,
                 "node": node, "pr": pr["number"], "held": held}
     if candidates:
-        return {"result": "idle", "reason": "no_work"}
+        return idle()
     chosen = None
     for repo in repos:
         name = repo["name"]
@@ -180,6 +197,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 and row["title"] != "lokay-stalled"
                 and (only_issue is None or int(row["number"]) == only_issue)
             ]
+            for row in issues:
+                saved = state_read(name, row["number"])
+                if saved.get("failures", 0):
+                    blocked.append((name, row["number"], saved))
             issue = next((row for row in issues
                           if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
                           and open_pr_for(name, f"lokay/{row['number']}") is None), None)
@@ -205,7 +226,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 release(held)
         break
     if chosen is None:
-        return {"result": "idle", "reason": "no_work"}
+        return idle()
     return chosen
 
 
@@ -246,7 +267,9 @@ def main(argv: list[str] | None = None) -> int:
     if outcome["result"] == "idle":
         from lokay.observe import current
 
-        current(result="idle")
+        current(result="idle", idle_reason=outcome["reason"],
+                **{key: value for key, value in outcome.items()
+                   if key in ("repo", "issue", "issue_since", "failures", "last_error")})
         extra = outcome.get("failed") or ""
         print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return 0
