@@ -49,8 +49,11 @@ GitHub calls use 60 seconds, setup/local CI use 600 seconds. Timed-out process
 groups are killed. Retry waits stop at the deadline. This is not a hard wall-clock
 limit on filesystem operations or guard cleanup.
 
-Ready repositories are ordered by their latest persisted attempt across issues,
-oldest first. Missing timestamps count as zero; ties use repository name. Within
+Ready repositories are ordered by their latest persisted attempt, oldest first.
+Each repository saves `runs/<repo>/attempt.json` under its lock before fetching
+its queue, so API failures and budget exhaustion also rotate selection. Existing
+issue timestamps remain a fallback. Missing timestamps count as zero; ties use
+repository name. Within
 a repository, PRs retain priority and use oldest issue attempt, then PR number.
 The attempt timestamp is saved before processing, including failed or exhausted
 ticks. An issue-only repository now competes with PR repositories, but continuous
@@ -178,7 +181,7 @@ Report evidence against `(mikolaj92/lokay, PR #1784, final SHA)` separately:
 
 | Gate | Required counters | Evidence |
 | --- | --- | --- |
-| Local suite | `scenarios=21/21; errors=0` | Full check summary |
+| Local suite | `scenarios=37/37; errors=0` | Full check summary |
 | Deterministic cycle | `autonomous_runs=2/2; mutations_rejected=3/3` | Same-process ticks, fake call trace, states, logs, heartbeat |
 | Runner Check | Full suite on final SHA | Effective config path, argv and existing PR's Check log |
 | Real canary | `merged_prs=2/2; rounds_logs=2/2; between_run_heartbeat=1/1` | Sandbox PR URLs and saved proof |

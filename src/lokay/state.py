@@ -13,8 +13,18 @@ def run_dir(repo: str, issue: int) -> Path:
 
 def repo_last_attempt(repo: str) -> float:
     directory = RUNS / repo.replace("/", "__")
-    return max((json.loads(path.read_text()).get("last_attempt", 0)
-                for path in directory.glob("*/state.json")), default=0)
+    attempt = directory / "attempt.json"
+    latest = json.loads(attempt.read_text())["last_attempt"] if attempt.exists() else 0
+    return max(latest, max((json.loads(path.read_text()).get("last_attempt", 0)
+                           for path in directory.glob("*/state.json")), default=0))
+
+
+def repo_attempt(repo: str, timestamp: float) -> None:
+    path = RUNS / repo.replace("/", "__") / "attempt.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps({"last_attempt": timestamp}) + "\n")
+    temporary.replace(path)
 
 
 def state_read(repo: str, issue: int) -> dict:

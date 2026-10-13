@@ -13,7 +13,7 @@ from lokay.config import load_repos, tick_budget
 from lokay.gh import _gh, gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.run import TickExpired, check_deadline, retry_sleep, run_process, tick_deadline
-from lokay.state import repo_last_attempt, rounds_append, run_dir, state_read, state_update
+from lokay.state import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
 class RetryLater(RuntimeError):
@@ -139,24 +139,25 @@ def pick(env: dict[str, str] | None = None) -> dict:
     for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
         check_deadline()
         name = repo["name"]
-        code, out, err = _gh([
-            "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-            "--json", "number,headRefName,headRefOid",
-        ])
-        if code != 0:
-            raise RuntimeError(err.strip() or "pr list failed")
-        skipped = load_skips(name)
-        prs = [row for row in json.loads(out or "[]")
-               if row["headRefName"].startswith("lokay/")
-               and row["headRefName"][6:].isdecimal()
-               and int(row["headRefName"][6:]) not in skipped
-               and state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()
-               and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
         held = acquire(name.split("/")[0], name)
         if held["result"] != "held":
             continue
         chosen = None
         try:
+            repo_attempt(name, time.time())
+            code, out, err = _gh([
+                "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
+                "--json", "number,headRefName,headRefOid",
+            ])
+            if code != 0:
+                raise RuntimeError(err.strip() or "pr list failed")
+            skipped = load_skips(name)
+            prs = [row for row in json.loads(out or "[]")
+                   if row["headRefName"].startswith("lokay/")
+                   and row["headRefName"][6:].isdecimal()
+                   and int(row["headRefName"][6:]) not in skipped
+                   and state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()
+                   and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
             if prs:
                 pr = min(prs, key=lambda row: (
                     state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))

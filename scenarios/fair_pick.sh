@@ -35,6 +35,8 @@ with tempfile.TemporaryDirectory() as tmp, \
     state.state_update('example/second', 22, last_attempt=0)
     state.state_update('example/first', 11, last_attempt=0)
     state.state_update('example/second', 33, last_attempt=0)
+    for repo in repos:
+        state.repo_attempt(repo['name'], 0)
     got = start.pick({})
     assert got['pr'] == 1, got  # Repo ties use name; PR ties use number.
     with patch('lokay.start.acquire', side_effect=lambda owner, repo:
