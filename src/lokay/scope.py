@@ -5,6 +5,13 @@ import re
 from pathlib import PurePosixPath
 
 
+def is_artifact(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    return (path.endswith(".log") or path.startswith(".check-local/")
+            or (path.startswith("tmp/") and path.endswith(".lock"))
+            or parts[-2:] == ("bin", "gh"))
+
+
 def is_test(path: str) -> bool:
     parts = PurePosixPath(path).parts
     name = parts[-1] if parts else ""

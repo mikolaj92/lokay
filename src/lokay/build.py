@@ -9,6 +9,7 @@ from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
 from lokay.run import run_process
 from lokay.safety import untrusted_issue_block
+from lokay.scope import is_artifact
 
 DROP = ("GH_TOKEN", "GITHUB_TOKEN")
 
@@ -25,7 +26,7 @@ def _git(repo: Path, args: list[str]) -> str:
 
 
 def tidy_and_commit(worktree: Path, message: str) -> tuple[list[str], list[str]]:
-    """Restore incidental lock edits, remove untracked caches, commit the rest."""
+    """Restore incidental edits, remove untracked artifacts, commit the rest."""
     def names(args: list[str]) -> set[str]:
         return set(filter(None, _git(worktree, args).split("\0")))
 
@@ -36,15 +37,23 @@ def tidy_and_commit(worktree: Path, message: str) -> tuple[list[str], list[str]]
                 "package-lock.json": "package.json"}
     junk = sorted(path for path in modified if Path(path).name in siblings
                   and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
-    if junk:
-        _git(worktree, ["checkout", "HEAD", "--", *junk])
-    caches = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".venv"}
+    tracked = names(["ls-tree", "-r", "--name-only", "-z", "HEAD"])
+    artifacts = {path for path in modified if is_artifact(path)
+                 and (path not in tracked or path.startswith((".check-local/", "tmp/")))}
+    junk = sorted(set(junk) | artifacts)
+    restore = sorted(set(junk) & tracked)
+    if restore:
+        _git(worktree, ["checkout", "HEAD", "--", *restore])
+    added = sorted(artifacts - tracked)
+    if added:
+        _git(worktree, ["rm", "-r", "--cached", "-f", "--ignore-unmatch", "--", *added])
+    caches = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".venv", ".check-local"}
     untracked = names(["ls-files", "--others", "--exclude-standard", "-z"])
     untracked |= names(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
     directories = set()
     for name in sorted(untracked):
         path = Path(name)
-        if not (set(path.parts) & caches or path.name.endswith(".pyc")):
+        if not (set(path.parts) & caches or path.name.endswith(".pyc") or is_artifact(name)):
             continue
         file = worktree / path
         if file.is_file() or file.is_symlink():

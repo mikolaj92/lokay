@@ -44,6 +44,31 @@ with tempfile.TemporaryDirectory() as tmp:
     assert tidy_and_commit(root, 'dependencies') == (['pyproject.toml', 'uv.lock'], [])
     (root / 'uv.lock').write_text('valid again\n')
     assert tidy_and_commit(root, 'lock update') == (['uv.lock'], [])
+    # Local CI artifacts, including ignored and staged files, never reach the commit.
+    (root / '.gitignore').write_text('.check-local/\n')
+    (root / 'tracked.log').write_text('tracked\n')
+    (root / 'tmp').mkdir()
+    (root / 'tmp/tracked.lock').write_text('original\n')
+    git('add', '-A'); git('commit', '-qm', 'artifact baseline')
+    (root / 'tracked.log').write_text('keep tracked log edits\n')
+    (root / 'tmp/tracked.lock').write_text('incidental\n')
+    artifacts = ('.check-local/suite.log', '.check-local/validation.log',
+                 '.check-local/tmp/uv-1.lock', '.check-local/bin/gh', '.check-local/ignore',
+                 'suite.log', 'nested/validation.log', 'tmp/uv-2.lock',
+                 'tmp/nested/uv-3.lock', 'bin/gh', 'nested/bin/gh')
+    for name in artifacts:
+        file = root / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text('junk\n')
+    git('add', '-f', '.check-local/ignore', 'suite.log', 'bin/gh')
+    (root / 'code.py').write_text('pass\n')
+    committed, junk = tidy_and_commit(root, 'artifact cleanup')
+    assert committed == ['code.py', 'tracked.log'], (committed, junk)
+    assert not any((root / name).exists() for name in artifacts)
+    assert not (root / '.check-local').exists()
+    assert (root / 'tmp/tracked.lock').read_text() == 'original\n'
+    assert git('status', '--porcelain') == ''
+    assert tidy_and_commit(root, 'artifact noop') == ([], [])
     plan = Path(tmp).parent / (root.name + '-plan.md')
     try:
         plan.write_text('# Plan\n\n## Cel\nShip the change.\n\n## Kroki\nSECRET\n')
