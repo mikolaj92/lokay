@@ -41,7 +41,8 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
         return {"result": "failed", "artifact": ""}
     sha = _git(worktree, ["rev-parse", "HEAD"])
     if sha == previous:
-        return {"result": "failed", "reason": "no_changes", "artifact": ""}
+        return {"result": "failed", "reason": "no_changes", "artifact": "",
+                "pi_response": proc.stdout or proc.stderr or ""}
     return {"result": "done", "artifact": sha, "pi_response": (proc.stdout or proc.stderr or "")[-1500:]}
 
 
