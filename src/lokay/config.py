@@ -12,9 +12,11 @@ STATE = Path.home() / ".lokay"
 
 def tick_budget(env: dict[str, str] | None = None) -> float:
     value = (os.environ if env is None else env).get("LOKAY_TICK_BUDGET", "2700")
+    if not isinstance(value, str):
+        raise ValueError("LOKAY_TICK_BUDGET must be finite positive seconds")
     try:
         seconds = float(value)
-    except (TypeError, ValueError):
+    except ValueError:
         raise ValueError("LOKAY_TICK_BUDGET must be finite positive seconds") from None
     if not math.isfinite(seconds) or seconds <= 0:
         raise ValueError("LOKAY_TICK_BUDGET must be finite positive seconds")

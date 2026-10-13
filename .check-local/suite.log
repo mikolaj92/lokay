@@ -1,0 +1,24 @@
+=== scenarios/build.sh ===
+pr_open 85a79b428449
+remote_moved
+=== scenarios/check.sh ===
+issue a.py 10
+merge
+=== scenarios/check_followup.sh ===
+follow-up: concrete → fix; none → note → merge; red CI → fix; threshold, batches, PR notes, empty Fix recovery OK
+=== scenarios/ci.sh ===
+CI: mutation, timeout, flaky, remote guards, SHA/argv cache; 4 real Check → merge cases OK
+=== scenarios/ci_not_run.sh ===
+ci_not_run: 7 false greens blocked; real command and empty configuration OK
+=== scenarios/docs_only_fix.sh ===
+docs_only_fix: scope gate in real Check graph; advanced main merged before CI; Fix → Merge OK
+=== scenarios/no_new_tests.sh ===
+no_new_tests: committed, tracked, untracked; tests-only and production OK
+=== scenarios/setup_deps.sh ===
+setup_deps: depth, uv/npm, explicit/empty setup, failure logging and configuration OK
+=== scenarios/darkfactory.sh ===
+Traceback (most recent call last):
+  File "<stdin>", line 300, in <module>
+AssertionError: {"result":"picked","repo":"example/darkfactory","issue":1,"node":"plan","pr":null}
+{"result":"failed","reason":"RuntimeError: unexpected fake gh: ['pr', 'edit', '1', '--repo', 'example/darkfactory', '--body', '## Zmiany\\n\\n```text\\napp.py | 1 +\\n 1 file changed, 1 insertion(+)\\n```\\n\\n- Implement app value\\n\\n## Plan\\n\\n## Cel\\nReturn 42.\\n\\nCloses #1\\n\\nOpened by lokay.\\n']"}
+

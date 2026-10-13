@@ -10,6 +10,17 @@ from unittest.mock import patch
 
 from lokay.check import aggregate, local_ci
 from lokay.gh import pr_checks
+from lokay.config import tick_budget
+
+assert tick_budget({}) == 2700
+assert tick_budget({'LOKAY_TICK_BUDGET': '0.25'}) == 0.25
+for value in ('', '0', '-1', 'text', 'nan', 'inf', '-inf', '1e999', None, True, 30):
+    try:
+        tick_budget({'LOKAY_TICK_BUDGET': value})
+    except ValueError as exc:
+        assert str(exc) == 'LOKAY_TICK_BUDGET must be finite positive seconds'
+    else:
+        raise AssertionError(f'invalid tick budget accepted: {value!r}')
 
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
@@ -113,6 +124,13 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         {'result': 'pushed', 'sha': head['sha']}))
     stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'pending'}))
     stack.enter_context(patch('lokay.gh.check_comment'))
+    def issue_view(args):
+        assert args == ['issue', 'view', '1', '--repo', 'example/resume', '--json', 'title,body'], args
+        return 0, json.dumps({'title': 'Fix code', 'body': ''}), ''
+    issue = stack.enter_context(patch('lokay.gh._gh', side_effect=issue_view))
+    # Guard behavior has its own real-Git scenario; this fixture has no Git repository.
+    guard = stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={
+        'removed': [], 'reset': []}))
     def processes(argv, **kwargs):
         if argv in (['git', 'diff', 'origin/main...HEAD'], ['git', 'diff', '--stat', 'origin/main...HEAD']):
             return CompletedProcess(argv, 0, '', '')
@@ -191,6 +209,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         if exit_code in (0, None):
             assert result['result'] == 'merged', result
             merge.assert_called_once()
+            guard.assert_called()
+            assert issue.call_count == 1, 'issue metadata should be cached across resumes'
             fix.assert_not_called()
         else:
             assert result['result'] == 'failed', result

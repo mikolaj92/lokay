@@ -71,6 +71,16 @@ elif tool == "git":
         os.execv('/usr/bin/git', ['git', *args])
     if args[:3] == ['diff', '--name-status', '--diff-filter=A'] or args[:4] == ['diff', '--cached', '--name-status', '--diff-filter=A'] or args == ['ls-files', '--others', '--exclude-standard']:
         pass
+    elif args == ['diff', '--name-only', '-z', 'HEAD'] or args == ['diff', '--cached', '--name-only', '-z']:
+        if (cwd / 'app.py').read_text() != data['contents'][str(cwd)]:
+            sys.stdout.write('app.py\0')
+    elif args == ['diff', '--name-only', '-z', 'origin/main..HEAD']:
+        sys.stdout.write('app.py\0')
+    elif args in (['ls-files', '--others', '--exclude-standard', '-z'],
+                  ['ls-files', '--others', '--ignored', '--exclude-standard', '-z']):
+        pass
+    elif args == ['diff', '--name-status', '-z', 'origin/main...HEAD']:
+        sys.stdout.write('A\0app.py\0')
     elif args == ['diff', '--name-only', 'origin/main...HEAD']:
         print('app.py')
     elif args == ["fetch", "origin", "main"]:
@@ -99,6 +109,8 @@ elif tool == "git":
         print(branch())
     elif args == ["rev-parse", "HEAD"]:
         print(head())
+    elif args == ['log', '--format=%s', 'origin/main..HEAD']:
+        print('Implement app value')
     elif args == ["log", "--oneline", "origin/main..HEAD"]:
         print(head() + " scenario commit")
     elif args[:2] == ["ls-remote", "origin"]:
@@ -113,6 +125,8 @@ elif tool == "git":
         pass
     elif args == ["merge", "--no-edit", "origin/main"]:
         pass
+    elif args == ['diff', '--stat', 'origin/main...HEAD']:
+        print(' app.py | 1 +\n 1 file changed, 1 insertion(+)')
     elif args == ["diff", "origin/main...HEAD"]:
         print("diff --git a/app.py b/app.py\n+++ b/app.py\n@@ -0,0 +1 @@\n+"
               + (cwd / "app.py").read_text().strip())

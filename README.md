@@ -38,7 +38,9 @@ The service uses the checkout SHA as the heartbeat version after self-update;
 manual runs use the installed package version.
 
 `LOKAY_TICK_BUDGET` sets the tick budget in seconds (default: `2700`).
-It must be finite and positive. A shared monotonic deadline starts before queue
+It must be a numeric string representing finite positive seconds; invalid values
+stop the tick before queue selection. For example, `LOKAY_TICK_BUDGET=0.25`
+sets a quarter-second budget. A shared monotonic deadline starts before queue
 selection. Plan, Check/Fix, Merge and process retries stop starting work at the
 deadline. The saved node, SHA, findings and Plan phase resume on the next tick;
 the tick owner releases its lock even if saving fails.
@@ -53,8 +55,8 @@ Ready repositories are ordered by their latest persisted attempt, oldest first.
 Each repository saves `runs/<repo>/attempt.json` under its lock before fetching
 its queue, so API failures and budget exhaustion also rotate selection. Existing
 issue timestamps remain a fallback. Missing timestamps count as zero; ties use
-repository name. Within
-a repository, PRs retain priority and use oldest issue attempt, then PR number.
+repository name. Within a repository, PRs retain priority and use oldest issue
+attempt, then PR number.
 The attempt timestamp is saved before processing, including failed or exhausted
 ticks. An issue-only repository now competes with PR repositories, but continuous
 PR arrivals **can still starve issues within the same repository**.
