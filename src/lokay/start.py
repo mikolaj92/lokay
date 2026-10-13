@@ -379,6 +379,7 @@ def _prepare(picked: dict) -> tuple | dict:
 
     prepare_dependencies(worktree, repo, int(picked["issue"]))
     build_note = state_read(picked["repo"], picked["issue"]).get("build_note")
+    check_deadline()
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
                        clone_path=root, **({"build_note": build_note} if build_note else {}))
     if built.get("result") == "failed":

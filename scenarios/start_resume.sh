@@ -174,6 +174,48 @@ with tempfile.TemporaryDirectory() as tmp:
             args = merge.call_args.args
             assert args[:3] == (repo, 12, 'new') and args[3]['sha'] == 'new', args
 
+        # Fix starts before the deadline; publication waits for the next tick.
+        from lokay.run import tick_deadline
+        reset(node='fix', sha='new', pr=12, verdict=finding)
+        code.reset_mock(); publish.reset_mock(); merge.reset_mock()
+        clock = [9.0]
+        token = tick_deadline.set(10.0)
+        try:
+            with patch('lokay.run.time.monotonic', side_effect=lambda: clock[0]), \
+                 patch('lokay.fix.fix_code', side_effect=lambda *a, **kw:
+                       (clock.__setitem__(0, 10.0) or {'result': 'done'})) as bounded_code:
+                result = start.resume(picked)
+                assert result == {'result': 'pending', 'reason': 'tick budget exhausted'}, result
+                bounded_code.assert_called_once()
+                publish.assert_not_called(); merge.assert_not_called()
+                saved = state.state_read(repo, 7)
+                assert (saved['node'], saved['sha'], saved['pr']) == ('fix', 'new', 12), saved
+                assert saved['verdict'] == finding and saved['failures'] == 0, saved
+                # At the exact boundary even the initial PR lookup must not start.
+                remote.reset_mock()
+                assert start.resume(picked)['result'] == 'pending'
+                remote.assert_not_called()
+                clock[0] = 9.0
+                aggregate.side_effect = [green]
+                bounded_code.side_effect = None
+                bounded_code.return_value = {'result': 'done'}
+                assert start.resume(picked)['result'] == 'merged'
+                assert bounded_code.call_count == 2
+                merge.assert_called_once()
+        finally:
+            tick_deadline.reset(token)
+
+        # An unknown merge failure ends this tick after one attempt, without sleep.
+        reset(node='check', sha='new', pr=12)
+        aggregate.side_effect = [green]
+        merge.reset_mock()
+        with patch('lokay.merge.merge_sha', side_effect=RuntimeError('head match service unavailable')) as unknown:
+            result = start.resume(picked)
+            assert result['result'] == 'failed' and 'head match' in result['reason'], result
+            unknown.assert_called_once()
+        saved = state.state_read(repo, 7)
+        assert saved['node'] == 'merge' and saved['sha'] == 'new' and saved['pr'] == 12, saved
+
         # Repeated findings return through Plan instead of imposing a Fix cap.
         reset(node='check', issue_title='title', issue_body='body')
         aggregate.side_effect = [finding, finding, green]

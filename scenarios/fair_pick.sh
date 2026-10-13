@@ -43,6 +43,22 @@ with tempfile.TemporaryDirectory() as tmp, \
                {'result': 'busy' if repo == 'example/second' else 'held'}):
         got = start.pick({})
         assert got['repo'] == 'example/first', got
+    for repo in repos:
+        state.repo_attempt(repo['name'], 0)
+        for pr in rows[repo['name']]:
+            state.state_update(repo['name'], int(pr['headRefName'][6:]), last_attempt=0)
+    with patch('lokay.start._gh', side_effect=RuntimeError('API unavailable')), \
+         patch('lokay.start.release') as released:
+        try:
+            start.pick({})
+        except RuntimeError as exc:
+            assert str(exc) == 'API unavailable'
+        else:
+            raise AssertionError('API error swallowed')
+        released.assert_called_once()
+    assert state.repo_last_attempt('example/first') >= before
+    assert state.repo_last_attempt('example/second') == 0
+    assert start.pick({})['repo'] == 'example/second'
     rows = {repo['name']: [] for repo in repos}
     with patch('lokay.start.open_issues', return_value=[{'number': 44, 'title': 'fix'}]), \
          patch('lokay.start.open_pr_for', return_value=None):

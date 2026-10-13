@@ -20,7 +20,8 @@ def answers(choice):
 
 
 def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
-             existing=False, accepted=False, changed=False, invalid=False, unknown=False, build_failure=None):
+             existing=False, accepted=False, changed=False, invalid=False, unknown=False, build_failure=None,
+             budget=False):
     with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         root = Path(tmp)
         art = root / 'run' / 'plan.md'
@@ -74,6 +75,29 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
         if unknown:
             stack.enter_context(patch('lokay.plan.verdict', return_value={'next': 'ship'}))
         picked = {'repo': 'example/repo', 'issue': 1, 'node': node}
+        if budget:
+            from lokay.run import tick_deadline
+            clock = [9.0]
+            stack.enter_context(patch('lokay.run.time.monotonic', side_effect=lambda: clock[0]))
+            stack.enter_context(patch('lokay.setup.prepare_dependencies',
+                                      side_effect=lambda *a: clock.__setitem__(0, 10.0)))
+            token = tick_deadline.set(10.0)
+            try:
+                outcome = start.advance(picked)
+                assert outcome['result'] == 'pending', outcome
+                assert not any(kind == 'build' for kind, _ in events), events
+                assert saved['node'] == 'build' and saved['plan_phase'] is None, saved
+                accepted_sha = saved['plan_accepted_sha']
+                assert accepted_sha and saved['issue_title'] == 'title'
+                clock[0] = 9.0
+                with patch('lokay.setup.prepare_dependencies'):
+                    assert start.advance(picked)['result'] == 'pending'
+                assert saved['sha'] == 'head' and saved['node'] == 'check', saved
+                assert saved['plan_accepted_sha'] == accepted_sha
+                assert [kind for kind, _ in events] == ['write', 'decide', 'build'], events
+            finally:
+                tick_deadline.reset(token)
+            return
         error = None
         try:
             outcome = start.advance.__wrapped__(picked)
@@ -104,6 +128,7 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert 'k_testy' in prompts[1], prompts
         print(f'{choices}: writes={len(prompts)}; decide={len(decisions)}; build={len(builds)}; error={error}')
 
+run_case(['ok'], budget=True)
 for reason in ('no_changes', 'outside_worktree', 'pi_exit'):
     run_case(['ok'], expected_build=1, build_failure=reason)
 run_case(['revise'] * 4 + ['ok'], expected_build=1)

@@ -157,6 +157,9 @@ elif tool == "gh":
         print(f"https://example.invalid/pull/{n}")
     elif args[:2] == ["pr", "view"]:
         emit({"headRefOid": data["remote"][f"lokay/{args[2]}"], "statusCheckRollup": []})
+    elif args[:2] == ["pr", "edit"]:
+        assert f"Closes #{args[2]}" in option("--body")
+        assert int(args[2]) in data["prs"].values()
     elif args[:2] == ["pr", "comment"]:
         data["comments"].append([int(args[2]), option("--body")])
         save()
@@ -187,7 +190,7 @@ def verify_rounds(rounds, sha):
     assert f'Merge: sha={sha}' in rounds[4], rounds
 
 def verify_runs(runs):
-    assert sorted(path.name for path in runs.iterdir()) == ['1', '2'], 'missing second tick'
+    assert sorted(path.name for path in runs.iterdir() if path.is_dir()) == ['1', '2'], 'missing second tick'
     for issue in (1, 2):
         state = json.loads((runs / str(issue) / 'state.json').read_text())
         assert state['result'] == 'merged' and state['pr'] == issue, state

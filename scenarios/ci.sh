@@ -6,7 +6,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from lokay.check import aggregate, local_ci
 from lokay.gh import pr_checks
@@ -127,7 +127,10 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     def issue_view(args):
         assert args == ['issue', 'view', '1', '--repo', 'example/resume', '--json', 'title,body'], args
         return 0, json.dumps({'title': 'Fix code', 'body': ''}), ''
-    issue = stack.enter_context(patch('lokay.gh._gh', side_effect=issue_view))
+    issue = Mock(side_effect=issue_view)
+    # start also holds an imported reference; keep both API entry points isolated.
+    stack.enter_context(patch('lokay.gh._gh', issue))
+    stack.enter_context(patch('lokay.start._gh', issue))
     # Guard behavior has its own real-Git scenario; this fixture has no Git repository.
     guard = stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={
         'removed': [], 'reset': []}))

@@ -34,6 +34,7 @@ touch "$GH_LOG"
 uv run python - <<'PY'
 import os
 from pathlib import Path
+from unittest.mock import patch
 from lokay.gh import issues_with_label, merge, pr_create
 
 rows = issues_with_label("mikolaj92/lokay-sandbox")
@@ -49,6 +50,20 @@ assert body["result"] == "pr_open"
 log = Path(os.environ["GH_LOG"]).read_text()
 assert "Closes #1" in log
 assert "Opened by lokay" in log
+for message in ('head service unavailable', 'match service unavailable'):
+    with patch('lokay.gh._gh', side_effect=[
+        (1, '', message), (0, '{"headRefOid":"abc"}', '')]) as api:
+        try:
+            merge('example/repo', 9, 'abc')
+        except RuntimeError as exc:
+            assert str(exc) == message, exc
+        else:
+            raise AssertionError('unknown error classified as sha_moved')
+        assert api.call_count == 2
+        assert sum(call.args[0][:2] == ['pr', 'merge'] for call in api.call_args_list) == 1
+with patch('lokay.gh._gh', return_value=(1, '', 'Head branch was modified')) as api:
+    assert merge('example/repo', 9, 'abc')['result'] == 'sha_moved'
+    api.assert_called_once()
 print("sha_moved")
 print("merge guard ok")
 PY
