@@ -11,7 +11,7 @@ from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
 from lokay.run import run_process
 from lokay.safety import untrusted_issue_block
-from lokay.scope import is_artifact
+from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
 DROP = ("GH_TOKEN", "GITHUB_TOKEN")
 
@@ -25,6 +25,17 @@ def _git(repo: Path, args: list[str]) -> str:
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout or "").strip())
     return (proc.stdout or "").strip()
+
+
+def exclude_caches(worktree: Path) -> None:
+    exclude = worktree / _git(worktree, ["rev-parse", "--git-path", "info/exclude"])
+    existing = exclude.read_text() if exclude.exists() else ""
+    missing = [pattern for pattern in CACHE_PATTERNS if pattern not in existing.splitlines()]
+    if missing:
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a") as file:
+            file.write(("\n" if existing and not existing.endswith("\n") else "")
+                       + "\n".join(missing) + "\n")
 
 
 def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
@@ -87,42 +98,46 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     junk = sorted(path for path in modified if path not in stale_locks and Path(path).name in siblings
                   and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     tracked = names(["ls-tree", "-r", "--name-only", "-z", "HEAD"])
+    cache_paths = {path for path in modified | branch_changes if is_cache(path)}
+    if cache_paths:
+        _git(worktree, ["--literal-pathspecs", "rm", "-r", "-f", "--ignore-unmatch", "--", *sorted(cache_paths)])
     artifacts = {path for path in modified if is_artifact(path)
-                 and (path not in tracked or path.startswith((".check-local/", "tmp/")))}
+                 and (path not in tracked or is_cache(path) or path.startswith("tmp/"))}
     junk = sorted(set(junk) | artifacts)
-    restore = sorted(set(junk) & tracked)
+    restore = sorted((set(junk) & tracked) - cache_paths)
     if restore:
         _git(worktree, ["checkout", "HEAD", "--", *restore])
     added = sorted(artifacts - tracked)
     if added:
         _git(worktree, ["rm", "-r", "--cached", "-f", "--ignore-unmatch", "--", *added])
-    caches = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".venv", ".check-local"}
     untracked = names(["ls-files", "--others", "--exclude-standard", "-z"])
     untracked |= names(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
     directories = set()
     for name in sorted(untracked):
         path = Path(name)
-        if not (set(path.parts) & caches or path.name.endswith(".pyc") or is_artifact(name)):
+        if not is_artifact(name):
             continue
         file = worktree / path
         if file.is_file() or file.is_symlink():
             file.unlink()
         for parent in path.parents:
-            if set(parent.parts) & caches:
+            if is_cache(parent.as_posix()):
                 directories.add(worktree / parent)
     # ls-files omits empty directories. Include them without following symlinks.
     for root, dirs, _ in os.walk(worktree, followlinks=False):
         dirs[:] = [name for name in dirs if name != ".git"]
         relative = Path(root).relative_to(worktree)
-        if set(relative.parts) & caches:
+        if is_cache(relative.as_posix()):
             directories.add(Path(root))
     for directory in sorted(directories, key=lambda p: (-len(p.parts), str(p))):
         try:
             directory.rmdir()
         except OSError:
             pass  # Keep directories containing tracked files.
+    exclude_caches(worktree)
     after = worktree_status(worktree)
-    selected = sorted(path for path in after if path in stale_locks or before is None or before.get(path) != after[path])
+    selected = sorted(path for path in after if path in cache_paths or path in stale_locks
+                      or before is None or before.get(path) != after[path])
     index_paths = names(["ls-files", "-z"])
     stage = [path for path in selected if path in index_paths or (worktree / path).exists()
              or (worktree / path).is_symlink()]
@@ -163,6 +178,7 @@ def build_code(
     previous_head = previous_head or _git(worktree, ["rev-parse", "HEAD"])
     clean = child_env(env)
     clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
+    exclude_caches(worktree)
     before = worktree_status(worktree)
     prompt = (
         Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()

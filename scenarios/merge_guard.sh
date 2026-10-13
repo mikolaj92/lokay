@@ -117,7 +117,8 @@ with tempfile.TemporaryDirectory() as tmp:
         'tracked.log', 'nested/suite.log', '.check-local/suite.log',
         '.check-local/validation.log', '.check-local/tmp/uv-1.lock',
         '.check-local/bin/gh', '.check-local/ignore', 'tmp/uv-2.lock',
-        'tmp/nested/uv-3.lock', 'tmp/uv.lock', 'bin/gh', 'nested/bin/gh'))
+        'tmp/nested/uv-3.lock', 'tmp/uv.lock', 'bin/gh', 'nested/bin/gh',
+        '.cache/swift/manifests/manifest.db', 'node_modules/x.js', '.build/x'))
     finish('clean', 'Fix code', '', False)
 print('merge guard: removed/reset → committed/pushed → Check; requested tests kept; clean → Merge OK')
 PY
