@@ -933,16 +933,21 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             continue
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
-        ci = saved.get("local_ci")
-        if ci and (ci.get("sha") != sha or ci.get("sha") != head):
-            state_update(picked["repo"], picked["issue"], local_ci=None, test_log=None)
-            ci = None
-        if not tests or not ci or ci.get("argv") != tests or "tested" not in ci:
+        from lokay.setup import prepare_dependencies
+
+        state_update(picked["repo"], picked["issue"], local_ci=None, test_log=None, tested=False)
+        setup = prepare_dependencies(worktree, repo, int(picked["issue"]))
+        setup = setup if isinstance(setup, dict) else {}
+        if setup.get("failed"):
+            ci = {"sha": sha, "result": "red", "tested": False, "tested_cwds": [],
+                  "failed": setup["failed"], "notes": [], "log": setup["log"]}
+        else:
             ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
-            ci = {**ci, "argv": list(tests)}
-            state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
-            if ci["notes"]:
-                rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
+            ci = {**ci, "log": setup.get("log", "") + "\n" + ci["log"]}
+        ci = {**ci, "argv": list(tests)}
+        state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
+        if ci["notes"]:
+            rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
         if tests:
             tested_cwds = set(ci.get("tested_cwds") or [])
             for row in rows:
@@ -992,7 +997,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         directory = run_dir(picked["repo"], picked["issue"])
         decision_state = check_state(directory, rounds + 1, diff.stdout or "",
                                      _retry(picked, "check", read_stat), ci,
-                                     sha=sha, repo=picked["repo"], issue=picked["issue"])
+                                     sha=sha, repo=picked["repo"], issue=picked["issue"],
+                                     issue_title=(saved.get("issue_title") or "")[:4000],
+                                     issue_body=(saved.get("issue_body") or "")[:4000])
         decisions = []
         kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
         for kind in kinds:

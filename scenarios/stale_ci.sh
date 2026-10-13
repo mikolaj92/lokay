@@ -70,8 +70,8 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
             assert commands == [tests] and worktree == root
             return {'sha': sha, 'result': 'green', 'log': 'fresh', 'failed': [], 'notes': []}
 
-        # Each mismatch invalidates CI; matching SHA reuses it.
-        for ci_sha, published_sha, expected in ((old, head, 1), (old, old, 1), (head, old, 1), (head, head, 0)):
+        # Every Check run invalidates CI, even with a matching SHA.
+        for ci_sha, published_sha, expected in ((old, head, 1), (old, old, 1), (head, old, 1), (head, head, 1)):
             reset(ci_sha)
             with patch('lokay.check.local_ci', side_effect=rerun) as ci:
                 assert start._finish(picked, root, 'lokay/7', published_sha, tests)['result'] == 'pending'
@@ -96,5 +96,5 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
                     assert log not in state.state_read(picked['repo'], 7)['plan_prompt']
                 else:
                     code.assert_called_once()
-print('stale_ci: redirect, both SHA checks, invalidation, rerun/reuse, Fix/Plan prompts OK')
+print('stale_ci: redirect, both SHA checks, invalidation, fresh reruns, Fix/Plan prompts OK')
 PY
