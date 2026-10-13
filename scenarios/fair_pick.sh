@@ -31,11 +31,12 @@ with tempfile.TemporaryDirectory() as tmp, \
     assert (got['repo'], got['pr']) == ('example/second', 20), got
     assert state.state_read('example/second', 22)['last_attempt'] >= before
     got = start.pick({})
-    assert got['pr'] == 30, got  # Fairness within one repo too.
+    assert got['pr'] == 1, got  # A busy repo cannot take consecutive ticks.
     state.state_update('example/second', 22, last_attempt=0)
     state.state_update('example/first', 11, last_attempt=0)
+    state.state_update('example/second', 33, last_attempt=0)
     got = start.pick({})
-    assert got['pr'] == 1, got  # Ties use PR number.
+    assert got['pr'] == 1, got  # Repo ties use name; PR ties use number.
     with patch('lokay.start.acquire', side_effect=lambda owner, repo:
                {'result': 'busy' if repo == 'example/second' else 'held'}):
         got = start.pick({})

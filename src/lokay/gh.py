@@ -157,9 +157,16 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     )
     if code != 0:
         blob = (err or out).lower()
+        if "head branch was modified" in blob:
+            return {"result": "sha_moved", "merge_sha": None}
+        view_code, view_out, _ = _gh([
+            "pr", "view", str(number), "--repo", repo, "--json", "headRefOid",
+        ])
+        if view_code == 0:
+            head = json.loads(view_out).get("headRefOid")
+            if head and head != expected_head_sha:
+                return {"result": "sha_moved", "merge_sha": None}
         if "not mergeable" in blob or "behind" in blob or "conflict" in blob:
             return {"result": "conflict", "merge_sha": None}
-        if "match" in blob or "head" in blob:
-            return {"result": "sha_moved", "merge_sha": None}
         raise RuntimeError(err.strip() or out.strip() or "merge failed")
     return {"result": "merged", "merge_sha": expected_head_sha}

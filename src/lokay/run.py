@@ -1,10 +1,33 @@
 from __future__ import annotations
 
+import math
 import os
 import signal
 import subprocess
+import time
+from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+
+
+class TickExpired(BaseException):
+    """Yield to the next tick without treating the saved node as failed."""
+
+
+tick_deadline: ContextVar[float | None] = ContextVar("tick_deadline", default=None)
+
+
+def check_deadline() -> None:
+    deadline = tick_deadline.get()
+    if deadline is not None and time.monotonic() >= deadline:
+        raise TickExpired()
+
+
+def retry_sleep(seconds: float) -> None:
+    check_deadline()
+    deadline = tick_deadline.get()
+    time.sleep(seconds if deadline is None else min(seconds, max(0, deadline - time.monotonic())))
+    check_deadline()
 
 
 def run_process(
@@ -14,6 +37,12 @@ def run_process(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    check_deadline()
+    # Even callers without a timeout cannot hold a tick indefinitely.
+    timeout = 3600 if timeout is None else timeout
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("process timeout must be finite and positive")
+    timeout = min(timeout, 3600)
     with subprocess.Popen(
         list(argv),
         cwd=cwd,
@@ -22,11 +51,12 @@ def run_process(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        start_new_session=True,
     ) as process:
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            process.kill()
+            os.killpg(process.pid, signal.SIGKILL)
             stdout, stderr = process.communicate(timeout=5)
             raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr)
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)

@@ -12,6 +12,10 @@ if [ "$1" = "pr" ] && [ "$2" = "merge" ]; then
   echo "merge refused: head does not match" >&2
   exit 1
 fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
+  printf '%s\n' '{"headRefOid":"changed"}'
+  exit 0
+fi
 if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
   case " $* " in
     *" --label "*) printf '%s

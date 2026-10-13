@@ -9,11 +9,11 @@ import time
 from functools import wraps
 from pathlib import Path
 
-from lokay.config import load_repos
+from lokay.config import load_repos, tick_budget
 from lokay.gh import _gh, gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
-from lokay.run import run_process
-from lokay.state import rounds_append, run_dir, state_read, state_update
+from lokay.run import TickExpired, check_deadline, retry_sleep, run_process, tick_deadline
+from lokay.state import repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
 class RetryLater(RuntimeError):
@@ -24,7 +24,13 @@ def guarded_step(step):
     @wraps(step)
     def guarded(picked: dict) -> dict:
         try:
+            check_deadline()
             outcome = step(picked)
+        except TickExpired:
+            repo, issue = picked["repo"], picked["issue"]
+            state_update(repo, issue, result="pending", reason="tick budget exhausted")
+            rounds_append(repo, issue, "Tick: budget exhausted; resume saved node")
+            return {"result": "pending", "reason": "tick budget exhausted"}
         except RetryLater as exc:
             return {"result": "failed", "reason": str(exc)}
         except Exception as exc:
@@ -130,8 +136,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
              if not only_repo or repo["name"] == only_repo]
-    candidates = []
-    for repo in repos:
+    for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
+        check_deadline()
         name = repo["name"]
         code, out, err = _gh([
             "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
@@ -146,35 +152,22 @@ def pick(env: dict[str, str] | None = None) -> dict:
                and int(row["headRefName"][6:]) not in skipped
                and state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()
                and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
-        if not prs:
-            continue
-        candidates.extend((state_read(name, int(pr["headRefName"][6:])).get("last_attempt", 0),
-                           int(pr["number"]), name, pr) for pr in prs)
-    for _, _, name, pr in sorted(candidates, key=lambda row: row[:3]):
-        issue = int(pr["headRefName"][6:])
         held = acquire(name.split("/")[0], name)
         if held["result"] != "held":
             continue
-        saved_node = state_read(name, issue).get("node")
-        node = saved_node if saved_node in ("plan", "build") else "check"
+        chosen = None
         try:
-            state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
-                         result="running", reason=None, last_attempt=time.time())
-        except BaseException:
-            release(held)
-            raise
-        return {"result": "picked", "repo": name, "issue": issue,
-                "node": node, "pr": pr["number"], "held": held}
-    if candidates:
-        return {"result": "idle", "reason": "no_work"}
-    chosen = None
-    for repo in repos:
-        name = repo["name"]
-        owner = name.split("/")[0]
-        held = acquire(owner, name)
-        if held["result"] != "held":
-            continue
-        try:
+            if prs:
+                pr = min(prs, key=lambda row: (
+                    state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
+                issue = int(pr["headRefName"][6:])
+                saved_node = state_read(name, issue).get("node")
+                node = saved_node if saved_node in ("plan", "build", "check", "fix", "merge") else "check"
+                state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
+                             result="running", reason=None, last_attempt=time.time())
+                chosen = {"result": "picked", "repo": name, "issue": issue,
+                          "node": node, "pr": pr["number"], "held": held}
+                return chosen
             issues = open_issues(name)
             skipped = load_skips(name)
             issues = [
@@ -207,10 +200,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
         finally:
             if chosen is None:
                 release(held)
-        break
-    if chosen is None:
-        return {"result": "idle", "reason": "no_work"}
-    return chosen
+        return chosen
+    return {"result": "idle", "reason": "no_work"}
 
 
 def refresh_body(repo: str, issue: int) -> dict:
@@ -246,6 +237,18 @@ def main(argv: list[str] | None = None) -> int:
         report = probes()
         print(json.dumps(report, separators=(",", ":")))
         return 0 if host_ready(report) else 1
+    token = tick_deadline.set(time.monotonic() + tick_budget())
+    try:
+        return _tick()
+    except TickExpired:
+        return 0
+    finally:
+        tick_deadline.reset(token)
+
+
+def _tick() -> int:
+    import sys
+
     outcome = pick()
     if outcome["result"] == "idle":
         from lokay.observe import current
@@ -269,6 +272,7 @@ def _retry(picked: dict, node: str, action, expected: str | None = None):
     repo, issue = picked["repo"], picked["issue"]
     state_update(repo, issue, node=node)
     try:
+        check_deadline()
         outcome = action()
         if expected is None or outcome.get("result") == expected:
             state_update(repo, issue, failures=0, retry_at=0, reason=None)
@@ -326,6 +330,7 @@ def _prepare(picked: dict) -> tuple | dict:
         phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
         evaluations = saved.get("plan_evaluations", 0) if saved.get("plan_phase") else 0
         while True:
+            check_deadline()
             if phase == "write" or not plan.valid_plan(art):
                 state_update(picked["repo"], picked["issue"], plan_phase="write", plan_prompt=prompt)
                 def write_plan():
@@ -339,6 +344,7 @@ def _prepare(picked: dict) -> tuple | dict:
             plan_text = art.read_text()
             evaluations += 1
             state_update(picked["repo"], picked["issue"], plan_evaluations=evaluations)
+            check_deadline()
             answers = decide(plan.plan_questions(plan_text))
             verdict = plan.verdict(answers)
             if verdict.get("next") not in ("ok", "revise"):
@@ -358,11 +364,12 @@ def _prepare(picked: dict) -> tuple | dict:
             phase = "write"
             state_update(picked["repo"], picked["issue"], plan_evaluations=0,
                          plan_phase=phase, plan_prompt=prompt)
-            time.sleep(20)
+            retry_sleep(20)
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root = Path(os.path.expanduser(repo["clone_path"]))
     worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
     branch = f"lokay/{picked['issue']}"
+    check_deadline()
     if not worktree.exists():
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
@@ -480,6 +487,7 @@ def fix_to_build(picked: dict, worktree: Path) -> dict | None:
 
 def fix_step(picked: dict, node: str, action, sha: str) -> dict:
     try:
+        check_deadline()
         outcome = action()
     except Exception as exc:
         return needs_help(picked, f"{node}: {type(exc).__name__}: {exc}", sha)
@@ -495,11 +503,12 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
 
 def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
     for attempt in range(6):
+        check_deadline()
         pr = open_pr_for(repo, branch)
         if pr and pr.get("headRefOid") == sha:
             return pr
         if attempt < 5:
-            time.sleep(5)
+            retry_sleep(5)
     return None
 
 
@@ -591,6 +600,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     saved = state_read(picked["repo"], picked["issue"])
     rounds = saved.get("check_rounds", 0)
     verdict = saved.get("verdict")
+    # Revalidate Merge on a new tick; Fix keeps its SHA-bound findings.
     pending = "check" if saved.get("node") == "merge" else saved.get("node")
 
     def sync_head():
@@ -617,6 +627,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         return []
 
     while True:
+        check_deadline()
         if pending == "merge" and verdict and verdict.get("sha") == sha:
             from lokay.merge_guard import merge_guard
 
@@ -659,7 +670,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         clone_path=clone_path,
                     )
                 except Exception as exc:
-                    return needs_help(picked, f"merge: {type(exc).__name__}: {exc}", sha)
+                    raise RuntimeError(
+                        f"merge repo={picked['repo']} pr={pr['number']} sha={sha}: "
+                        f"{type(exc).__name__}: {exc}"
+                    ) from exc
                 state_update(picked["repo"], picked["issue"], result=merged["result"])
                 if merged["result"] == "merged":
                     state_update(picked["repo"], picked["issue"], sha=merged["merge_sha"])
@@ -667,7 +681,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     return merged
                 rounds_append(picked["repo"], picked["issue"], f"Merge: retry, result={merged['result']}")
                 if merged["result"] != "conflict":
-                    time.sleep(60)
+                    state_update(picked["repo"], picked["issue"], node="check", verdict=None)
+                    retry_sleep(60)
+            state_update(picked["repo"], picked["issue"], node="check", verdict=None)
             if pr and pr.get("headRefOid") and pr["headRefOid"] != sha:
                 _retry(picked, "check", sync_head)
                 sha = pr["headRefOid"]
@@ -708,13 +724,14 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if diff.returncode != 0:
                 raise RuntimeError(diff.stderr or "diff failed")
             return diff
-        diff = _retry(picked, "check", read_diff)
+        active_node = "fix" if pending == "fix" else "check"
+        diff = _retry(picked, active_node, read_diff)
         def read_head():
             code, out, err = _git(worktree, ["rev-parse", "HEAD"])
             if code != 0:
                 raise RuntimeError(err or "HEAD lookup failed")
             return out.strip()
-        head = _retry(picked, "check", read_head)
+        head = _retry(picked, active_node, read_head)
         diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
         state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
@@ -800,6 +817,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint)
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
+            state_update(picked["repo"], picked["issue"], node="check", verdict=None)
             continue
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])

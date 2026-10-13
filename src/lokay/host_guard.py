@@ -7,7 +7,7 @@ import subprocess
 
 def _git(path: Path, *args: str, input: bytes | None = None) -> bytes:
     return subprocess.run(
-        ["git", "-C", str(path), *args], input=input, capture_output=True, check=True,
+        ["git", "-C", str(path), *args], input=input, capture_output=True, check=True, timeout=60,
     ).stdout
 
 
@@ -56,7 +56,7 @@ def restore_changes(snapshots: dict[Path, dict]) -> dict:
             for name in sorted(files):
                 exists = subprocess.run(
                     ["git", "-C", str(path), "cat-file", "-e", f"{before['head']}:{name}"],
-                    capture_output=True,
+                    capture_output=True, timeout=60,
                 ).returncode == 0
                 if exists:
                     _git(path, "checkout", before["head"], "--", name)

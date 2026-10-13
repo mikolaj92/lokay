@@ -172,6 +172,7 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
 
 
 def decide(internal: Mapping) -> dict:
+    from lokay.run import run_process
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
@@ -189,7 +190,7 @@ def decide(internal: Mapping) -> dict:
         cmd.extend(["-H", f"authorization: Bearer {key}"])
     cmd.append(base + path)
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=float(timeout) + 2)
+        proc = run_process(cmd, timeout=float(timeout) + 2)
     except (OSError, subprocess.TimeoutExpired):
         raise DecisionError("decision request failed or timed out") from None
     if proc.returncode != 0:

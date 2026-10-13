@@ -11,6 +11,12 @@ def run_dir(repo: str, issue: int) -> Path:
     return RUNS / repo.replace("/", "__") / str(issue)
 
 
+def repo_last_attempt(repo: str) -> float:
+    directory = RUNS / repo.replace("/", "__")
+    return max((json.loads(path.read_text()).get("last_attempt", 0)
+                for path in directory.glob("*/state.json")), default=0)
+
+
 def state_read(repo: str, issue: int) -> dict:
     path = run_dir(repo, issue) / "state.json"
     return json.loads(path.read_text()) if path.exists() else {}
