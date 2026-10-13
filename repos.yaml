@@ -129,7 +129,7 @@ repos:
 - name: mikolaj92/PunkRecords
   clone_path: ~/Developer/PunkRecords/main
   # README.
-  test: ["uv", "run", "pytest"]
+  test: ["uv", "run", "--extra", "dev", "pytest"]
   merge: 'on'
 - name: mikolaj92/influenzer
   clone_path: ~/Developer/influenzer/main
