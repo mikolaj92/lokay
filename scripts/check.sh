@@ -2,8 +2,8 @@
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 # Keep host state and tool caches out of the local proof.
-mkdir -p .venv
-sandbox=$(mktemp -d "$PWD/.venv/check.XXXXXX")
+mkdir -p .uv
+sandbox=$(mktemp -d "$PWD/.uv/check.XXXXXX")
 trap 'rm -rf "$sandbox"' EXIT HUP INT TERM
 mkdir -p "$sandbox/home" "$sandbox/tmp" "$sandbox/cache" "$sandbox/bin"
 printf '%s\n' '#!/bin/sh' 'echo "unexpected external gh (blocked by local check)" >&2' 'exit 1' > "$sandbox/bin/gh"

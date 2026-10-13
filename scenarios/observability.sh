@@ -18,12 +18,21 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, HOME=tmp, LOKA
     with patch.object(state, "RUNS", Path(tmp) / "runs"), patch.object(observe, "RUNS", Path(tmp) / "runs"):
         with observe.ticking():
             state.state_update("example/repo", 7, node="check", result="running")
-            time.sleep(.06)
             path = Path(tmp) / ".lokay/heartbeat.json"
-            first = json.loads(path.read_text())
+            def wait_heartbeat(matches):
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    if path.exists():
+                        beat = json.loads(path.read_text())
+                        if matches(beat):
+                            return beat
+                    time.sleep(.01)
+                raise AssertionError('heartbeat did not publish the expected state')
+            first = wait_heartbeat(lambda beat: beat.get('issue') == 7
+                                   and beat.get('node') == 'check')
             state.state_update("example/repo", 7, failures=1, reason="retry")
-            time.sleep(.06)
-            second = json.loads(path.read_text())
+            second = wait_heartbeat(lambda beat: beat.get('failures') == 1
+                                    and beat.get('last_error') == 'retry')
             assert second["time"] != first["time"]
             assert second["node_since"] == first["node_since"]
             assert second["issue"] == 7 and second["node"] == "check"
