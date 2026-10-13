@@ -54,6 +54,7 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / 'tmp/tracked.lock').write_text('incidental\n')
     artifacts = ('.check-local/suite.log', '.check-local/validation.log',
                  '.check-local/tmp/uv-1.lock', '.check-local/bin/gh', '.check-local/ignore',
+                 '.cache/swift/manifests/manifest.db', 'node_modules/x.js', '.build/x',
                  'suite.log', 'nested/validation.log', 'tmp/uv-2.lock',
                  'tmp/nested/uv-3.lock', 'bin/gh', 'nested/bin/gh')
     for name in artifacts:
@@ -69,6 +70,29 @@ with tempfile.TemporaryDirectory() as tmp:
     assert (root / 'tmp/tracked.lock').read_text() == 'original\n'
     assert git('status', '--porcelain') == ''
     assert tidy_and_commit(root, 'artifact noop') == ([], [])
+    # Already committed caches are removed; source databases stay untouched.
+    caches = ('.cache/swift/manifests/manifest.db', 'node_modules/x.js', '.build/x')
+    for name in (*caches, 'source.db'):
+        file = root / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text('data\n')
+    git('add', '-f', '--', *caches, 'source.db')
+    git('commit', '-qm', 'pi caches')
+    assert tidy_and_commit(root, 'drop pi caches')[0] == sorted(caches)
+    assert not any((root / name).exists() for name in caches)
+    assert (root / 'source.db').read_text() == 'data\n'
+    exclude = root / git('rev-parse', '--git-path', 'info/exclude')
+    rules = exclude.read_text()
+    assert all(pattern in rules.splitlines() for pattern in ('.cache/', 'node_modules/', '.build/'))
+    assert tidy_and_commit(root, 'cache noop') == ([], [])
+    assert exclude.read_text() == rules
+    for name in caches:
+        file = root / name
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text('ignored\n')
+    git('add', '-A')
+    assert git('diff', '--cached', '--name-only') == ''
+    assert tidy_and_commit(root, 'ignored caches') == ([], [])
     # Only pi edits enter the commit, not earlier staged or untracked files.
     (root / 'earlier.txt').write_text('keep staged\n')
     git('add', 'earlier.txt')

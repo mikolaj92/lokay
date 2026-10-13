@@ -5,9 +5,22 @@ import re
 from pathlib import PurePosixPath
 
 
+CACHE_PATTERNS = [
+    ".cache/", ".build/", "DerivedData/", "node_modules/", "__pycache__/",
+    ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".venv/", ".check-local/",
+    "*.pyc", "*.db-shm", "*.db-wal", "manifest.db",
+]
+
+
+def is_cache(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    return any(fnmatch.fnmatchcase(part, pattern.rstrip("/"))
+               for part in parts for pattern in CACHE_PATTERNS)
+
+
 def is_artifact(path: str) -> bool:
     parts = PurePosixPath(path).parts
-    return (path.endswith(".log") or path.startswith((".check-local/", ".validation/"))
+    return (is_cache(path) or path.endswith(".log") or path.startswith(".validation/")
             or (path.startswith("tmp/") and path.endswith(".lock"))
             or parts[-2:] == ("bin", "gh"))
 
