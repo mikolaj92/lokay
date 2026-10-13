@@ -17,6 +17,18 @@ GH_CANDIDATES = (
 )
 
 
+def fit_body(text: str, limit: int = 60000) -> str:
+    if len(text) <= limit:
+        return text
+    notice = "\n... [{} znaków logu pominięto; pełny log w ~/.lokay/runs] ...\n"
+    keep = limit - len(notice.format(len(text)))
+    if keep < 2:
+        raise ValueError("body limit is too small to keep the start and end")
+    start = (keep + 1) // 2
+    end = keep // 2
+    return text[:start] + notice.format(len(text) - keep) + text[-end:]
+
+
 def gh_bin() -> str:
     found = shutil.which("gh")
     if found:
@@ -67,7 +79,7 @@ def open_pr_for(repo: str, branch: str) -> dict | None:
 def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict:
     marked = body.rstrip() + f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
     code, out, err = _gh(
-        ["pr", "create", "--repo", repo, "--head", branch, "--title", title, "--body", marked]
+        ["pr", "create", "--repo", repo, "--head", branch, "--title", title, "--body", fit_body(marked)]
     )
     if code != 0:
         if "already exists" in err:
@@ -80,7 +92,7 @@ def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict
 
 def pr_set_body(repo: str, number: int, body: str, issue: int) -> dict:
     marked = body.rstrip() + f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
-    code, out, err = _gh(["pr", "edit", str(number), "--repo", repo, "--body", marked])
+    code, out, err = _gh(["pr", "edit", str(number), "--repo", repo, "--body", fit_body(marked)])
     if code != 0:
         raise RuntimeError(err.strip() or "pr edit failed")
     return {"result": "updated", "pr": number}
@@ -122,7 +134,7 @@ def comment_upsert(repo: str, number: int, marker: str, body: str) -> dict:
     if code != 0:
         raise RuntimeError(err.strip() or "comments failed")
     comments = json.loads(out).get("comments") or []
-    text = f"<!-- {marker} -->\n{body}"
+    text = fit_body(f"<!-- {marker} -->\n{body}")
     for comment in comments:
         if marker in (comment.get("body") or ""):
             cid = comment["id"]
@@ -149,7 +161,7 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
     if notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
             f"- {note['pytanie']}: {note['note']}" for note in notes)
-    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", body])
+    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", fit_body(body)])
     if code != 0:
         raise RuntimeError(err.strip() or "Check comment failed")
     return {"result": "commented", "url": out.strip()}
