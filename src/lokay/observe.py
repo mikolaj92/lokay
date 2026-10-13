@@ -25,7 +25,7 @@ def current(**fields) -> None:
 def ticking():
     stopped = Event()
     current(result="running", repo=None, issue=None, node=None, node_since=None,
-            failures=0, last_error=None)
+            issue_since=None, idle_reason=None, failures=0, last_error=None)
 
     def pulse():
         while not stopped.is_set():
@@ -53,11 +53,20 @@ def heartbeat(result: str | None = None, **fields) -> dict:
     previous = json.loads(path.read_text()) if path.exists() else {}
     previous.setdefault("failures", 0)
     previous.setdefault("last_error", None)
+    previous.setdefault("idle_reason", None)
+    previous.setdefault("issue_since", None)
     previous.update(fields)
     if fields.get("failures") == 0:
         previous["last_error"] = None
     if result is not None:
         previous["result"] = result
+    if previous.get("idle_reason") == "no_work":
+        previous["queue_since"] = None
+    elif result == "merged":
+        previous["last_merge"] = time.time()
+        previous["queue_since"] = time.time()
+    elif fields.get("repo") and not previous.get("queue_since"):
+        previous["queue_since"] = fields.get("issue_since") or time.time()
     try:
         installed = version("lokay")
     except PackageNotFoundError:
@@ -91,6 +100,16 @@ def monitor() -> dict:
         age = time.time() - datetime.fromisoformat(beat["time"]).timestamp()
         if age > float(os.environ.get("LOKAY_HEARTBEAT_MINUTES", "5")) * 60:
             reasons.append(f"Heartbeat age: {age / 60:.1f} minutes")
+        if beat.get("idle_reason") in ("idle_backoff", "host_down"):
+            reasons.append(f"Idle: {beat['idle_reason']}")
+        if beat.get("failures", 0) >= 3:
+            reasons.append(f"Failures: {beat['failures']}; last_error: {beat.get('last_error')}")
+        issue_age = time.time() - (beat.get("issue_since") or time.time())
+        if beat.get("issue_since") and issue_age > float(os.environ.get("LOKAY_ISSUE_MINUTES", "60")) * 60:
+            reasons.append(f"Issue {beat.get('issue')} age: {issue_age / 60:.1f} minutes")
+        queue_age = time.time() - (beat.get("queue_since") or time.time())
+        if beat.get("queue_since") and queue_age > float(os.environ.get("LOKAY_MERGE_HOURS", "1")) * 3600:
+            reasons.append(f"No merge with queued work: {queue_age / 3600:.1f} hours")
         node_age = time.time() - (beat.get("node_since") or time.time())
         if beat.get("node") and node_age > float(os.environ.get("LOKAY_NODE_MINUTES", "60")) * 60:
             reasons.append(f"Node {beat['node']} age: {node_age / 60:.1f} minutes")
