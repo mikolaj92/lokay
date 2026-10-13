@@ -23,6 +23,7 @@ class RetryLater(RuntimeError):
 def guarded_step(step):
     @wraps(step)
     def guarded(picked: dict) -> dict:
+        before = state_read(picked["repo"], picked["issue"]).get("updated_at")
         try:
             outcome = step(picked)
         except RetryLater as exc:
@@ -42,15 +43,10 @@ def guarded_step(step):
             return outcome
         state = state_read(repo, issue)
         if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
-                and state.get("retry_at", 0) > time.time()):
+                and state.get("updated_at") != before):
             return outcome
-        failures = state.get("failures", 0) + 1
         reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
-        delay = min(3600, 60 * 2 ** min(failures - 1, 6))
-        state_update(repo, issue, result="failed", reason=reason, failures=failures,
-                     retry_at=time.time() + delay)
-        rounds_append(repo, issue, f"{state.get('node', picked['node'])}: retry, reason={reason}")
-        return {"result": "failed", "reason": reason}
+        return needs_help(picked, reason)
     return guarded
 
 
@@ -276,11 +272,7 @@ def _retry(picked: dict, node: str, action, expected: str | None = None):
         reason = outcome.get("reason") or outcome.get("error") or str(outcome)
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
-    failures = state_read(repo, issue).get("failures", 0) + 1
-    delay = min(3600, 60 * 2 ** min(failures - 1, 6))
-    state_update(repo, issue, result="failed", failures=failures,
-                 reason=reason, retry_at=time.time() + delay)
-    rounds_append(repo, issue, f"{node}: retry, reason={reason}")
+    needs_help(picked, reason)
     raise RetryLater(reason)
 
 
@@ -319,6 +311,7 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     prompt = prompt_for(saved.get("issue_title") or "", saved.get("issue_body")) + (
         "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
         + "\n\nUwagi:\n" + json.dumps(history, ensure_ascii=False)
+        + "\n\nLast state:\n" + json.dumps({key: value for key, value in saved.items() if key != "plan_prompt"}, ensure_ascii=False)
         + "\n\nFix history:\n" + json.dumps(saved.get("fix_history", []), ensure_ascii=False)
         + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
         + "\n\n" + reason + "\n"
@@ -450,18 +443,27 @@ def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
     failures = saved.get("failures", 0) + 1
-    delay = min(3600, 60 * 2 ** min(failures - 1, 6))
-    fields = {"node": "check"}
-    if reason.startswith("fix_code"):
+    repeated = saved.get("last_error") == reason
+    transient = bool(re.search(
+        r"timeout|timed out|connection|could not resolve host|network|HTTP 5\d\d|host probe",
+        reason, re.IGNORECASE))
+    delay = min(3600, 60 * 2 ** min(failures - 1, 6)) if transient else 0
+    fields = {"node": saved.get("node") or "check"}
+    to_plan = not transient and (repeated or reason.startswith("fix_code"))
+    if to_plan:
+        rounds_append(repo, issue, f"{saved.get('node', picked.get('node', 'check'))} → Plan: {reason}")
         fields.update(node="plan", plan_phase="write", plan_evaluations=0,
                       plan_accepted_sha=None,
-                      plan_prompt=replan_prompt(picked, f"Uwagi (Fix): {reason}",
-                                                (saved.get("verdict") or {}).get("uwagi", [])))
+                      plan_prompt=replan_prompt(picked, f"Repeated failure: {reason}",
+                                                (saved.get("verdict") or {}).get("uwagi", []),
+                                                sha or saved.get("sha") or ""))
     state_update(repo, issue, **fields, result="failed", reason=reason,
-                 failures=failures, retry_at=time.time() + delay,
+                 last_error=None if to_plan else reason,
+                 failures=failures, retry_at=time.time() + delay if delay else 0,
                  pr=saved.get("pr", picked.get("pr")),
                  sha=sha if sha is not None else saved.get("sha"))
-    rounds_append(repo, issue, f"{reason} → retry later")
+    if not to_plan:
+        rounds_append(repo, issue, f"{reason} → retry later" if transient else f"{reason} → retry")
     return {"result": "failed", "reason": reason}
 
 
@@ -558,14 +560,29 @@ def resume(picked: dict) -> dict:
     # open_pr_for filters by branch; its contract returns number and SHA only.
     if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):
         return needs_help(picked, "PR branch or number mismatch", sha)
-    if not worktree.is_dir():
-        return needs_help(picked, "missing worktree", sha)
-    try:
-        code, out, err = _git(worktree, ["branch", "--show-current"])
-    except Exception as exc:
-        return needs_help(picked, f"branch mismatch: {type(exc).__name__}: {exc}", sha)
+    code, out, err = _git(worktree, ["branch", "--show-current"]) if worktree.is_dir() else (1, "", "missing worktree")
     if code != 0 or out.strip() != branch:
-        return needs_help(picked, f"branch mismatch: {err.strip() or out.strip()}", sha)
+        def restore():
+            commands = [["fetch", "origin", branch]]
+            if worktree.exists():
+                # Keep the old branch, commits and dirty files in a sibling worktree.
+                backup = worktree.with_name(f"{worktree.name}-recovery-{time.time_ns()}")
+                commands.append(["worktree", "move", str(worktree), str(backup)])
+            else:
+                commands.append(["worktree", "prune"])
+            for args in commands:
+                status, output, error = _git(root, args)
+                if status != 0:
+                    raise RuntimeError(error or output)
+            exists, _, _ = _git(root, ["show-ref", "--verify", f"refs/heads/{branch}"])
+            args = (["worktree", "add", str(worktree), branch] if exists == 0 else
+                    ["worktree", "add", "-b", branch, str(worktree), f"origin/{branch}"])
+            status, output, error = _git(root, args)
+            if status != 0:
+                raise RuntimeError(error or output)
+            state_update(picked["repo"], picked["issue"], node="check", verdict=None, local_ci=None)
+            rounds_append(picked["repo"], picked["issue"], "Worktree restored → Check")
+        _retry(picked, "check", restore)
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 

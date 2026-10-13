@@ -118,9 +118,10 @@ env = {
 }
 needs_help({"repo": "mikolaj92/lokay-sandbox", "issue": 1}, "commit is outside the issue worktree")
 got = pick(env)
-assert got.get("issue") != 1, got
-assert got.get("issue") == 2, got
+assert got.get("issue") == 1, got
 assert got.get("repo") == "mikolaj92/lokay-sandbox", got
-print("pick deferred", 1, "selected", got["issue"])
+from lokay.lock import release
+release(got['held'])
+print("deterministic failure: retry without backoff", got["issue"])
 PY
 rm -rf "$tmp"
