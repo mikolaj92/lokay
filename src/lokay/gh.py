@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
@@ -110,9 +111,11 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
         return {"result": "no_ci", "sha": sha, "failed": [],
                 "notes": [{"warstwa": "GitHub CI", "log": "no GitHub checks configured"}]}
     failed = []
+    failed_logs = {}
     pending = []
     for item in rollup:
         name = item.get("name") or item.get("context") or "GitHub CI"
+        failure_count = len(failed)
         if item.get("__typename") == "StatusContext" or "state" in item:
             if item.get("state") in ("ERROR", "FAILURE"):
                 failed.append(name)
@@ -122,10 +125,21 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
             pending.append(name)
         elif item.get("conclusion") not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
             failed.append(name)
+        if len(failed) > failure_count:
+            failed_logs[name] = name
+            run = re.search(r"/actions/runs/(\d+)(?:/|$)", item.get("detailsUrl") or "")
+            if run:
+                try:
+                    code, log, _ = _gh(["run", "view", run[1], "--repo", repo, "--log-failed"])
+                    if code == 0 and log.strip():
+                        failed_logs[name] = log[-4000:]
+                except Exception:
+                    pass  # Keep the check name when GitHub logs are unavailable.
     if pending:
-        return {"result": "pending", "sha": sha, "failed": failed, "pending": pending}
+        return {"result": "pending", "sha": sha, "failed": failed,
+                "failed_logs": failed_logs, "pending": pending}
     if failed:
-        return {"result": "red", "sha": sha, "failed": failed}
+        return {"result": "red", "sha": sha, "failed": failed, "failed_logs": failed_logs}
     return {"result": "green", "sha": sha, "failed": []}
 
 

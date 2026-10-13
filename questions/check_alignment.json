@@ -1,6 +1,6 @@
 {
   "id": "alignment",
   "type": "bool",
-  "question": "Does this hunk miss or drift from the issue and the plan? Changes the issue explicitly asks for (including deleting files) are in scope, not unrelated changes.",
+  "question": "Does this hunk miss or drift from the issue and the plan? Changes the issue explicitly asks for (including deleting files) are in scope, not unrelated changes. Changes required to make CI checks pass are in scope.",
   "veto": 0.85
 }
