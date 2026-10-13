@@ -176,21 +176,26 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         calls = []
         def model(request):
             calls.append(request)
-            assert request['state']['kind'] == kinds, request
+            assert request['state']['kind'] in kinds.split(), request
             if request['questions'][0]['id'] == 'where':
                 return {q['id']: {'choice': 'none' if q['id'] == 'where' else 'logic bug',
                     'probabilities': {key: (1.0 if key == ('none' if q['id'] == 'where' else 'logic bug') else 0.0)
                                       for key in q['options']}}
                         for q in request['questions']}
             assert len(request['questions']) == 1, request
-            for kind in kinds.split():
-                assert lens(kind) in request['questions'][0]['instructions']
+            assert lens(request['state']['kind']) in request['questions'][0]['instructions']
             return {'next': {'choice': choice, 'probabilities': {
                 choice: 0.9, ('issue' if choice == 'ok' else 'ok'): 0.1}}}
-        with patch('lokay.decide.decide', side_effect=model):
+        with patch('lokay.decide.decide', side_effect=model), \
+             patch('lokay.start._prepare', return_value={'result': 'fixture-plan'}) as prepare:
             result = start.resume.__wrapped__(picked)
-        assert len(calls) == (2 if choice == 'issue' else 1), calls
-        if exit_code in (0, None):
+        assert len(calls) == (14 if choice == 'issue' else 7), calls
+        if choice == 'issue':
+            assert result['result'] == 'fixture-plan', result
+            prepare.assert_called_once()
+            merge.assert_not_called()
+            fix.assert_not_called()
+        elif exit_code in (0, None):
             assert result['result'] == 'merged', result
             merge.assert_called_once()
             fix.assert_not_called()

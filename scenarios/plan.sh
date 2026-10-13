@@ -60,12 +60,16 @@ before = art.read_text()
 plan_check(wire, "m")
 assert art.read_text() == before
 # THRESHOLD is currently unused: preserve verdict's actual boundary (0.5),
-# including acceptance of revise when no criterion has a negative majority.
+# but revise never passes, even with positive criteria.
 for p in (0.849999, 0.85, 0.850001, 0.5):
     boundary = json.loads(json.dumps(low))
     boundary['answers']['k_testy'] = {
         'choice': 'true', 'probabilities': {'true': p, 'false': 1 - p}}
+    assert plan_check(boundary, 'm')['next'] == 'revise', p
+    boundary['answers']['next'] = wire['answers']['next']
     assert plan_check(boundary, 'm')['next'] == 'ok', p
+boundary['answers']['k_testy'] = low['answers']['k_testy']
+assert plan_check(boundary, 'm')['next'] == 'revise'
 assert plan_check(low, 'm')['next'] == 'revise'
 print("plan ok; probabilities below/at/above 0.85 preserve verdict semantics")
 print(json.dumps(checked))
