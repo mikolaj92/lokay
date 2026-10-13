@@ -46,8 +46,6 @@ def run_process(
     remaining = None if deadline is None else deadline - time.monotonic()
     if remaining is not None and remaining <= 0:
         raise TickExpired()
-    tick_limited = remaining is not None and remaining <= timeout
-    effective_timeout = timeout if remaining is None else min(timeout, remaining)
     process = subprocess.Popen(
         list(argv),
         cwd=cwd,
@@ -60,6 +58,10 @@ def run_process(
     )
     cleanup_deadline = None
     try:
+        # Process creation consumes the same tick budget as communication.
+        remaining = None if deadline is None else max(0, deadline - time.monotonic())
+        tick_limited = remaining is not None and remaining <= timeout
+        effective_timeout = timeout if remaining is None else min(timeout, remaining)
         try:
             stdout, stderr = process.communicate(timeout=effective_timeout)
         except subprocess.TimeoutExpired as error:

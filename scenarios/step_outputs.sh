@@ -108,6 +108,12 @@ try:
             with patch.object(run.subprocess, 'Popen', return_value=process):
                 run.run_process(['fixture'], timeout=operation)
             process.communicate.assert_called_once_with(timeout=effective)
+            process.reset_mock()
+            # Starting the process also consumes the tick budget.
+            with patch.object(run.subprocess, 'Popen', return_value=process), \
+                 patch.object(run.time, 'monotonic', side_effect=[9.0, 9.5]):
+                run.run_process(['fixture'], timeout=operation)
+            process.communicate.assert_called_once_with(timeout=min(effective, 0.5))
             for drain_timeout in (False, True):
                 for vanished in (False, True):
                     process.reset_mock()
@@ -117,7 +123,8 @@ try:
                         subprocess.TimeoutExpired(['fixture'], 5, output='partial stdout', stderr='partial stderr')
                         if drain_timeout else ('partial stdout', 'partial stderr')]
                     with patch.object(run.subprocess, 'Popen', return_value=process), \
-                         patch.object(run.os, 'killpg', side_effect=ProcessLookupError if vanished else None) as killpg:
+                         patch.object(run.os, 'killpg', side_effect=ProcessLookupError if vanished else None) as killpg, \
+                         patch.object(run.time, 'monotonic', side_effect=[9.0, 9.0, 9.0, 9.0, 14.0]):
                         try:
                             run.run_process(['fixture'], timeout=operation)
                         except run.TickExpired:
@@ -131,7 +138,7 @@ try:
                         killpg.assert_called_once_with(123, signal.SIGKILL)
                     assert process.communicate.call_args_list == [call(timeout=effective), call(timeout=5)]
                     if drain_timeout:
-                        process.wait.assert_called_once_with(timeout=5)
+                        process.wait.assert_called_once_with(timeout=0)
                     else:
                         process.wait.assert_not_called()
             process.communicate.side_effect = None
