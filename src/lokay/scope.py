@@ -38,13 +38,20 @@ def code_scope_issue(files: list[str], plan: str) -> dict | None:
     if section:
         for line in section[1].splitlines():
             item = re.match(r"^\s*(?:[-*+]|\d+[.)])\s+(.+)", line)
-            if not item:
+            if item:
+                text = item[1].split("—", 1)[0].strip().removeprefix("**")
+                if not text:
+                    continue
+                quoted = re.match(r"`([^`]+)`", text)
+                path = quoted[1] if quoted else text.split()[0]
+            elif line.lstrip().startswith("|"):
+                cell = line.lstrip().split("|", 2)[1].strip()
+                if not cell or cell.lower() in ("plik", "file") or re.fullmatch(r":?-{3,}:?", cell):
+                    continue
+                quoted = re.search(r"`([^`]+)`", cell)
+                path = quoted[1] if quoted else cell
+            else:
                 continue
-            text = item[1].split("—", 1)[0].strip().removeprefix("**")
-            if not text:
-                continue
-            quoted = re.match(r"`([^`]+)`", text)
-            path = quoted[1] if quoted else text.split()[0]
             planned.add(path.rstrip(":,").removesuffix("**").rstrip(":,").removeprefix("./"))
     outside = [path for path in files if path not in planned and not is_test(path)
                and not (PurePosixPath(path).name.endswith(".lock") or
