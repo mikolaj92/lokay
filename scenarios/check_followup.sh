@@ -87,6 +87,7 @@ from pathlib import Path
 from unittest.mock import patch
 from lokay.gh import check_comment
 from lokay import start
+refresh_body = start.refresh_body
 with patch('lokay.gh._gh', return_value=(0, 'url', '')) as gh:
     check_comment('example/repo', 1, 1, green, {'result': 'green'})
     body = gh.call_args.args[0][-1]
@@ -150,5 +151,49 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     entries = [line for line in rounds.splitlines() if 'Check lens ' in line and 'p=' in line][:7]
     assert len(entries) == len({line.split('p=', 1)[1] for line in entries}) == 7
     assert 'Check → Plan' in rounds
+
+    stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={'removed': [], 'reset': []}))
+    stack.enter_context(patch('lokay.setup.prepare_dependencies'))
+    stop_fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
+    stack.enter_context(patch('lokay.gh.open_pr_for', return_value={'number': 1, 'headRefOid': 'abc'}))
+    merge.return_value = {'result': 'merged', 'merge_sha': 'merged'}
+    kinds = sorted(p.stem.removeprefix('check_') for p in QUESTIONS.glob('check_*.json'))
+    for identical in (7, 4):
+        state.state_update(picked['repo'], picked['issue'], node='check', verdict=None,
+                           check_notes=[], fix_counts=[], fix_history=[], diff_fingerprint=None,
+                           fix_fingerprint=None)
+        decision.side_effect = [
+            {'next': 'issue', 'uwagi': [{'plik': 'a.py', 'linia_od': 10, 'linia_do': 12,
+              'zmiana': 'missing handling/validation' if n < identical else f'bug {n}',
+              'pytanie': kind, 'p': .40 + n/100}], 'probabilities': []}
+            for n, kind in enumerate(kinds)
+        ]
+        merge.reset_mock()
+        stop_fix.reset_mock()
+        with patch('sys.stderr') as stderr:
+            outcome = start._finish(picked, Path(tmp), 'lokay/1809', 'abc', [])
+        saved = state.state_read(picked['repo'], picked['issue'])
+        if identical == 7:
+            assert outcome['result'] == 'merged', outcome
+            merge.assert_called_once()
+            stop_fix.assert_not_called()
+            assert saved['verdict']['uwagi'] == [] and len(saved['check_notes']) == 7
+            assert stderr.write.called
+            rounds = (state.run_dir(picked['repo'], picked['issue']) / 'rounds.md').read_text()
+            assert 'Check degenerate answer: categories=' + ','.join(kinds) in rounds
+            with patch('lokay.build.pr_body', return_value='base'), \
+                 patch('lokay.start.open_pr_for', return_value={'number': 1}), \
+                 patch('lokay.gh.pr_set_body', return_value={'result': 'updated'}) as update:
+                refresh_body(picked['repo'], picked['issue'])
+                body = update.call_args.args[2]
+                assert '## Uwagi bez konkretu' in body
+                assert all(kind in body for kind in kinds)
+                assert 'a.py:10-12: missing handling/validation' in body
+        else:
+            assert outcome['result'] == 'failed'
+            merge.assert_not_called()
+            stop_fix.assert_called_once()
+            assert len(saved['verdict']['uwagi']) == 7 and not saved['check_notes']
+            assert not stderr.write.called
 print('follow-up: relative threshold; issue without location → Plan; seven distinct lens logs; no merge OK')
 PY
