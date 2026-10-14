@@ -37,51 +37,76 @@ def main(argv: list[str] | None = None) -> int:
     if args.node == "replay":
         import gzip
         import json
-        from datetime import datetime, timezone
-        from lokay.state import RUNS
+        import difflib
+        import hashlib
+        from pathlib import Path
+        from lokay.start import step
 
         replay = argparse.ArgumentParser(prog="lokay replay")
-        replay.add_argument("--tick")
+        replay.add_argument("path", type=Path)
         replay.add_argument("--repo")
         replay.add_argument("--issue", type=int)
-        replay.add_argument("--date", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
         filters = replay.parse_args(rest)
-        day = datetime.strptime(filters.date, "%Y-%m-%d").strftime("%Y-%m-%d")
-        directory = RUNS.parent / "ticks"
-        path = directory / f"{day}.jsonl"
-        if not path.exists():
-            path = path.with_suffix(".jsonl.gz")
-        states = {}
-        sequences = {}
-        opener = gzip.open if path.suffix == ".gz" else open
-        with opener(path, "rt") as stream:
-            for line in stream:
-                row = json.loads(line)
-                if any(value is not None and row.get(key) != value for key, value in
-                       (("tick", filters.tick), ("repo", filters.repo), ("issue", filters.issue))):
-                    continue
-                tick = row["tick"]
-                if row["v"] != 1 or row["seq"] <= sequences.get(tick, 0):
-                    raise ValueError("invalid event sequence")
-                sequences[tick] = row["seq"]
-                for key in ("before", "after", "output"):
-                    value = row.get(key)
-                    if isinstance(value, dict) and set(value) == {"blob"}:
-                        sha = value["blob"].removeprefix("sha256:")
-                        if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
-                            raise ValueError("invalid blob hash")
-                        import hashlib
-
-                        raw = (directory / "blobs" / sha).read_bytes()
-                        if hashlib.sha256(raw).hexdigest() != sha:
-                            raise ValueError("blob hash mismatch")
-                        row[key] = json.loads(raw)
-                if row["kind"] == "transition":
-                    identity = (row["repo"], row["issue"])
-                    if states.get(identity, row["before"]) != row["before"]:
-                        raise ValueError("state discontinuity")
-                    states[identity] = row["after"]
-                print(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+        source = filters.path
+        paths = sorted(path for path in source.rglob("*")
+                       if path.name.endswith((".jsonl", ".jsonl.gz"))) if source.is_dir() else [source]
+        count = 0
+        row = {}
+        try:
+            if not paths:
+                raise ValueError("no replay files")
+            for path in paths:
+                if not path.name.endswith((".jsonl", ".jsonl.gz")):
+                    raise ValueError("expected .jsonl or .jsonl.gz")
+                opener = gzip.open if path.suffix == ".gz" else open
+                with opener(path, "rt") as stream:
+                    for line in stream:
+                        value = json.loads(line)
+                        if not isinstance(value, dict):
+                            raise ValueError("expected event object")
+                        row = value
+                        if row.get("kind") != "transition" or any(
+                            value is not None and row.get(key) != value for key, value in
+                            (("repo", filters.repo), ("issue", filters.issue))
+                        ):
+                            continue
+                        for key in ("before", "event", "after"):
+                            value = row[key]
+                            if isinstance(value, dict) and set(value) == {"blob"}:
+                                reference = value["blob"]
+                                if not isinstance(reference, str) or not reference.startswith("sha256:"):
+                                    raise ValueError("invalid blob hash")
+                                sha = reference[7:]
+                                if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+                                    raise ValueError("invalid blob hash")
+                                candidates = [path.parent / "blobs" / sha,
+                                              path.parent / "ticks" / "blobs" / sha]
+                                if source.is_dir():
+                                    candidates.append(source / "blobs" / sha)
+                                blob = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
+                                raw = blob.read_bytes()
+                                if hashlib.sha256(raw).hexdigest() != sha:
+                                    raise ValueError("blob hash mismatch")
+                                row[key] = json.loads(raw)
+                        if any(not isinstance(row[key], dict) for key in ("before", "event", "after")):
+                            raise ValueError("expected before/event/after objects")
+                        got = step(row["before"], row["event"])
+                        got = {key: value for key, value in got.items() if key != "updated_at"}
+                        expected = {key: value for key, value in row["after"].items() if key != "updated_at"}
+                        if got != expected:
+                            print(f"replay: mismatch seq={row.get('seq')} node={row.get('node')} "
+                                  f"event={json.dumps(row['event'], ensure_ascii=False)}", file=sys.stderr)
+                            print("\n".join(difflib.unified_diff(
+                                json.dumps(expected, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
+                                json.dumps(got, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
+                                fromfile="expected", tofile="got", lineterm="")), file=sys.stderr)
+                            return 1
+                        count += 1
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"replay: seq={row.get('seq')} node={row.get('node')} "
+                  f"event={row.get('event')} error={exc}", file=sys.stderr)
+            return 1
+        print(f"replay: {count}/{count} transitions ok")
         return 0
     if args.node == "status":
         from lokay.observe import status

@@ -60,7 +60,7 @@ def log_event(kind: str, **fields) -> None:
                 raw = value.encode() if isinstance(value, str) else json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
                 row["input"] = "sha256:" + hashlib.sha256(raw).hexdigest()
                 row["ms"] = round((time.monotonic() - row.pop("started")) * 1000)
-            for key in ("output", "before", "after"):
+            for key in ("output", "before", "event", "after"):
                 if key not in row:
                     continue
                 raw = json.dumps(row[key], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
@@ -129,20 +129,15 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     current = json.loads(path.read_text()) if path.exists() else {}
     before = {key: value for key, value in current.items() if key != "updated_at"}
-    if "node" in fields and (fields["node"] != current.get("node") or "node_since" not in current):
-        current["node_since"] = time.time()
-    if fields.get("last_attempt") and not current.get("issue_since"):
-        current["issue_since"] = time.time()
-    if fields.get("result") == "merged":
-        current["issue_since"] = None
-    current.update(fields)
+    from lokay.start import step
+
+    event = {"ts": time.time(), **fields.pop("_event", {}), "fields": fields}
+    current = step(before, event)
     from lokay.observe import current as observe_current
 
     failures = current.get("failures", 0)
     reason = (current.get("reason") or current.get("last_error")) if failures else None
     result = "failed" if failures and current.get("reason") else current.get("result", "running")
-    if fields.get("failures") == 0 and "result" not in fields and current.get("result") == "failed":
-        current["result"] = result = "running"
     observe_current(repo=repo, issue=issue, node=current.get("node"),
                     node_since=current.get("node_since"), result=result,
                     issue_since=current.get("issue_since"), idle_reason=None,
@@ -154,9 +149,6 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     after = {key: value for key, value in current.items() if key != "updated_at"}
     log_event("context", repo=repo, issue=issue, node=current.get("node"))
     if before != after:
-        event = (fields.get("result") or
-                 (f"{before.get('node') or 'start'}->{after.get('node')}"
-                  if before.get("node") != after.get("node") else after.get("result") or after.get("node") or "updated"))
         log_event("transition", repo=repo, issue=issue, node=current.get("node"),
                   event=event, before=before, after=after)
     return path

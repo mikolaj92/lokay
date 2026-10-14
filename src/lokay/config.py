@@ -4,8 +4,6 @@ import math
 import os
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parents[2]
 STATE = Path.home() / ".lokay"
 
@@ -24,6 +22,8 @@ def tick_budget(env: dict[str, str] | None = None) -> float:
 
 
 def load_repos(path: Path | None = None) -> list[dict]:
+    import yaml
+
     if path is None:
         path = Path(os.environ.get("LOKAY2_REPOS_FILE") or ROOT / "repos.yaml")
     raw = yaml.safe_load(path.read_text()) or {}

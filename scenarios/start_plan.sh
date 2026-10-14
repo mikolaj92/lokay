@@ -47,7 +47,8 @@ def scenario(*, choices=None, writes=None, node='plan', existing=False,
 
         def update(repo, issue, **values):
             # Match persisted state: mutations of a read must not silently save it.
-            saved.update(deepcopy(values))
+            event = {"ts": clock[0], **values.pop("_event", {}), "fields": deepcopy(values)}
+            saved.update(start.step(saved, event))
 
         def maybe_pause(kind, name):
             nonlocal paused

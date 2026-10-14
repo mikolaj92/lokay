@@ -16,6 +16,67 @@ from lokay.run import TickExpired, check_deadline, retry_sleep, run_process, tic
 from lokay.state import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
+def step(state: dict, event: dict) -> dict:
+    current = dict(state)
+    fields = dict(event["fields"])
+    action = event.get("action")
+    outcome = event.get("outcome") or {}
+    if action == "needs_help":
+        reason = outcome["reason"]
+        failures = current.get("failures", 0) + 1
+        transient = bool(re.search(
+            r"timeout|timed out|connection|could not resolve host|network|HTTP 5\d\d|host probe",
+            reason, re.IGNORECASE))
+        to_plan = not event.get("plan_branch") and not transient and (
+            current.get("last_error") == reason or reason.startswith("fix_code"))
+        delay = min(3600, 60 * 2 ** min(failures - 1, 6)) if transient else 0
+        fields.update(node="plan" if to_plan else current.get("node") or "check",
+                      result="failed", reason=reason, last_error=None if to_plan else reason,
+                      failures=failures, retry_at=event["ts"] + delay if delay else 0)
+        if to_plan:
+            fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
+                          plan_evaluations=0, plan_accepted_sha=None)
+    elif action == "replan" or (action == "build_complete" and outcome.get("result") == "failed"):
+        fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
+                      plan_evaluations=0, plan_accepted_sha=None)
+        if action == "build_complete":
+            fields.update(result="failed", reason=outcome.get("reason") or "build failed",
+                          failures=current.get("failures", 0) + 1, retry_at=0)
+    elif action == "retry_succeeded":
+        fields.update(failures=0, retry_at=0, reason=None)
+    elif action == "build_complete" and outcome.get("result") == "done":
+        fields.update(failures=0, reason=None, retry_at=0, build_note=None, previous_head=None,
+                      pi_response=outcome.get("pi_response") or "")
+    elif action == "fix_to_build":
+        fields.update(node="build", result="running", reason=None, failures=0, retry_at=0)
+    elif action == "synthesis" and outcome.get("next") == "ok":
+        fields.update(node="build", plan_phase=None, plan_prompt=None)
+    elif action == "published" and outcome.get("result") == "pr_open":
+        fields.update(node="check", verdict=None)
+    elif action == "verdict":
+        fields["node"] = outcome["result"]
+        if outcome["result"] == "plan":
+            fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
+                          plan_evaluations=0, plan_accepted_sha=None)
+    elif action == "fix_complete":
+        fields.update(node="check", verdict=None)
+    elif action == "merge_complete":
+        fields["result"] = outcome["result"]
+    elif action == "red_main":
+        fields.update(node=current.get("node") or ("check" if outcome.get("pr") else "plan"),
+                      result="running", reason=None, retry_at=0)
+    if "node" in fields and (fields["node"] != current.get("node") or "node_since" not in current):
+        current["node_since"] = event["ts"]
+    if fields.get("last_attempt") and not current.get("issue_since"):
+        current["issue_since"] = event["ts"]
+    if fields.get("result") == "merged":
+        current["issue_since"] = None
+    current.update(fields)
+    if fields.get("failures") == 0 and "result" not in fields and current.get("result") == "failed":
+        current["result"] = "running"
+    return current
+
+
 class RetryLater(RuntimeError):
     pass
 
@@ -240,8 +301,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
             pr = open_pr_for(name, branch)
             saved = state_read(name, number)
             node = saved.get("node") or ("check" if pr else "plan")
-            state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
-                         result="running", reason=None, retry_at=0, last_attempt=time.time())
+            state_update(name, number, _event={"action": "red_main", "outcome": {"pr": pr, "status": status}},
+                         branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
             return {"result": "picked", "repo": name, "issue": number, "node": node,
                     "pr": pr["number"] if pr else None, "held": held}
         except BaseException:
@@ -335,7 +396,8 @@ def _retry(picked: dict, node: str, action, expected: str | None = None, *, plan
         check_deadline()
         outcome = action()
         if expected is None or outcome.get("result") == expected:
-            state_update(repo, issue, failures=0, retry_at=0, reason=None)
+            state_update(repo, issue, _event={"action": "retry_succeeded",
+                                             "outcome": {"result": outcome.get("result")} if isinstance(outcome, dict) else {}})
             return outcome
         reason = outcome.get("reason") or outcome.get("error") or str(outcome)
     except Exception as exc:
@@ -488,7 +550,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
             rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: Decision {outcome['next']}")
             if outcome["next"] == "ok":
                 synthesis["phase"] = "accepted"
-                state_update(repo, issue, node="build", plan_phase=None, plan_prompt=None,
+                state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
                              plan_synthesis=synthesis,
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []))
@@ -573,17 +635,13 @@ def _prepare(picked: dict) -> tuple | dict:
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
         rounds_append(picked["repo"], picked["issue"], f"Build → Plan: {reason}")
-        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                     plan_evaluations=0, plan_accepted_sha=None,
+        state_update(picked["repo"], picked["issue"], _event={"action": "build_complete", "outcome": built},
                      plan_prompt=replan_prompt(picked, f"Uwagi (Build): {reason}: {explanation}", [built],
-                                               build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None),
-                     result="failed", reason=reason,
-                     failures=state_read(picked["repo"], picked["issue"]).get("failures", 0) + 1, retry_at=0)
+                                               build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None))
         return {**built, "next": "plan"}
     if built.get("result") != "done":
         raise RuntimeError(f"unexpected Build outcome: {built}")
-    state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0, build_note=None,
-                 previous_head=None, pi_response=built.get("pi_response") or "")
+    state_update(picked["repo"], picked["issue"], _event={"action": "build_complete", "outcome": built})
     def publish():
         pr = open_pr_for(picked["repo"], branch)
         expected = pr.get("headRefOid") if pr else None
@@ -599,35 +657,28 @@ def _prepare(picked: dict) -> tuple | dict:
         picked["repo"], picked["issue"], pr=published.get("pr"),
         sha=published.get("sha"), result=published["result"],
     )
-    state_update(picked["repo"], picked["issue"], node="check", verdict=None)
+    state_update(picked["repo"], picked["issue"], _event={"action": "published", "outcome": published})
     return worktree, branch, published["sha"], repo.get("test") or [], plan_rounds
 
 
 def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch: bool = False) -> dict:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
-    failures = saved.get("failures", 0) + 1
-    repeated = saved.get("last_error") == reason
-    transient = bool(re.search(
-        r"timeout|timed out|connection|could not resolve host|network|HTTP 5\d\d|host probe",
-        reason, re.IGNORECASE))
-    delay = min(3600, 60 * 2 ** min(failures - 1, 6)) if transient else 0
-    fields = {"node": saved.get("node") or "check"}
-    to_plan = not plan_branch and not transient and (repeated or reason.startswith("fix_code"))
+    event = {"ts": time.time(), "fields": {}, "action": "needs_help",
+             "outcome": {"reason": reason}, "plan_branch": plan_branch}
+    derived = step(saved, event)
+    fields = {}
+    to_plan = derived.get("last_error") is None
     if to_plan:
         rounds_append(repo, issue, f"{saved.get('node', picked.get('node', 'check'))} → Plan: {reason}")
-        fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={}, plan_evaluations=0,
-                      plan_accepted_sha=None,
-                      plan_prompt=replan_prompt(picked, f"Repeated failure: {reason}",
-                                                (saved.get("verdict") or {}).get("uwagi", []),
-                                                sha or saved.get("sha") or ""))
-    state_update(repo, issue, **fields, result="failed", reason=reason,
-                 last_error=None if to_plan else reason,
-                 failures=failures, retry_at=time.time() + delay if delay else 0,
+        fields["plan_prompt"] = replan_prompt(picked, f"Repeated failure: {reason}",
+                                             (saved.get("verdict") or {}).get("uwagi", []),
+                                             sha or saved.get("sha") or "")
+    state_update(repo, issue, **fields, _event=event,
                  pr=saved.get("pr", picked.get("pr")),
                  sha=sha if sha is not None else saved.get("sha"))
     if not to_plan:
-        rounds_append(repo, issue, f"{reason} → retry later" if transient else f"{reason} → retry")
+        rounds_append(repo, issue, f"{reason} → retry later" if derived["retry_at"] else f"{reason} → retry")
     return {"result": "failed", "reason": reason}
 
 
@@ -675,8 +726,8 @@ def fix_to_build(picked: dict, worktree: Path) -> dict | None:
     note = (f"Failing test(s) added by this PR: {names}\n{log[-6000:]}\n"
             "Fix the production code so they pass, or remove these newly added tests (new unit tests are not allowed).")
     rounds_append(picked["repo"], picked["issue"], "Fix → Build: failing test added in this PR: " + names)
-    state_update(picked["repo"], picked["issue"], node="build", build_note=note,
-                 result="running", reason=None, failures=0, retry_at=0)
+    state_update(picked["repo"], picked["issue"], _event={"action": "fix_to_build", "outcome": ci},
+                 build_note=note)
     return {"next": "build"}
 
 
@@ -690,9 +741,8 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
         return outcome
     if node == "fix_code" and outcome.get("reason") == "outside_worktree":
         prompt = replan_prompt(picked, outcome.get("explanation") or "outside_worktree", [outcome], sha)
-        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                     plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None,
-                     result="failed", reason="outside_worktree", retry_at=0)
+        state_update(picked["repo"], picked["issue"], _event={"action": "replan", "outcome": outcome},
+                     plan_prompt=prompt, result="failed", reason="outside_worktree", retry_at=0)
         return {**outcome, "next": "plan"}
     expected = "done" if node == "fix_code" else "pushed"
     if outcome.get("result") != expected and not (
@@ -867,7 +917,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         f"merge repo={picked['repo']} pr={pr['number']} sha={sha}: "
                         f"{type(exc).__name__}: {exc}"
                     ) from exc
-                state_update(picked["repo"], picked["issue"], result=merged["result"])
+                state_update(picked["repo"], picked["issue"], _event={"action": "merge_complete", "outcome": merged})
                 if merged["result"] == "merged":
                     state_update(picked["repo"], picked["issue"], sha=merged["merge_sha"])
                     rounds_append(picked["repo"], picked["issue"], f"Merge: sha={merged['merge_sha']}")
@@ -889,7 +939,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     for file in conflicts
                 ]}
                 pending = "fix"
-                state_update(picked["repo"], picked["issue"], node="fix", verdict=verdict)
+                state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
+                             verdict=verdict)
                 rounds_append(picked["repo"], picked["issue"], "Check: conflict, files=" + ", ".join(conflicts))
                 pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
                 if pr:
@@ -983,8 +1034,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 prompt = replan_prompt(picked, "Fix made no progress; revise the plan.", uwagi, head)
                 prompt += "\n\nTest log:\n" + test_log
                 rounds_append(picked["repo"], picked["issue"], "Re-Plan test log:\n" + test_log)
-                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                             plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
+                state_update(picked["repo"], picked["issue"], _event={"action": "replan"}, plan_prompt=prompt)
                 prepared = _prepare({**picked, "node": "plan"})
                 if isinstance(prepared, dict):
                     return prepared
@@ -1086,7 +1136,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if fixed.get("dispute_rejected"):
                 verdict = {**verdict, "result": "merge", "uwagi": []}
                 pending = "merge"
-                state_update(picked["repo"], picked["issue"], node="merge", result="merge", verdict=verdict)
+                state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
+                             result="merge", verdict=verdict)
                 continue
             if fixed.get("next") in ("build", "plan"):
                 return fixed
@@ -1120,7 +1171,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                          fix_hunk_fingerprint=hunk_fingerprint, diff_fingerprint=diff_fingerprint)
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
-            state_update(picked["repo"], picked["issue"], node="check", verdict=None)
+            state_update(picked["repo"], picked["issue"], _event={"action": "fix_complete", "outcome": pushed})
             continue
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
@@ -1295,12 +1346,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             reason = "\n".join(item["prompt"] for item in verdict["replan"])
             rounds_append(picked["repo"], picked["issue"], "Check → Plan: " + reason)
             prompt = replan_prompt(picked, reason, findings, head)
-            state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                         plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
+            state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
+                         plan_prompt=prompt)
             prepared = _prepare({**picked, "node": "plan"})
             if isinstance(prepared, dict):
                 return prepared
             worktree, branch, sha, tests, plan_rounds = prepared
             pending = "check"
             continue
-        state_update(picked["repo"], picked["issue"], node=pending)
+        state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})
