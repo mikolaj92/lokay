@@ -20,7 +20,7 @@ It parses the entire script before running, so an update cannot change a running
 
 - `lokay status` prints runs from `~/.lokay/runs/*/*/state.json`.
 - Ticks log calls and transitions in `~/.lokay/ticks/`, with large values in `blobs/`.
-  `uv run lokay replay <file.jsonl|dir> [--repo R --issue N]` verifies transitions without external calls.
+  `uv run lokay replay <file.jsonl|file.jsonl.gz|dir> [--repo R --issue N]` verifies transitions without external calls.
 - `~/.lokay/heartbeat.json` records UTC time, result, version, current repo/issue/node
   and node start time every tick, including during long steps and retries.
   It also reports `idle_reason` (`idle_backoff`, `host_down`, `no_work`),
@@ -107,23 +107,11 @@ bash scripts/check.sh
 The check first prepares this checkout with `uv sync --frozen` and verifies local
 `lokay` and `yaml` imports. Initial preparation may require network access;
 an unavailable dependency fails the check. It then isolates the home, temporary
-directory and uv cache inside the checkout and runs all 37 scenarios offline,
-without syncing dependencies. An unexpected GitHub CLI call fails without
-logging its arguments. Scenario fixtures replace this blocker with their own
-fake GitHub CLI.
-
-`repos.yaml` uses the same explicit inventory in `scripts/check.sh`. Missing files
-fail before any scenario runs; a red scenario stops the check. The summary counts
-executed/required scenarios. Only the live, separately authorized canary is excluded.
-`scenarios/suite.sh` verifies inventory completeness, missing/red failure paths,
-and stale external configuration → repaired configuration reload, in temporary files.
-
-The old `scenarios/manifest.sh` was deleted in `df81eb38` together with the Fala
-manifest it inspected. It is not a lost Python runner test. `3f9097e2` removed its
-stale reference, but still checked only 11 scenarios. The full inventory includes
-Build, Fix, graph transitions in darkfactory, guards and observability instead of
-restoring an obsolete manifest test. A copied historical check command still fails
-with exit 127; use the configured check command above.
+directory and uv cache inside the checkout and runs
+`uv run lokay replay fixtures/replay/` offline, without syncing dependencies.
+An unexpected GitHub CLI call fails without logging its arguments.
+Replay checks recorded transitions and stops at the first mismatch.
+Blobs may be plain or gzip-compressed.
 
 ### Checkout configuration is not host configuration
 
@@ -146,34 +134,12 @@ Persisted local CI is reusable only when both SHA and exact test argv match.
 A changed argv or legacy state without argv forces a new local check, even on
 an unchanged SHA. The new result replaces the cache through normal state writes;
 round logs remain intact. No extra commit is needed to invalidate this cache.
-`scenarios/ci.sh` exercises production resume with temporary configuration and
-state, real local commands, and fake external Git/PR operations.
 An already running `_finish()` holds its test argv locally; its internal Check
 retry does not reload that list. Use a new runner invocation/resume after the
 active invocation ends, not a concurrent runner or a manual state edit.
 `lokay start --check` only probes host readiness; it does not execute the suite.
 Require the runner's Check log to show `bash scripts/check.sh` and the full
 summary on the final PR SHA. A manual green suite is not that evidence.
-
-`bash scenarios/darkfactory.sh` runs two repetitions in fresh temporary homes.
-Each repetition keeps one CLI process for both ticks and the idle tick.
-It processes two issues, forces red → Fix → green → Merge, then
-checks an idle tick. Fake pi, Git, GitHub and a local Decision HTTP server log
-calls and reject unexpected operations. It checks persisted states, separate
-round logs, SHA-bound checks, heartbeat timestamps and operation counts. It compares
-the complete ordered external call trace across repetitions. Mutation checks reject
-missing Fix, merge with red CI and missing second tick. Python network calls and
-the runner's curl health probe are restricted to loopback in this scenario.
-`scenarios/darkfactory_canary.sh` checks the canary with fake GitHub; it does not
-prove a real canary run.
-
-Report the deterministic counters separately: `autonomous_runs=2/2`,
-`mutations_rejected=3/3`, `rounds_logs=2/2`, `between_run_heartbeat=1/1`.
-For the sandbox, measure `merged_prs=2/2`, `rounds_logs=2/2`,
-`between_run_heartbeat=1/1` and `next_scheduled_pair=1/1` separately.
-Fake recurrence checks do not confirm a scheduled LaunchAgent cycle.
-An unmeasured counter is unconfirmed, not successful. Attribute runner evidence
-to `(mikolaj92/lokay, PR #1784, final SHA)`; a local suite is separate evidence.
 
 ### Real canary (separate authorization required)
 
@@ -197,7 +163,7 @@ LOKAY_DARKFACTORY_CANARY=1
 LOKAY2_REPO=mikolaj92/lokay-sandbox
 ```
 
-The caretaker invokes `scenarios/darkfactory-canary.sh` before each normal tick.
+The caretaker invokes `scripts/darkfactory-canary.sh` before each normal tick.
 It creates a slugify/version issue pair at most once every 24 hours. An unfinished
 pair blocks new pairs. Titles contain a persisted pair ID, so a retry recovers
 an issue created before local persistence failed. An advisory lock blocks
@@ -223,14 +189,12 @@ Report evidence against `(mikolaj92/lokay, PR #1784, final SHA)` separately:
 
 | Gate | Required counters | Evidence |
 | --- | --- | --- |
-| Local suite | `scenarios=37/37; errors=0` | Full check summary |
-| Deterministic cycle | `autonomous_runs=2/2; mutations_rejected=3/3` | Same-process ticks, fake call trace, states, logs, heartbeat |
+| Local replay | `replay: 129/129 transitions ok` | Full check summary |
 | Runner Check | Full suite on final SHA | Effective config path, argv and existing PR's Check log |
 | Real canary | `merged_prs=2/2; rounds_logs=2/2; between_run_heartbeat=1/1` | Sandbox PR URLs and saved proof |
 | Real recurrence | One next pair due, no duplicates | Persisted deadline and existing LaunchAgent log |
 
-The fake canary scenario checks recovery, evidence collection, deadlines and
-failure handling. Its simulated clock/state does not prove real recurrence.
+Replay does not prove real recurrence.
 Observe the next real pair without changing the clock or invoking a manual tick.
 Before the deadline expect no new pair; afterwards expect exactly one. Active
 pairs and failures must not create duplicates. Missing evidence stays unverified.

@@ -83,8 +83,10 @@ def main(argv: list[str] | None = None) -> int:
                                               path.parent / "ticks" / "blobs" / sha]
                                 if source.is_dir():
                                     candidates.append(source / "blobs" / sha)
+                                candidates = [variant for candidate in candidates
+                                              for variant in (candidate, candidate.with_suffix(".gz"))]
                                 blob = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
-                                raw = blob.read_bytes()
+                                raw = gzip.decompress(blob.read_bytes()) if blob.suffix == ".gz" else blob.read_bytes()
                                 if hashlib.sha256(raw).hexdigest() != sha:
                                     raise ValueError("blob hash mismatch")
                                 row[key] = json.loads(raw)

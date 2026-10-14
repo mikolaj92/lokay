@@ -255,7 +255,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
                 return False
         summary = re.search(
             r"\b[1-9]\d* passed\b|\bRan [1-9]\d* tests?\b|\bExecuted [1-9]\d* tests?\b"
-            r"|\btests? [1-9]\d*\b|\bscenarios: [1-9]\d*/[1-9]\d*; errors=0|\b\w+ tests passed\b", log)
+            r"|\btests? [1-9]\d*\b|\breplay: ([1-9]\d*)/\1 transitions ok\b|\b\w+ tests passed\b", log)
         return (proc.returncode == 0 and summary is not None
                 and not re.search(r"\b0 passed\b", log)
                 and not any(marker in log.lower() for marker in markers))

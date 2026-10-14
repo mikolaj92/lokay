@@ -6,4 +6,4 @@ The graph is Plan, Build, Check, Fix, Merge. Merge is the only end.
 
 `pi -p` writes code. Decision steps return probabilities, not prose. Do not import `lokay` from `src/lokay`.
 
-No unit tests of this package. A scenario script or a real run is the proof. Auto-merge is on for every repo. The only human approval is the nuke PR.
+No unit tests of this package. Recorded replay or a real run is the proof. Auto-merge is on for every repo. The only human approval is the nuke PR.
