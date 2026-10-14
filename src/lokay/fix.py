@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lokay.build import child_env, tidy_and_commit, worktree_status
+from lokay.build import tidy_and_commit, worktree_status
 from lokay.git import push
 from lokay.host_guard import guard, failure
-from lokay.run import run_process
+from lokay.run import pi_env, run_process, sandboxed
 
 
 def _git(repo: Path, args: list[str]) -> str:
@@ -17,13 +17,13 @@ def _git(repo: Path, args: list[str]) -> str:
 
 def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
     before = worktree_status(worktree)
-    clean = child_env(env)
+    clean = pi_env(env, worktree)
     clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
     changes = {"changed": False}
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
             proc = run_process(
-                ["pi", "-p", "--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt],
+                sandboxed(["pi", "-p", "--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt], worktree, clean),
                 cwd=worktree,
                 env=clean,
                 timeout=3600,

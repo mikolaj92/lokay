@@ -9,15 +9,13 @@ from pathlib import Path
 from lokay.git import push, worktree_add
 from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
-from lokay.run import run_process
+from lokay.run import pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
-DROP = ("GH_TOKEN", "GITHUB_TOKEN")
-
 
 def child_env(base: dict[str, str]) -> dict[str, str]:
-    return {key: value for key, value in base.items() if key not in DROP}
+    return pi_env(base, Path.cwd())
 
 
 def _git(repo: Path, args: list[str]) -> str:
@@ -183,7 +181,7 @@ def build_code(
     previous_head: str | None = None,
 ) -> dict:
     previous_head = previous_head or _git(worktree, ["rev-parse", "HEAD"])
-    clean = child_env(env)
+    clean = pi_env(env, worktree)
     clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
     exclude_caches(worktree)
     before = worktree_status(worktree)
@@ -197,7 +195,7 @@ def build_code(
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
             proc = run_process(
-                ["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt],
+                sandboxed(["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt], worktree, clean),
                 cwd=worktree,
                 env=clean,
                 timeout=3600,

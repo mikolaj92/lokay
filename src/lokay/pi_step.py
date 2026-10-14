@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from lokay.run import run_process
+from lokay.run import pi_env, run_process, sandboxed
 
 
 def pi_step(
@@ -16,13 +16,14 @@ def pi_step(
     env: Mapping[str, str] | None = None,
     timeout: float = 3600,
 ) -> dict[str, str]:
-    child = dict(os.environ if env is None else env)
+    worktree = cwd if cwd is not None else Path.cwd()
+    child = pi_env(os.environ if env is None else env, worktree)
     provider = child.get("LOKAY2_PROVIDER", "")
     model = child.get("LOKAY2_MODEL", "")
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
     proc = run_process(
-        ["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt],
+        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child),
         cwd=cwd,
         env=child,
         timeout=timeout,

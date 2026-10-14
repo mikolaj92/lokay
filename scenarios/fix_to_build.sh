@@ -65,7 +65,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     start.fix_to_build(picked, root)
     note = state.state_read(picked['repo'], 7)['build_note']
     def pi(argv, **kwargs):
-        if argv[0] != 'pi':
+        if argv[0] != 'pi' and not (argv[0] == '/usr/bin/sandbox-exec' and 'pi' in argv):
             return run_process(argv, **kwargs)
         assert note in argv[-1], argv
         added.unlink()

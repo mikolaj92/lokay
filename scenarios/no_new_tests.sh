@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory() as tmp:
     for production in (False, True):
         _git(root, ['reset', '--hard', base])
         def pi(argv, **kwargs):
-            if argv[0] != 'pi':
+            if argv[0] != 'pi' and not (argv[0] == '/usr/bin/sandbox-exec' and 'pi' in argv):
                 return run_process(argv, **kwargs)
             (root / 'tests').mkdir(exist_ok=True)
             (root / 'tests/new.py').write_text('test\n')
