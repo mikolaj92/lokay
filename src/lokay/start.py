@@ -292,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         report = probes()
         print(json.dumps(report, separators=(",", ":")))
         return 0 if host_ready(report) else 1
+    from lokay.state import log_event
+
+    log_event("start")
     token = tick_deadline.set(time.monotonic() + tick_budget())
     try:
         return _tick()

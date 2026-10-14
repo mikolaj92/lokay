@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from urllib.parse import parse_qs, urlsplit
 
 import yaml
 
@@ -263,6 +264,34 @@ class Dashboard:
             self.refresh()
             self.stop.wait(interval)
 
+    def ticks(self, offset: int = 0, day: str = "") -> dict:
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        offset = offset if not day or day == today else 0
+        lines = []
+        path = self.home / "ticks" / f"{today}.jsonl"
+        try:
+            with path.open("rb") as stream:
+                if offset > path.stat().st_size:
+                    offset = 0
+                stream.seek(offset)
+                for _ in range(200):
+                    line = stream.readline()
+                    if not line.endswith(b"\n"):
+                        break
+                    offset = stream.tell()
+                    try:
+                        row = json.loads(line)
+                        for key in ("before", "after", "output"):
+                            value = row.get(key)
+                            if isinstance(value, dict) and re.fullmatch(r"sha256:[a-f0-9]{64}", str(value.get("blob", ""))):
+                                row[key] = read_json(self.home / "ticks" / "blobs" / value["blob"][7:])
+                        lines.append(safe(row))
+                    except (ValueError, TypeError):
+                        continue
+        except OSError:
+            pass
+        return {"date": today, "offset": offset, "lines": lines}
+
     def state(self) -> dict:
         now = time.time()
         heartbeat = select(read_json(self.home / "heartbeat.json"), HEARTBEAT_FIELDS)
@@ -388,6 +417,9 @@ def render(data: dict) -> str:
     if data.get("current_label"):
         body += f'<p>{esc(data["current_label"])}</p>'
     body += table(["Field", "Value"], fields)
+    body += ('<h2>Live ticks</h2><ol id="ticks" aria-live="polite"></ol>'
+             '<button id="tick-back" type="button">Previous seq</button> '
+             '<button id="tick-live" type="button">Live</button><pre id="tick-state"></pre>')
     body += f'<p>Last GitHub refresh: {esc(date(data["last_refresh"]))}. {esc(data["error"] or "")}</p>'
     body += '<h2>Finished lokay/* merges</h2>' + table(["Merged (Warsaw)", "Repo", "PR", "Title", "+ / −", "Kind"], [
         [esc(date(pr.get("mergedAt"))), esc(pr["repo"]), link(pr["repo"], pr.get("number")), esc(pr.get("title")),
@@ -414,7 +446,40 @@ def render(data: dict) -> str:
     body += '<h2>Recent runs</h2>' + table(["Repo", "Issue", "PR", "Node", "Rounds", "Updated (Warsaw)"], [
         [esc(r["repo"]), esc(r["issue"]), link(r["repo"], r.get("pr")), esc(str(r.get("node") or "—").capitalize()), rounds(r), esc(date(r.get("updated_at")))] for r in data["recent"]])
     body += '<p>GitHub lists are capped: 100 merged PRs and 100 open PRs per repo, 1000 open issues per repo. Rates and ETA use this cached sample; unavailable counts are shown as —. Only currently open PRs contribute to growth opened counts.</p>'
-    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="60"><title>Lokay2 dashboard</title><style>body{font:14px system-ui,sans-serif;color:#17212b;background:#f5f7fa;margin:24px}h1{font-size:24px}h2{margin-top:28px;font-size:19px}h3{font-size:15px}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;background:white}th,td{text-align:left;padding:6px 9px;border-bottom:1px solid #dce2e8;vertical-align:top;overflow-wrap:anywhere}th{background:#e7edf3}tr:nth-child(even){background:#f8fafc}a{color:#1262a4}.bad{color:#b00020;font-weight:bold}.bar{background:#337ab7;height:12px;min-width:0}p{color:#485563}</style></head><body>' + body + '</body></html>'
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Lokay2 dashboard</title><style>body{font:14px system-ui,sans-serif;color:#17212b;background:#f5f7fa;margin:24px}h1{font-size:24px}h2{margin-top:28px;font-size:19px}h3{font-size:15px}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;background:white}th,td{text-align:left;padding:6px 9px;border-bottom:1px solid #dce2e8;vertical-align:top;overflow-wrap:anywhere}th{background:#e7edf3}tr:nth-child(even){background:#f8fafc}a{color:#1262a4}.bad{color:#b00020;font-weight:bold}.bar{background:#337ab7;height:12px;min-width:0}p{color:#485563}</style></head><body>' + body + '''<script>
+let offset=0, day='', events=[], selected=null;
+const list=document.getElementById('ticks'), state=document.getElementById('tick-state');
+function show(event){
+  selected=event;
+  state.textContent=JSON.stringify({tick:event.tick,seq:event.seq,state:event.after||event.output},null,2);
+}
+document.getElementById('tick-back').onclick=()=>{
+  const current=selected||events.at(-1);
+  if(!current)return;
+  const previous=events.findLast(e=>e.tick===current.tick&&e.seq<current.seq&&e.kind==='transition');
+  if(previous)show(previous);
+  else state.textContent=JSON.stringify({tick:current.tick,seq:current.seq,state:current.before},null,2);
+};
+document.getElementById('tick-live').onclick=()=>{selected=null;state.textContent='';};
+async function tail(){
+  try{
+    const response=await fetch('/api/ticks.json?offset='+offset+'&date='+day);
+    if(!response.ok)return;
+    const data=await response.json();
+    if(day&&day!==data.date){events=[];list.replaceChildren();selected=null;}
+    day=data.date;offset=data.offset;
+    for(const event of data.lines){
+      events.push(event);
+      const item=document.createElement('li'), button=document.createElement('button');
+      button.type='button';
+      button.textContent=event.tick.slice(0,8)+' #'+event.seq+' '+event.repo+' #'+event.issue+' '+event.node+' '+(event.event||event.call);
+      button.onclick=()=>show(event);item.append(button);list.append(item);
+    }
+    while(list.children.length>20)list.firstChild.remove();
+  }catch{}
+}
+tail();setInterval(tail,2000);
+</script></body></html>'''
 
 
 def handler(dashboard: Dashboard):
@@ -423,6 +488,10 @@ def handler(dashboard: Dashboard):
             path = self.path.split("?", 1)[0]
             if path == "/healthz":
                 content, mime, status = b"ok\n", "text/plain", 200
+            elif path == "/api/ticks.json":
+                query = parse_qs(urlsplit(self.path).query)
+                data = dashboard.ticks(number(query.get("offset", [0])[0]), query.get("date", [""])[0])
+                content, mime, status = json.dumps(data, ensure_ascii=False).encode(), "application/json", 200
             elif path in ("/", "/api/state.json"):
                 data = dashboard.state()
                 if path == "/":

@@ -5,6 +5,7 @@ import math
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Mapping
 
 EPS = 1e-5
@@ -243,6 +244,24 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
 
 
 def decide(internal: Mapping) -> dict:
+    from lokay.state import log_event
+
+    started = time.monotonic()
+    output = None
+    ok = False
+    try:
+        output = _decide(internal)
+        ok = True
+        return output
+    except BaseException as exc:
+        output = {"error": type(exc).__name__, "reason": str(exc)}
+        raise
+    finally:
+        log_event("call", call="decide", name=",".join(str(q.get("id", "")) for q in internal.get("questions", []) if isinstance(q, Mapping))[:200],
+                  input=internal, output=output, started=started, ok=ok)
+
+
+def _decide(internal: Mapping) -> dict:
     from lokay.run import run_process
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]

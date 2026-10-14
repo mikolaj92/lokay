@@ -71,6 +71,38 @@ def run_process(
     timeout: float | None = None,
     input: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    from lokay.state import log_event
+
+    command = next((index for index, arg in enumerate(argv)
+                    if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
+    if command is None:
+        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+    call = Path(argv[command]).name
+    started = time.monotonic()
+    output = None
+    ok = False
+    try:
+        proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
+        ok = proc.returncode == 0
+        return proc
+    except BaseException as exc:
+        output = {"error": type(exc).__name__, "reason": str(exc)}
+        raise
+    finally:
+        log_event("call", call=call, name=" ".join(argv[command + 1:command + 3])[:200] if call == "gh" else "pi -p",
+                  input={"argv": list(argv[command:]), "stdin": input},
+                  output=output, started=started, ok=ok)
+
+
+def _run_process(
+    argv: Sequence[str],
+    *,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout: float | None = None,
+    input: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     # Even callers without a timeout cannot hold a tick indefinitely.
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
