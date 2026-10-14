@@ -118,7 +118,8 @@ with ExitStack() as stack:
     result = build.build_code(Path('/unused'), 'trusted plan', 'Żółć', body, {}, expected_branch='lokay/17')
     assert result['result'] == 'done', result
     argv = process.call_args.args[0]
-    assert argv[:2] == ['pi', '-p'] and len(argv) == 7, argv
+    pi_argv = argv[argv.index('pi'):]
+    assert pi_argv[:2] == ['pi', '-p'] and len(pi_argv) == 7, argv
     from lokay.safety import untrusted_issue_block
     assert argv[-1].endswith(untrusted_issue_block('Żółć', body)), argv
     assert process.call_count == 1

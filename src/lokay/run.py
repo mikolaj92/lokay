@@ -4,10 +4,43 @@ import math
 import os
 import signal
 import subprocess
+import tempfile
 import time
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+
+
+def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
+    env = dict(base)
+    for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+                "GIT_ASKPASS", "SSH_AUTH_SOCK"):
+        env.pop(key, None)
+    env.update({
+        "GH_CONFIG_DIR": tempfile.mkdtemp(dir=os.path.realpath(env.get("TMPDIR") or "/tmp")),
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": "credential.helper",
+        "GIT_CONFIG_VALUE_0": "",
+        "GIT_CONFIG_KEY_1": "remote.origin.pushurl",
+        "GIT_CONFIG_VALUE_1": "no_push://disabled",
+    })
+    return env
+
+
+def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> list[str]:
+    if not Path("/usr/bin/sandbox-exec").exists():
+        return argv
+    worktree = Path(worktree).resolve()
+    git = run_process(["git", "-C", str(worktree), "rev-parse", "--git-common-dir"], timeout=30)
+    gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
+    return [
+        "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[2] / "sandbox/pi.sb"),
+        "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
+        "-D", f"TMPDIR={os.path.realpath(env.get('TMPDIR') or '/tmp')}",
+        "-D", f"HOME={os.path.realpath(env.get('HOME') or os.environ['HOME'])}",
+        *argv,
+    ]
 
 
 class TickExpired(BaseException):
