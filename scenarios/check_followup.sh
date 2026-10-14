@@ -131,6 +131,9 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     stack.enter_context(patch('lokay.start.refresh_body', return_value={'result': 'updated'}))
     stack.enter_context(patch('lokay.gh.open_pr_for', return_value={'number': 1}))
     stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green'}))
+    stack.enter_context(patch('lokay.check.local_ci', side_effect=lambda sha, commands, cwd: {
+        'sha': sha, 'result': 'green', 'tested': True, 'tested_cwds': [str(cwd.resolve())],
+        'failed': [], 'notes': [], 'log': '1 passed'}))
     stack.enter_context(patch('lokay.gh.check_comment'))
     stack.enter_context(patch('lokay.scope.code_scope_issue', return_value=None))
     merge = stack.enter_context(patch('lokay.merge.merge_sha'))
@@ -152,7 +155,6 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     assert len(entries) == len({line.split('p=', 1)[1] for line in entries}) == 7
     assert 'Check → Plan' in rounds
 
-    stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={'removed': [], 'reset': []}))
     stack.enter_context(patch('lokay.setup.prepare_dependencies'))
     stop_fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
     stack.enter_context(patch('lokay.gh.open_pr_for', return_value={'number': 1, 'headRefOid': 'abc'}))

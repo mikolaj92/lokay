@@ -13,6 +13,10 @@ from lokay.run import pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
+LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
+             "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
+             "yarn.lock": "package.json"}
+
 
 def child_env(base: dict[str, str]) -> dict[str, str]:
     return pi_env(base, Path.cwd())
@@ -56,8 +60,6 @@ def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
 @contextmanager
 def generated_cleanup(worktree: Path):
     """Keep ignored environments; discard setup/CI output and lock rewrites."""
-    from lokay.merge_guard import LOCKFILES
-
     if not (worktree / ".git").exists():
         yield
         return
@@ -89,8 +91,6 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     modified = names(["diff", "--name-only", "-z", "HEAD"])
     manifests = (modified | names(["diff", "--name-only", "-z", "origin/main..HEAD"])
                  | names(["ls-files", "--others", "--exclude-standard", "-z"]))
-    from lokay.merge_guard import LOCKFILES
-
     siblings = LOCKFILES
     branch_changes = names(["diff", "--name-only", "-z", "origin/main...HEAD"])
     stale_locks = sorted(path for path in branch_changes if Path(path).name in siblings

@@ -111,7 +111,11 @@ elif tool == "git":
     elif args == ['diff', '--name-only', 'origin/main...HEAD']:
         print('app.py')
     elif args == ["fetch", "origin", "main"]:
-        pass
+        os.execv('/usr/bin/git', ['git', *args])
+    elif args == ['rev-parse', 'origin/main'] or args[:3] == ['worktree', 'add', '--detach']:
+        os.execv('/usr/bin/git', ['git', *args])
+    elif args[:3] == ['show', '--format=fuller', '--first-parent']:
+        os.execv('/usr/bin/git', ['git', *args[:3], 'HEAD'])
     elif args[:3] == ["worktree", "add", "-b"]:
         target = Path(args[4])
         target.mkdir()
@@ -121,6 +125,8 @@ elif tool == "git":
         data["contents"][str(target)] = ""
         save()
     elif args[:3] == ["worktree", "remove", "--force"]:
+        if Path(args[3]).parent.name.startswith('lokay-main-'):
+            os.execv('/usr/bin/git', ['git', *args])
         shutil.rmtree(args[3])
     elif args[:2] == ["status", "--porcelain"]:
         if (cwd / "app.py").exists() and (cwd / "app.py").read_text() != data["contents"][str(cwd)]:
@@ -186,7 +192,9 @@ elif tool == "gh":
     elif args[:2] == ["pr", "edit"]:
         assert f"Closes #{args[2]}" in option("--body")
     elif args[:2] == ["pr", "view"]:
-        emit({"headRefOid": data["remote"][f"lokay/{args[2]}"], "statusCheckRollup": []})
+        sha = data["remote"][f"lokay/{args[2]}"]
+        emit({"headRefOid": sha, "mergeCommit": {"oid": sha},
+              "statusCheckRollup": [{"name": "fixture", "status": "COMPLETED", "conclusion": "SUCCESS"}]})
     elif args[:2] == ["pr", "edit"]:
         assert f"Closes #{args[2]}" in option("--body")
         assert int(args[2]) in data["prs"].values()
@@ -198,8 +206,8 @@ elif tool == "gh":
         assert option("--match-head-commit") == data["remote"][f"lokay/{n}"]
         assert n not in data["merged"]
         checks = [body for issue, body in data['comments'] if issue == n]
-        assert len(checks) == 2 and '**fix** · CI: **no_ci** · tests: **red**' in checks[0]
-        assert '**merge** · CI: **no_ci** · tests: **green** · tested=true' in checks[1], 'merge without green check'
+        assert len(checks) == 2 and '**fix** · CI: **green** · tests: **red**' in checks[0]
+        assert '**merge** · CI: **green** · tests: **green** · tested=true' in checks[1], 'merge without green check'
         assert data['contents'][str(root / f'clone-wt-{n}')] == 'value = 42\n'
         data["merged"].append(n)
         save()
@@ -213,7 +221,7 @@ requests = []
 
 def verify_rounds(rounds, sha):
     progress = [line for line in rounds if 'Fix progress:' in line]
-    assert len(progress) == 1 and 'counts=[1]' in progress[0], rounds
+    assert len(progress) == 1 and 'counts=[2]' in progress[0], rounds
     lenses = [line for line in rounds if 'Check lens ' in line]
     assert len(lenses) == 14, rounds
     rounds = [line for line in rounds if 'Fix progress:' not in line and 'Check lens ' not in line]
@@ -274,6 +282,19 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
     root = Path(temporary).resolve()
     (root / "bin").mkdir()
     (root / "clone").mkdir()
+    def real_git(*args):
+        subprocess.run(['/usr/bin/git', *args], cwd=root / 'clone', check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       env={**os.environ, 'GIT_AUTHOR_DATE': '2026-01-01T00:00:00Z',
+                            'GIT_COMMITTER_DATE': '2026-01-01T00:00:00Z'})
+    real_git('init', '-b', 'main')
+    real_git('config', 'user.name', 'mikolaj92')
+    real_git('config', 'user.email', 'fixture@example.invalid')
+    (root / 'clone/app.py').write_text('value = 42\n')
+    (root / 'clone/verify.py').write_text("from app import value\nassert value == 42, value\nprint('1 passed')\n")
+    real_git('add', '.')
+    real_git('commit', '-m', 'Main fixture')
+    real_git('remote', 'add', 'origin', str(root / 'clone'))
     # Guard the real runner and its children, not just the fake tool arguments.
     (root / 'sitecustomize.py').write_text('''
 import socket
@@ -408,8 +429,8 @@ for line in sys.stdin:
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
             assert len(comments) == 2, comments
-            assert "**fix** · CI: **no_ci** · tests: **red**" in comments[0], comments
-            assert "**merge** · CI: **no_ci** · tests: **green** · tested=true" in comments[1], comments
+            assert "**fix** · CI: **green** · tests: **red**" in comments[0], comments
+            assert "**merge** · CI: **green** · tests: **green** · tested=true" in comments[1], comments
         calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
         pi_prompts = [args[-1] for tool, args in calls if tool == 'pi']
         assert len(pi_prompts) == 12, calls
@@ -422,7 +443,9 @@ for line in sys.stdin:
             assert len(merges) == 1, merges
             assert merges[0][merges[0].index('--match-head-commit') + 1] == state['sha']
         # Compare every external operation, including order, across fresh homes.
+        import re
         normalized = json.dumps(calls, sort_keys=True).replace(str(root), '<root>')
+        normalized = re.sub(r'/[^" ]*/lokay-main-[^/" ]+', '<main>', normalized)
         print('operations:', len(calls), hashlib.sha256(normalized.encode()).hexdigest())
         print("darkfactory: two autonomous ticks, red → fix → green → merge, state/rounds/heartbeat OK; mutations rejected=3")
     finally:

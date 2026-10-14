@@ -12,7 +12,7 @@ from tempfile import NamedTemporaryFile
 import sys
 
 from lokay.gh import _gh
-from lokay.state import RUNS
+from lokay.state import RUNS, main_status
 
 CURRENT: dict = {}
 
@@ -72,6 +72,7 @@ def heartbeat(result: str | None = None, **fields) -> dict:
         installed = version("lokay")
     except PackageNotFoundError:
         installed = "unknown"
+    previous["main_status"] = main_status()
     previous.update(time=datetime.now(timezone.utc).isoformat(),
                     version=os.environ.get("LOKAY_VERSION", installed))
     path.parent.mkdir(parents=True, exist_ok=True)

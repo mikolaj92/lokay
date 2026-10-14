@@ -204,7 +204,15 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
             head = json.loads(view_out).get("headRefOid")
             if head and head != expected_head_sha:
                 return {"result": "sha_moved", "merge_sha": None}
-        if "not mergeable" in blob or "behind" in blob or "conflict" in blob:
+        if "behind" in blob:
+            return {"result": "behind", "merge_sha": None}
+        if "not mergeable" in blob or "conflict" in blob:
             return {"result": "conflict", "merge_sha": None}
         raise RuntimeError(err.strip() or out.strip() or "merge failed")
-    return {"result": "merged", "merge_sha": expected_head_sha}
+    code, out, err = _gh(["pr", "view", str(number), "--repo", repo, "--json", "mergeCommit"])
+    if code:
+        raise RuntimeError(err or "merge commit lookup failed")
+    sha = (json.loads(out).get("mergeCommit") or {}).get("oid")
+    if not sha:
+        raise RuntimeError("merge commit missing")
+    return {"result": "merged", "merge_sha": sha}

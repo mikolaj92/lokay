@@ -133,9 +133,6 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     # start also holds an imported reference; keep both API entry points isolated.
     stack.enter_context(patch('lokay.gh._gh', issue))
     stack.enter_context(patch('lokay.start._gh', issue))
-    # Guard behavior has its own real-Git scenario; this fixture has no Git repository.
-    guard = stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={
-        'removed': [], 'reset': []}))
     package_diff = False
     package = worktree / 'packages' / 'argus'
     package.mkdir(parents=True)
@@ -184,8 +181,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     history = state.run_dir(picked['repo'], 1) / 'rounds.md'
     assert history.read_text().count('GitHub CI pending') == 6
     # Use the real Check verdict and model response parser; only external effects are faked.
-    stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'no_ci', 'failed': [],
-        'notes': [{'warstwa': 'GitHub CI', 'log': 'no GitHub checks configured'}]}))
+    stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green', 'failed': [], 'notes': []}))
     merge = stack.enter_context(patch('lokay.merge.merge_sha', return_value={
         'result': 'merged', 'merge_sha': 'merged'}))
     fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
@@ -202,7 +198,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         cached = ({'sha': head['sha'], 'argv': [], 'result': 'green',
                    'failed': [], 'notes': [], 'log': ''} if exit_code is None else None)
         state.state_update(picked['repo'], 1, node='check', verdict=None, local_ci=cached,
-                           issue_title='fixture', issue_body='')
+                           fix_history=[], fix_counts=[], issue_title='fixture', issue_body='')
         merge.reset_mock(); fix.reset_mock()
         calls = []
         def model(request):
@@ -230,21 +226,20 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
             prepare.assert_called_once()
             merge.assert_not_called()
             fix.assert_not_called()
-        elif exit_code is None or (exit_code == 0 and not package_diff):
+        elif exit_code == 0 and not package_diff:
             assert result['result'] == 'merged', result
             merge.assert_called_once()
-            guard.assert_called()
             issue.assert_not_called()  # Saved issue metadata must not be fetched again.
             fix.assert_not_called()
             saved = state.state_read(picked['repo'], 1)
-            assert saved['ci'] == 'no_ci' and saved['tested'] == (exit_code == 0), saved
+            assert saved['ci'] == 'green' and saved['tested'] == (exit_code == 0), saved
             assert comment.call_args.args[-1]['tested'] == (exit_code == 0)
         else:
-            assert result['result'] == 'failed', result
+            assert result['result'] == 'failed', (choice, exit_code, package_diff, result)
             merge.assert_not_called()
             fix.assert_called_once()
-            if package_diff:
+            if package_diff and exit_code is not None:
                 assert any('changed package' in row.get('log', '') for row in
                            state.state_read(picked['repo'], 1)['verdict']['uwagi'])
-print('CI: mutation, timeout, flaky, remote guards, SHA/argv cache; 4 real Check → merge cases OK')
+print('CI: mutation, timeout, flaky, remote guards, SHA/argv cache; 1 real Check → merge case; untested runs rejected OK')
 PY

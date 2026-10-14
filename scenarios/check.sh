@@ -120,6 +120,55 @@ except FileNotFoundError:
     pass
 else:
     raise AssertionError('missing questions accepted')
+from dataclasses import replace
+from pathlib import Path
+from lokay.checks import CheckInput, ci_green, docs, local_tests
+
+input = CheckInput('example/repo', 1865, 'abc', '', '', '', '', [],
+                   {'sha': 'abc', 'ci': 'green', 'result': 'green', 'tested': True, 'failed': []}, Path.cwd())
+assert ci_green(input)['pass'] and local_tests(input)['pass']
+for status in ('red', 'pending', 'no_ci', None):
+    assert not ci_green(replace(input, ci={**input.ci, 'ci': status}))['pass']
+assert not ci_green(replace(input, ci={**input.ci, 'sha': 'old'}))['pass']
+for tested in (False, None, 1):
+    assert not local_tests(replace(input, ci={**input.ci, 'tested': tested}))['pass']
+assert not local_tests(replace(input, ci={**input.ci, 'result': 'red'}))['pass']
+assert not local_tests(replace(input, ci={**input.ci, 'result': 'pending'}))['pass']
+github = {'warstwa': 'GitHub CI', 'plik': '.github/workflows/ci.yml', 'linia': 12,
+          'log': 'discard-github' + 'G' * 3000}
+combined = replace(input, ci={**input.ci, 'ci': 'red', 'result': 'red', 'failed': [github]})
+assert local_tests(combined)['pass'] and not ci_green(combined)['pass']
+finding = ci_green(combined)
+assert finding['location'] == '.github/workflows/ci.yml:12'
+assert 'G' * 3000 in finding['reason'] and 'G' * 3000 in finding['fix_hint']
+assert 'discard-github' not in finding['reason'] + finding['fix_hint']
+local = {'warstwa': 'uv run pytest', 'plik': 'a.py', 'linia': 10,
+         'log': 'discard-local' + 'L' * 800}
+combined = replace(combined, ci={**combined.ci, 'failed': [github, local]})
+finding = local_tests(combined)
+assert not finding['pass'] and finding['location'] == 'a.py:10'
+assert 'L' * 800 in finding['reason'] and 'L' * 800 in finding['fix_hint']
+assert 'discard-local' not in finding['reason'] + finding['fix_hint']
+assert 'G' * 800 not in finding['reason'] + finding['fix_hint']
+assert not local_tests(replace(input, ci={**input.ci, 'failed': [local]}))['pass']
+assert not local_tests(replace(input, ci={**input.ci, 'result': None}))['pass']
+
+doc_diff = 'diff --git a/README.md b/README.md\n+++ b/README.md\n@@ -0,0 +1 @@\n+guide\n'
+doc_input = replace(input, diff=doc_diff, plan='Update `README.md`.')
+assert not docs(doc_input)['pass']
+for request in ('README', 'docs', 'dokumentacja', 'dokumentacji', 'documentation'):
+    assert docs(replace(doc_input, issue_title=request))['pass'], request
+    assert docs(replace(doc_input, issue_body=request))['pass'], request
+for request in ('documentary', 'undocumented', 'readmeish'):
+    assert not docs(replace(doc_input, issue_title=request))['pass'], request
+for plan in ('', 'other/README.md', 'README.md.old', 'README.md/extra', 'prefix-README.md'):
+    assert not docs(replace(doc_input, issue_title='docs', plan=plan))['pass'], plan
+second_doc = 'diff --git a/docs/guide.md b/docs/guide.md\n+++ b/docs/guide.md\n@@ -1 +1 @@\n-old\n+new\n'
+multiple_docs = replace(doc_input, issue_title='docs', diff=doc_diff + second_doc)
+assert not docs(multiple_docs)['pass']
+assert docs(replace(multiple_docs, plan='README.md and docs/guide.md'))['pass']
+assert docs(replace(doc_input, diff=doc_diff.replace('+guide', '-guide')))['pass']
+print('checks: CI SHA/status, local evidence/logs, explicit planned documentation OK')
 print("issue", bad["uwagi"][0]["plik"], bad["uwagi"][0]["linia_od"])
 print("merge")
 PY

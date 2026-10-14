@@ -105,7 +105,8 @@ Proza wspomina `outside.py`.
         events.append('ci')
         assert _git(root, ['merge-base', '--is-ancestor', main_sha, 'HEAD']) == ''
         assert sha != pr_head, 'CI ran on stale PR base'
-        return {'result': 'green', 'sha': sha, 'failed': [], 'notes': [], 'log': ''}
+        return {'result': 'green', 'sha': sha, 'tested': True, 'tested_cwds': [str(cwd.resolve())],
+                'failed': [], 'notes': [], 'log': '1 passed'}
     def fix(*args, **kwargs):
         events.append('fix')
         assert any(note.get('warstwa') == 'scope'
@@ -128,8 +129,6 @@ Proza wspomina `outside.py`.
         stack.enter_context(patch('lokay.start.load_repos', return_value=[repo]))
         stack.enter_context(patch('lokay.start.refresh_body', return_value={'result': 'updated'}))
         stack.enter_context(patch('lokay.git._git', side_effect=git))
-        stack.enter_context(patch('lokay.merge_guard._git', side_effect=lambda path, args:
-                                  '' if args[0] == 'fetch' else _git(path, args)))
         stack.enter_context(patch('lokay.fix.fix_publish', side_effect=publish))
         stack.enter_context(patch('lokay.fix.fix_code', side_effect=fix))
         stack.enter_context(patch('lokay.check.local_ci', side_effect=ci))

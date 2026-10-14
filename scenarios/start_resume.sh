@@ -157,7 +157,6 @@ with tempfile.TemporaryDirectory() as tmp:
         aggregate = stack.enter_context(patch('lokay.check.aggregate'))
         code = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'done'}))
         publish = stack.enter_context(patch('lokay.fix.fix_publish', return_value={'result': 'pushed', 'sha': 'new'}))
-        stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={'removed': [], 'reset': []}))
         merge = stack.enter_context(patch('lokay.merge.merge_sha', return_value={'result': 'merged', 'merge_sha': 'merged'}))
         finding = {'result': 'fix', 'sha': 'new', 'uwagi': [{'plik': 'a', 'pytanie': 'bug'}]}
         green = {'result': 'merge', 'sha': 'new', 'uwagi': []}
@@ -176,6 +175,66 @@ with tempfile.TemporaryDirectory() as tmp:
             assert merge.call_count == 1
             args = merge.call_args.args
             assert args[:3] == (repo, 12, 'new') and args[3]['sha'] == 'new', args
+
+        for merge_result in ('sha_moved', 'behind', 'conflict'):
+            reset(node='check', sha='new', pr=12)
+            calls = Mock()
+            for name, mock in (('git', git_mock), ('publish', publish),
+                               ('check', aggregate), ('fix', code), ('merge', merge)):
+                mock.reset_mock()
+                calls.attach_mock(mock, name)
+            aggregate.side_effect = [green, green]
+            ci.reset_mock()
+            conflict = [False]
+            def recovery_git(path, args):
+                if args == ['diff', '--name-only', '--diff-filter=U'] and conflict[0]:
+                    conflict[0] = False
+                    return 0, 'conflicted.py\n', ''
+                return git(path, args)
+            def recovery_merge(*args, **kwargs):
+                if merge.call_count == 1:
+                    conflict[0] = merge_result == 'conflict'
+                    return {'result': merge_result}
+                assert merge.call_count == 2, 'unexpected extra Merge'
+                return {'result': 'merged', 'merge_sha': 'merged'}
+            def recovery_fix(*args, **kwargs):
+                saved = state.state_read(repo, 7)
+                assert saved['node'] == 'fix', saved
+                assert saved['verdict']['uwagi'] == [
+                    {'pytanie': 'conflict', 'plik': 'conflicted.py',
+                     'log': 'Resolve the merge with origin/main.'}], saved
+                assert 'conflicted.py' in args[2], args
+                return {'result': 'done'}
+            git_mock.side_effect = recovery_git
+            merge.side_effect = recovery_merge
+            code.side_effect = recovery_fix
+            try:
+                result = start.resume(picked)
+                assert result == {'result': 'merged', 'merge_sha': 'merged'}, result
+                sequence = []
+                for call in calls.mock_calls:
+                    if call[0] == 'git':
+                        if call.args == (worktree, ['fetch', 'origin', 'main']):
+                            sequence.append('fetch')
+                        elif call.args == (worktree, ['merge', '--no-edit', 'origin/main']):
+                            sequence.append('sync')
+                    else:
+                        sequence.append(call[0])
+                expected = ['fetch', 'sync', 'publish', 'check', 'merge', 'fetch']
+                if merge_result == 'conflict':
+                    expected += ['fix', 'publish', 'fetch']
+                expected += ['sync', 'publish', 'check', 'merge']
+                assert sequence == expected, (merge_result, sequence)
+                assert code.call_count == int(merge_result == 'conflict')
+                assert ci.call_count == 2
+                ci.assert_called_with('new', [tests], worktree)
+                saved = state.state_read(repo, 7)
+                assert saved['sha'] == 'merged' and saved['failures'] == 0, saved
+                assert not saved.get('retry_at'), saved
+            finally:
+                git_mock.side_effect = git
+                merge.side_effect = None
+                code.side_effect = None
 
         # Fix starts before the deadline; publication waits for the next tick.
         from lokay.run import tick_deadline
@@ -277,15 +336,18 @@ with tempfile.TemporaryDirectory() as tmp:
             assert checks[0] == expected_fixes + 1
             assert result['result'] == 'merged', result
             merge.assert_called_once()
-            from lokay.checks import CHECKS, ok
+            from lokay.checks import CHECKS, CheckInput, ci_green, local_tests, ok
+            input = CheckInput(repo, 7, 'new', '', '', '', '', [],
+                               {'sha': 'new', 'ci': 'green', 'result': 'green', 'tested': True,
+                                'failed': [], 'notes': [], 'log': '\n1 passed'}, worktree)
             assert merge.call_args.args[3] == {
                 **green, 'evidence': {'extra': [1, 2]},
-                'checks': [{**ok(check.__name__), **({
+                'checks': [ci_green(input) if check is ci_green else local_tests(input) if check is local_tests else {**ok(check.__name__), **({
                     'reason': 'no new comments' if check.__name__ == 'no_new_comments'
                     else 'no documentation expansion'}
                     if check.__name__ in {'no_new_comments', 'docs'} else {})}
                     for check in CHECKS], 'failed': [],
-            }
+            }, merge.call_args.args[3]
 
         # main owns a real lock through Check, Fix and Merge, including failures.
         from lokay.lock import acquire, release as real_release
@@ -295,12 +357,12 @@ with tempfile.TemporaryDirectory() as tmp:
             else:
                 reset(node='check', sha='new', pr=12)
             publish.reset_mock(); merge.reset_mock()
-            held = acquire('example', repo)
+            held = acquire('example', f'{repo}/wt-7')
             assert held['result'] == 'held'
             active = {**picked, 'held': held}
             check_calls = [0]
             def busy():
-                assert acquire('example', repo)['result'] == 'busy'
+                assert acquire('example', f'{repo}/wt-7')['result'] == 'busy'
             def checked(*args):
                 busy()
                 check_calls[0] += 1
@@ -341,7 +403,7 @@ with tempfile.TemporaryDirectory() as tmp:
                         assert not saved.get('retry_at'), saved
                         publish.assert_not_called(); merge.assert_not_called()
                 release.assert_called_once_with(held)
-            free = acquire('example', repo)
+            free = acquire('example', f'{repo}/wt-7')
             assert free['result'] == 'held'
             real_release(free)
             if failure_at == 'tick_fix':

@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as tmp, \
     got = start.pick({})
     assert got['pr'] == 1, got  # Repo ties use name; PR ties use number.
     with patch('lokay.start.acquire', side_effect=lambda owner, repo:
-               {'result': 'busy' if repo == 'example/second' else 'held'}):
+               {'result': 'busy' if repo.startswith('example/second/wt-') else 'held'}):
         got = start.pick({})
         assert got['repo'] == 'example/first', got
     for repo in repos:
@@ -115,7 +115,7 @@ with tempfile.TemporaryDirectory() as tmp, \
         assert start.main([]) == 0
     assert state.repo_last_attempt('example/first') > 0
     assert state.repo_last_attempt('example/second') == 0
-    held = lock.acquire('example', 'example/first')
+    held = lock.acquire('example', 'example/first/wt-11')
     assert held['result'] == 'held', 'expired tick retained its lock'
     lock.release(held)
     with patch('lokay.start.open_issues') as issues:
