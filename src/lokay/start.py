@@ -58,8 +58,17 @@ def guarded_step(step):
 
 
 def is_task(issue: dict) -> bool:
-    # An epic groups tasks; lokay-stalled is an alarm, not a task.
-    return not issue["title"].lower().startswith("epic") and issue["title"] != "lokay-stalled"
+    # Epics and trackers group tasks; lokay-stalled is an alarm, not a task.
+    title = issue["title"].strip().lower()
+    return not (
+        title.startswith(("epic", "[tracker]", "tracker"))
+        or title == "lokay-stalled"
+        or any(
+            (label.get("name", "") if isinstance(label, dict) else label).lower()
+            in ("tracker", "epic")
+            for label in issue.get("labels") or []
+        )
+    )
 
 
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -143,8 +152,20 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if code != 0:
                     raise RuntimeError(err.strip() or "pr list failed")
                 prs = [row for row in json.loads(out or "[]") if row["headRefName"].startswith("lokay/")]
-                has_prs = has_prs or bool(prs)
-                prs = [row for row in prs if row["headRefName"][6:].isdecimal()
+                tasks = []
+                for row in prs:
+                    number = row["headRefName"][6:]
+                    if not number.isdecimal():
+                        continue
+                    code, out, err = _gh([
+                        "issue", "view", number, "--repo", name, "--json", "title,labels",
+                    ])
+                    if code != 0:
+                        raise RuntimeError(err.strip() or "issue view failed")
+                    if is_task(json.loads(out)):
+                        tasks.append(row)
+                has_prs = has_prs or bool(tasks)
+                prs = [row for row in tasks if row["headRefName"][6:].isdecimal()
                        and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
                 ready = []
                 for row in prs:

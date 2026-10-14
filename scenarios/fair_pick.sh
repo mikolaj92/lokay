@@ -16,6 +16,8 @@ rows = {'example/first': [{'number': 1, 'headRefName': 'lokay/11'}],
         'example/second': [{'number': 20, 'headRefName': 'lokay/22'},
                            {'number': 30, 'headRefName': 'lokay/33'}]}
 def gh(args):
+    if args[:2] == ['issue', 'view']:
+        return 0, json.dumps({'title': 'fix', 'labels': []}), ''
     return 0, json.dumps(rows[args[args.index('--repo') + 1]]), ''
 with tempfile.TemporaryDirectory() as tmp, \
      patch.dict(os.environ, HOME=tmp), \
