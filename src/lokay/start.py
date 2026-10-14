@@ -979,6 +979,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                             rounds_append(picked["repo"], picked["issue"],
                                           f"Dispute: {kind} {'upheld' if valid else 'rejected'} "
                                           f"(p={json.dumps(probabilities)})")
+                            current = state_read(picked["repo"], picked["issue"])
+                            check_history = current.get("check_history", [])
+                            if check_history and check_history[-1]["sha"] == sha:
+                                check_history[-1].setdefault("dispute", {})[kind] = "upheld" if valid else "rejected"
+                                state_update(picked["repo"], picked["issue"], check_history=check_history)
                             if valid:
                                 upheld[kind] = probabilities
                             else:
@@ -1026,7 +1031,20 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 return pushed
             if pushed["result"] == "remote_moved" and pushed.get("sha"):
                 _retry(picked, "check", sync_head)
+            previous_sha = sha
             sha = pushed["sha"]
+            if sha != previous_sha and pushed["result"] == "pushed":
+                def read_fix_subject():
+                    code, subject, err = _git(worktree, ["log", "--format=%s", "origin/main..HEAD"])
+                    if code != 0:
+                        raise RuntimeError(err or "fix commit subject lookup failed")
+                    return next(iter(subject.splitlines()), "")
+
+                subject = _retry(picked, "fix", read_fix_subject)
+                check_history = state_read(picked["repo"], picked["issue"]).get("check_history", [])
+                if check_history and check_history[-1]["sha"] == previous_sha:
+                    check_history[-1].update(fix_sha=sha, fix_commit_subject=subject)
+                    state_update(picked["repo"], picked["issue"], check_history=check_history)
             if pushed["result"] == "pushed":
                 if not pushed_pr(picked["repo"], branch, sha):
                     return needs_help(picked, "sha mismatch after push", sha)
@@ -1107,7 +1125,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                      _retry(picked, "check", read_stat), ci,
                                      sha=sha, repo=picked["repo"], issue=picked["issue"],
                                      issue_title=(saved.get("issue_title") or "")[:4000],
-                                     issue_body=(saved.get("issue_body") or "")[:4000])
+                                     issue_body=(saved.get("issue_body") or "")[:4000],
+                                     history=saved.get("check_history", [])[-5:])
         decisions = []
         kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
         for kind in kinds:
@@ -1164,10 +1183,20 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
             rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
         rounds += 1
+        check_history = state_read(picked["repo"], picked["issue"]).get("check_history", []) + [{
+            "round": rounds, "sha": sha,
+            "findings": [{"pytanie": row.get("pytanie", row.get("warstwa", "")),
+                          "plik": row.get("plik", ""),
+                          "linie": [row.get("linia_od"), row.get("linia_do")],
+                          "zmiana": row.get("zmiana", ""),
+                          "uzasadnienie": (row.get("uzasadnienie") or row.get("log") or "")[:300]}
+                         for row in verdict.get("uwagi", [])],
+            "fix_commit_subject": "", "dispute": {},
+        }]
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
             check_rounds=rounds, result=verdict["result"], verdict=verdict, test_log=log,
-            check_notes=check_notes,
+            check_notes=check_notes, check_history=check_history,
         )
         counts = ", ".join(
             f"{kind}={len(decision['uwagi'])}"

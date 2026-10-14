@@ -121,10 +121,19 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
         return internal
 
     results = []
+    reasons = {}
     for batch, answers in _decision_batches(rows, request, decide_request, api, model):
-        results.append(decide_hunks(kind, batch, {
+        result = decide_hunks(kind, batch, {
             "model": model, "usage": {"completion_tokens": 0}, "answers": answers,
-        }, model))
+        }, model)
+        for index, row in enumerate(batch, start=1):
+            reasons[row["plik"]] = "\n".join(reason for reason in (
+                answers["next"].get("reason"), answers[f"h{index}"].get("reason")
+            ) if reason)
+        for finding in result["uwagi"] + result["nits"]:
+            if reasons[finding["plik"]]:
+                finding["uzasadnienie"] = reasons[finding["plik"]]
+        results.append(result)
     result = {"next": "issue" if any(item["next"] == "issue" for item in results) else "ok",
               "confidence": min(item["confidence"] for item in results),
               "uwagi": [row for item in results for row in item["uwagi"]],
@@ -147,7 +156,11 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
 
         lens_text = " ".join(lens(part) for part in kind.split())
         for batch, answers in _decision_batches(rows, followup, decide_request, api, model):
+            raw_answers = answers
             answers = from_wire("tensorfold", model, {"answers": answers}, followup(batch))
+            for qid, answer in answers.items():
+                if "reason" in raw_answers[qid]:
+                    answer["reason"] = raw_answers[qid]["reason"]
             chosen = answers["where"]["choice"]
             probabilities = answers["where"]["probabilities"]
             p = probabilities[chosen]
@@ -166,6 +179,12 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                 row = next(row for row in batch if f"{row['plik']}:{row['linia_od']}-{row['linia_do']}" == chosen)
                 result["uwagi"].append({key: row[key] for key in ("plik", "linia_od", "linia_do")})
                 result["uwagi"][-1].update(pytanie=kind, p=p, zmiana=answers["change"]["choice"])
+                reason = "\n".join(reason for reason in (
+                    reasons.get(row["plik"]), answers["where"].get("reason"),
+                    answers["change"].get("reason")
+                ) if reason)
+                if reason:
+                    result["uwagi"][-1]["uzasadnienie"] = reason
         if not result["uwagi"]:
             result["replan"] = [{"pytanie": kind, "pliki": [row["plik"] for row in rows],
                                  "prompt": f"lens {kind} widzi problem w "

@@ -39,6 +39,8 @@ def _check(internal: Mapping, response: Mapping) -> dict:
             "probabilities": {name: round(float(probs[name]), 6) for name in options},
             "confidence": float(answer.get("confidence")),
         }
+        if "reason" in answer:
+            out[qid]["reason"] = answer["reason"]
     return out
 
 
@@ -107,7 +109,10 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 {"role": "system", "content": "You are a careful code reviewer. Answer each question "
                  "independently based on the given state, including diff hunks. Give a probability "
                  "distribution over the allowed options for each question. Be specific per question; "
-                 "do not give the same answer to every question by default."},
+                 "do not give the same answer to every question by default. "
+                 "state.history lists earlier findings on this PR and how they were addressed. "
+                 "Do not re-raise a finding that was resolved or rejected in a dispute unless the current "
+                 "diff reintroduces it; raise a new concern only if it is concrete and give its exact reason."},
                 {"role": "user", "content": json.dumps(user)},
             ],
             "response_format": {"type": "json_schema", "json_schema": {
@@ -185,6 +190,11 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
                 probs = {option: p / total if total else 1 / len(probs) for option, p in probs.items()}
                 choice = max(probs, key=lambda option: probs[option])
                 mapped[qid] = {"probabilities": probs, "choice": choice, "confidence": probs[choice]}
+                if "reason" in answers[qid]:
+                    reason = answers[qid]["reason"]
+                    if not isinstance(reason, str):
+                        raise DecisionError(f"reason {qid}")
+                    mapped[qid]["reason"] = reason.strip()[:1500]
         except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
             raise DecisionError("invalid chat decision response") from exc
         return _check(internal, mapped)
