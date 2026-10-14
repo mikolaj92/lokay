@@ -180,19 +180,24 @@ def docs(x: CheckInput) -> dict:
         elif kind == "-":
             change["net"] -= 1
     expanded = [(path, change) for path, change in changes.items() if change["net"] > 0]
-    requested = re.search(r"\b(?:README|docs|dokumentacj\w*|documentation)\b",
-                          x.issue_title + "\n" + x.issue_body, re.IGNORECASE)
-    planned = all(re.search(r"(?<![\w./-])" + re.escape(path) + r"(?![\w./-])", x.plan)
-                  for path in changes)
-    if expanded and requested and planned:
+    requested = re.search(
+        r"\b(?:README|docs|ADR|RFC|design\s+doc\w*|projekt\w*|dokument\w*|documentation|decyzj\w*|guide|changelog)\b",
+        x.issue_title + "\n" + x.issue_body, re.IGNORECASE)
+    unplanned = [(path, change) for path, change in expanded if not any(
+        re.search(r"(?<![\w./-])" + re.escape(candidate) + r"/?(?![\w./-])", x.plan)
+        for candidate in (path, str(Path(path).parent)) if candidate != ".")]
+    offenders = unplanned if requested else expanded
+    if expanded and not offenders:
         return {**ok("docs"), "reason": "requested documentation changes match the plan"}
-    if expanded:
-        path, change = expanded[0]
+    if offenders:
+        path, change = offenders[0]
         return {"name": "docs", "pass": False,
-                "reason": "documentation expanded: " + "; ".join(
-                    f"{path}: +{change['net']} net lines" for path, change in expanded),
+                "reason": "documentation expanded without request or plan: " + "; ".join(
+                    f"{path}: +{change['net']} net lines" for path, change in offenders),
                 "location": f"{path}:{change['line']}",
-                "fix_hint": "keep documentation minimal; do not expand docs"}
+                "fix_hint": "trim only these expanded files: " + ", ".join(
+                    path for path, _ in offenders)
+                + "; never delete documentation that the issue or plan requires"}
     return {**ok("docs"), "reason": "no documentation expansion"}
 
 
