@@ -98,7 +98,7 @@ def kind(files) -> str:
         name = path.rsplit("/", 1)[-1]
         if path.startswith("docs/") or name.endswith((".md", ".rst", ".txt")) or name.startswith("LICENSE"):
             kinds.add("docs")
-        elif path.startswith(("tests/", "test/", "scenarios/")) or (name.startswith("test_") and name.endswith(".py")) or name.endswith("_test.py") or name == "conftest.py":
+        elif path.startswith(("tests/", "test/", "fixtures/replay/")) or (name.startswith("test_") and name.endswith(".py")) or name.endswith("_test.py") or name == "conftest.py":
             kinds.add("tests")
         else:
             kinds.add("code")

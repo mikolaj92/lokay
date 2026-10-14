@@ -51,7 +51,7 @@ while true; do
       printf 'canary requires sandbox-only LOKAY2_REPO\n' >>"$LOG"
       exit 64
     fi
-    bash "$ROOT/scenarios/darkfactory-canary.sh" >>"$LOG" 2>&1 || {
+    bash "$ROOT/scripts/darkfactory-canary.sh" >>"$LOG" 2>&1 || {
       [[ "${1:-}" == "--once" ]] && exit 1
       sleep "$LOKAY_TICK_SECONDS"
       continue
