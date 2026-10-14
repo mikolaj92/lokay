@@ -19,6 +19,10 @@ After a successful update, the caretaker replaces itself with the new script.
 It parses the entire script before running, so an update cannot change a running loop.
 
 - `lokay status` prints runs from `~/.lokay/runs/*/*/state.json`.
+- Ticks append transitions and Decision/pi/gh calls to `~/.lokay/ticks/YYYY-MM-DD.jsonl` (UTC).
+  Large values live in hash-addressed `ticks/blobs`; rotation compresses after 30 days and deletes after 180 days.
+  `uv run lokay replay --date YYYY-MM-DD --repo owner/repo --issue 123` verifies state continuity and emits resolved events.
+  The dashboard tails `/api/ticks.json?offset=0&date=YYYY-MM-DD` and steps back within a tick by sequence.
 - `~/.lokay/heartbeat.json` records UTC time, result, version, current repo/issue/node
   and node start time every tick, including during long steps and retries.
   It also reports `idle_reason` (`idle_backoff`, `host_down`, `no_work`),

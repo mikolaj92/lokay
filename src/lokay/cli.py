@@ -11,6 +11,7 @@ NODES = (
     "refresh-body",
     "status",
     "monitor",
+    "replay",
 )
 
 
@@ -33,6 +34,55 @@ def main(argv: list[str] | None = None) -> int:
         from lokay.start import main as start_main
 
         return start_main(["refresh-body", *rest])
+    if args.node == "replay":
+        import gzip
+        import json
+        from datetime import datetime, timezone
+        from lokay.state import RUNS
+
+        replay = argparse.ArgumentParser(prog="lokay replay")
+        replay.add_argument("--tick")
+        replay.add_argument("--repo")
+        replay.add_argument("--issue", type=int)
+        replay.add_argument("--date", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        filters = replay.parse_args(rest)
+        day = datetime.strptime(filters.date, "%Y-%m-%d").strftime("%Y-%m-%d")
+        directory = RUNS.parent / "ticks"
+        path = directory / f"{day}.jsonl"
+        if not path.exists():
+            path = path.with_suffix(".jsonl.gz")
+        states = {}
+        sequences = {}
+        opener = gzip.open if path.suffix == ".gz" else open
+        with opener(path, "rt") as stream:
+            for line in stream:
+                row = json.loads(line)
+                if any(value is not None and row.get(key) != value for key, value in
+                       (("tick", filters.tick), ("repo", filters.repo), ("issue", filters.issue))):
+                    continue
+                tick = row["tick"]
+                if row["v"] != 1 or row["seq"] <= sequences.get(tick, 0):
+                    raise ValueError("invalid event sequence")
+                sequences[tick] = row["seq"]
+                for key in ("before", "after", "output"):
+                    value = row.get(key)
+                    if isinstance(value, dict) and set(value) == {"blob"}:
+                        sha = value["blob"].removeprefix("sha256:")
+                        if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+                            raise ValueError("invalid blob hash")
+                        import hashlib
+
+                        raw = (directory / "blobs" / sha).read_bytes()
+                        if hashlib.sha256(raw).hexdigest() != sha:
+                            raise ValueError("blob hash mismatch")
+                        row[key] = json.loads(raw)
+                if row["kind"] == "transition":
+                    identity = (row["repo"], row["issue"])
+                    if states.get(identity, row["before"]) != row["before"]:
+                        raise ValueError("state discontinuity")
+                    states[identity] = row["after"]
+                print(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+        return 0
     if args.node == "status":
         from lokay.observe import status
 
