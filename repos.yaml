@@ -73,8 +73,8 @@ repos:
   merge: 'on'
 - name: mikolaj92/app-factory
   clone_path: ~/Developer/app-factory/main
-  # README.
-  test: ["uv", "run", "pytest"]
+  # Root tests plus every examples/*/ package with its own pyproject.toml.
+  test: ["sh", "-c", "echo \"LOKAY_TEST_CWD=$PWD\" && uv run pytest && for p in examples/*/; do [ -f \"${p}pyproject.toml\" ] || continue; (cd \"$p\" && echo \"LOKAY_TEST_CWD=$PWD\" && uv run pytest) || exit; done"]
   merge: 'on'
 - name: mikolaj92/basecoat-factory
   clone_path: ~/Developer/basecoat-factory/main

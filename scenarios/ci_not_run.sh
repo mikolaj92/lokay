@@ -34,5 +34,23 @@ with tempfile.TemporaryDirectory() as root:
     assert set(ci['tested_cwds']) == {str(root), *(str(root / 'packages' / name) for name in ('argus', 'dike', 'new_package'))}, ci
     assert f'pytest cwd={root / "packages/argus"}' in ci['log'], ci
     assert f'pytest cwd={root} args=run --frozen pytest tests' in ci['log'], ci
-print('ci_not_run: empty/no-op summaries rejected; Temida all packages + root tests executed; tested=false OK')
+with tempfile.TemporaryDirectory(dir=Path.cwd()) as root:
+    root = Path(root).resolve()
+    # Execute the configured app-factory command against a separate miniature checkout.
+    (root / 'tests').mkdir()
+    package = root / 'examples' / 'multi_user_bom'
+    package.mkdir(parents=True)
+    (package / 'pyproject.toml').touch()
+    (root / 'examples' / 'minimal_host').mkdir()
+    (root / 'bin').mkdir()
+    uv = root / 'bin' / 'uv'
+    uv.write_text('#!/bin/sh\necho "pytest cwd=$PWD args=$*"\necho "1 passed"\n')
+    uv.chmod(0o755)
+    app_factory = next(repo for repo in load_repos(Path('repos.yaml')) if repo['name'] == 'mikolaj92/app-factory')
+    with patch.dict(os.environ, PATH=str(root / 'bin') + ':' + os.environ['PATH']):
+        ci = local_ci('af-head', [app_factory['test']], root)
+    assert ci['result'] == 'green' and ci['tested'], ci
+    assert set(ci['tested_cwds']) == {str(root), str(root / 'examples' / 'multi_user_bom')}, ci
+    assert f'pytest cwd={root / "examples/multi_user_bom"}' in ci['log'], ci
+print('ci_not_run: empty/no-op summaries rejected; Temida all packages + root tests executed; app-factory examples + root tests executed; tested=false OK')
 PY
