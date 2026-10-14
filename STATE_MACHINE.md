@@ -119,7 +119,6 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Fix | fix_code ≠ done albo wyjątek | needs_help; deterministyczny fix_code prowadzi do Plan | failures/reason; możliwy prompt Plan | failed, koniec ticka | [S3][S4] |
 | Fix | done i publish pushed/remote_moved | sync remote gdy potrzebne, kontrola SHA po pushed, opis PR | sha, fingerprint/hunk/diff, node=check, verdict=None | Check w ticku | [S4] |
 | Fix | publish błąd albo PR nie potwierdza push SHA | needs_help | failures, reason, retry_at | failed | [S3][S4] |
-| Merge | merge_guard usunął test lub zresetował lockfile | push; sync przy remote_moved | node=check, verdict/local_ci=None, nowy sha | result=check, koniec ticka | [S4][S18] |
 | Merge | PR SHA niezgodny lub wynik merge ≠ merged | sync przy nowym SHA; sleep 60 poza conflict | node=check, verdict=None | Check w ticku | [S4][S19] |
 | Merge | verdict=merge i SHA zgodny; gh potwierdza merge | zapis merged przed usunięciem worktree | merged, failures=0, retry_at=0; obserwacja last_merge | merged, koniec ticka | [S1][S4][S19] |
 | Merge | usunięcie worktree nieudane po merge | warning, nie failed | merged zachowany | merged | [S19] |
@@ -204,7 +203,6 @@ Historyczny [start.py][H1] ma wymienione w issue numery linii; nie przenosimy ic
 [S15]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/check.py
 [S16]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/scope.py
 [S17]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/git.py
-[S18]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/merge_guard.py
 [S19]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/merge.py
 [S20]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/scripts/check.sh
 [H1]: https://github.com/mikolaj92/lokay/blob/f343c0845efe7bdc2a34a0b3df6ab0fe8cc93b33/src/lokay/start.py

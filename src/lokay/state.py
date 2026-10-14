@@ -12,6 +12,20 @@ def run_dir(repo: str, issue: int) -> Path:
     return RUNS / repo.replace("/", "__") / str(issue)
 
 
+def main_status(home: Path | None = None) -> dict:
+    directory = home / "runs" if home is not None else RUNS
+    return {path.parent.name.replace("__", "/"): json.loads(path.read_text())
+            for path in directory.glob("*/main.json")}
+
+
+def save_main_status(repo: str, status: dict) -> None:
+    path = RUNS / repo.replace("/", "__") / "main.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(status) + "\n")
+    temporary.replace(path)
+
+
 def repo_last_attempt(repo: str) -> float:
     directory = RUNS / repo.replace("/", "__")
     attempt = directory / "attempt.json"

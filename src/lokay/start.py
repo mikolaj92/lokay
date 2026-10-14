@@ -165,7 +165,24 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         ready.append(row)
                 if not ready:
                     continue
-            held = acquire(name.split("/")[0], name)
+            if turn == "pr":
+                target = min(ready, key=lambda row: (
+                    state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
+                number = int(target["headRefName"][6:])
+            else:
+                issues = [row for row in open_issues(name) if is_task(row)
+                          and (only_issue is None or int(row["number"]) == only_issue)]
+                target = next((row for row in issues
+                               if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
+                               and open_pr_for(name, f"lokay/{row['number']}") is None), None)
+                if target is None:
+                    for row in issues:
+                        saved = state_read(name, row["number"])
+                        if saved.get("failures", 0):
+                            blocked.append((name, row["number"], saved))
+                    continue
+                number = target["number"]
+            held = acquire(name.split("/")[0], f"{name}/wt-{number}")
             if held["result"] != "held":
                 if turn == "pr":
                     blocked.extend((name, int(row["headRefName"][6:]),
@@ -175,8 +192,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             try:
                 repo_attempt(name, time.time())
                 if turn == "pr":
-                    pr = min(ready, key=lambda row: (
-                        state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
+                    pr = target
                     issue = int(pr["headRefName"][6:])
                     saved_node = state_read(name, issue).get("node")
                     node = saved_node if saved_node in ("plan", "build", "check", "fix", "merge") else "check"
@@ -185,21 +201,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     chosen = {"result": "picked", "repo": name, "issue": issue,
                               "node": node, "pr": pr["number"], "held": held}
                     return chosen
-                issues = open_issues(name)
-                issues = [
-                    row for row in issues
-                    if is_task(row)
-                    and (only_issue is None or int(row["number"]) == only_issue)
-                ]
-                for row in issues:
-                    saved = state_read(name, row["number"])
-                    if saved.get("failures", 0):
-                        blocked.append((name, row["number"], saved))
-                issue = next((row for row in issues
-                              if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
-                              and open_pr_for(name, f"lokay/{row['number']}") is None), None)
-                if issue is None:
-                    continue
+                issue = target
                 saved = state_read(name, issue["number"])
                 branch = f"lokay/{issue['number']}"
                 chosen = {
@@ -221,6 +223,30 @@ def pick(env: dict[str, str] | None = None) -> dict:
             return chosen
         return None
 
+    from lokay.state import main_status
+
+    statuses = main_status()
+    for repo in repos:
+        name = repo["name"]
+        status = statuses.get(name, {})
+        number = status.get("issue")
+        if status.get("status") != "red" or not number or (only_issue is not None and only_issue != number):
+            continue
+        held = acquire(name.split("/")[0], f"{name}/wt-{number}")
+        if held["result"] != "held":
+            continue
+        try:
+            branch = f"lokay/{number}"
+            pr = open_pr_for(name, branch)
+            saved = state_read(name, number)
+            node = saved.get("node") or ("check" if pr else "plan")
+            state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
+                         result="running", reason=None, retry_at=0, last_attempt=time.time())
+            return {"result": "picked", "repo": name, "issue": number, "node": node,
+                    "pr": pr["number"] if pr else None, "held": held}
+        except BaseException:
+            release(held)
+            raise
     chosen = choose("pr")
     if chosen is not None:
         return chosen
@@ -779,7 +805,8 @@ def dismissed_key(row: dict) -> list:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks, local_ci
+    from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks
+    from lokay.main_guard import run_repo_tests
     from lokay.checks import CheckInput, run_checks
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
@@ -822,36 +849,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     while True:
         check_deadline()
         if pending == "merge" and verdict and verdict.get("sha") == sha:
-            from lokay.merge_guard import merge_guard
-
-            saved = state_read(picked["repo"], picked["issue"])
-            if saved.get("issue_title") is None:
-                code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"],
-                                      "--json", "title,body"])
-                if code != 0:
-                    raise RuntimeError(err or "issue view failed")
-                issue = json.loads(raw)
-                saved = {**saved, "issue_title": issue["title"], "issue_body": issue.get("body")}
-                state_update(picked["repo"], picked["issue"], issue_title=issue["title"], issue_body=issue.get("body"))
-            guarded = _retry(picked, "merge", lambda: merge_guard(
-                worktree, saved.get("issue_title") or "", saved.get("issue_body")))
-            if guarded["removed"] or guarded["reset"]:
-                rounds_append(picked["repo"], picked["issue"],
-                              "Merge guard: removed " + ", ".join(guarded["removed"]) +
-                              ", reset " + ", ".join(guarded["reset"]))
-                state_update(picked["repo"], picked["issue"], node="check", verdict=None,
-                             local_ci=None, result="check")
-                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
-                if pushed["result"] == "failed":
-                    return pushed
-                if pushed["result"] == "remote_moved" and pushed.get("sha"):
-                    _retry(picked, "check", sync_head)
-                if pushed["result"] not in ("pushed", "remote_moved"):
-                    raise RuntimeError(f"merge guard publish failed: {pushed}")
-                sha = pushed["sha"]
-                state_update(picked["repo"], picked["issue"], node="check", sha=sha,
-                             verdict=None, local_ci=None, result="check")
-                return {"result": "check", "sha": sha}
             pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
             if pr and pr.get("headRefOid") == sha:
                 state_update(picked["repo"], picked["issue"], node="merge", pr=pr["number"])
@@ -875,7 +872,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 rounds_append(picked["repo"], picked["issue"], f"Merge: retry, result={merged['result']}")
                 if merged["result"] != "conflict":
                     state_update(picked["repo"], picked["issue"], node="check", verdict=None)
-                    retry_sleep(60)
             state_update(picked["repo"], picked["issue"], node="check", verdict=None)
             if pr and pr.get("headRefOid") and pr["headRefOid"] != sha:
                 _retry(picked, "check", sync_head)
@@ -1134,7 +1130,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             ci = {"sha": sha, "result": "red", "tested": False, "tested_cwds": [],
                   "failed": setup["failed"], "notes": [], "log": setup["log"]}
         else:
-            ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
+            ci = _retry(picked, "check", lambda: run_repo_tests(repo, sha, worktree))
             ci = {**ci, "log": setup.get("log", "") + "\n" + ci["log"]}
         ci = {**ci, "argv": list(tests)}
         state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])

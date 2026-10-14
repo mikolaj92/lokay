@@ -77,5 +77,4 @@ Nie wdrażamy zbiorczo kolejnych napraw i nie zmieniamy polityki grafu w tej zmi
 [observe]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/observe.py
 [state]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/state.py
 [host]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/host_guard.py
-[guard]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/merge_guard.py
 [merge]: https://github.com/mikolaj92/lokay/blob/594334bd391da5958153d864b972a869cdecf565/src/lokay/merge.py

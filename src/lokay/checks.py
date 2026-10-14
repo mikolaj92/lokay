@@ -22,12 +22,34 @@ def ok(name: str) -> dict:
     return {"name": name, "pass": True, "reason": "stub", "location": None, "fix_hint": ""}
 
 
+def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
+             log: str, fix_hint: str) -> dict:
+    details = "; ".join(
+        f"{item.get('warstwa', '')}: {item.get('log', '')[-limit:]}" for item in failures
+    ) or log[-limit:]
+    first = failures[0] if failures else {}
+    location = first.get("plik") or first.get("warstwa") or None
+    if first.get("plik") and first.get("linia") is not None:
+        location = f"{location}:{first['linia']}"
+    return {"name": name, "pass": passed, "reason": reason + (f": {details}" if details else ""),
+            "location": location, "fix_hint": "" if passed else fix_hint + (f": {details}" if details else "")}
+
+
 def ci_green(x: CheckInput) -> dict:
-    return ok("ci_green")
+    passed = x.ci.get("sha") == x.sha and x.ci.get("ci") == "green"
+    failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") == "GitHub CI"]
+    return evidence("ci_green", passed,
+                    f"GitHub CI {x.ci.get('ci')} at {x.ci.get('sha')}; expected green at {x.sha}",
+                    failures, 3000, "", "run and fix GitHub CI for the current SHA")
 
 
 def local_tests(x: CheckInput) -> dict:
-    return ok("local_tests")
+    failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") != "GitHub CI"]
+    github_failed = any(item.get("warstwa") == "GitHub CI" for item in x.ci.get("failed", []))
+    green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
+    passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
+    return evidence("local_tests", passed, "local tests green" if passed else "local tests not green or not run",
+                    failures, 800, x.ci.get("log", ""), "run and fix the complete local test suite")
 
 
 def merge_clean(x: CheckInput) -> dict:
@@ -158,6 +180,12 @@ def docs(x: CheckInput) -> dict:
         elif kind == "-":
             change["net"] -= 1
     expanded = [(path, change) for path, change in changes.items() if change["net"] > 0]
+    requested = re.search(r"\b(?:README|docs|dokumentacj\w*|documentation)\b",
+                          x.issue_title + "\n" + x.issue_body, re.IGNORECASE)
+    planned = all(re.search(r"(?<![\w./-])" + re.escape(path) + r"(?![\w./-])", x.plan)
+                  for path in changes)
+    if expanded and requested and planned:
+        return {**ok("docs"), "reason": "requested documentation changes match the plan"}
     if expanded:
         path, change = expanded[0]
         return {"name": "docs", "pass": False,

@@ -29,7 +29,7 @@ export UV_NO_SYNC=1 UV_PYTHON_DOWNLOADS=never UV_OFFLINE=1 PATH="$sandbox/bin:$P
 # Explicit inventory: a missing scenario is a failure, not a shorter green suite.
 scenarios='
 build check check_followup ci ci_not_run docs_only_fix no_new_tests setup_deps darkfactory darkfactory_canary decision_batches decision_contract fair_pick fix fix_to_build host_down host_guard
-issue_flow lock merge merge_guard merge_sha no_legacy_imports observability outside_worktree plan
+issue_flow lock merge merge_sha no_legacy_imports observability outside_worktree plan
 push_guard resume_push safety stale_ci start_pick start_plan start_resume step_outputs suite tidy worktree
 '
 required=0

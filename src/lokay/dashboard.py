@@ -23,7 +23,7 @@ REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 FORBIDDEN = ("key", "token", "secret", "auth", "password", "prompt", "body", "log")
 HEARTBEAT_FIELDS = (
     "repo", "issue", "node", "node_since", "result", "time", "version", "failures",
-    "last_error", "idle_reason", "issue_since", "last_merge",
+    "last_error", "idle_reason", "issue_since", "last_merge", "main_status",
 )
 RUN_FIELDS = (
     "node", "branch", "pr", "result", "plan_rounds", "check_rounds", "fix_counts",
@@ -289,6 +289,9 @@ class Dashboard:
             recent.append({"repo": path.parent.parent.name.replace("__", "/"), "issue": path.parent.name, **data})
         with self.lock:
             cache = copy.deepcopy(self.cache)
+        from lokay.state import main_status
+
+        statuses = main_status(self.home)
         merged, opened, per_repo = [], [], []
         for name in enabled_repos(self.repos_file):
             item = cache["repos"].get(name, {})
@@ -300,7 +303,7 @@ class Dashboard:
             count24 = sum(now - 86400 <= stamp(pr.get("mergedAt")) <= now for pr in merges)
             count7 = sum(now - 7 * 86400 <= stamp(pr.get("mergedAt")) <= now for pr in merges)
             issues = item.get("open_issues")
-            per_repo.append({"repo": name, "open_issues": issues, "open_prs": len(opens) if issues is not None else None,
+            per_repo.append({"repo": name, "main_status": safe(statuses.get(name)), "open_issues": issues, "open_prs": len(opens) if issues is not None else None,
                              "last_merge": last, "merges24": count24, "merges7": count7,
                              "last_refresh": item.get("last_refresh"), "error": item.get("error"),
                              "eta24": eta(issues, count24 / 24, now), "eta7": eta(issues, count7 / 168, now)})
@@ -398,6 +401,12 @@ def render(data: dict) -> str:
     body += '<h2>Per repo (merge on)</h2>' + table(["Repo", "Open issues", "Open lokay PRs", "Last merge", "PR", "24h", "7d", "Refresh", "Error"], [
         [esc(r["repo"]), esc(r["open_issues"]), esc(r["open_prs"]), esc(date(r["last_merge"].get("mergedAt"))),
          link(r["repo"], r["last_merge"].get("number")), esc(r["merges24"]), esc(r["merges7"]), esc(date(r["last_refresh"])), esc(r["error"])] for r in data["repos"]])
+    body += '<h2>Main status</h2>' + table(["Repo", "Status", "Since", "Culprit SHA", "PR", "Issue"], [
+        [esc(r["repo"]), esc((r.get("main_status") or {}).get("status")),
+         esc(date((r.get("main_status") or {}).get("since"))),
+         esc(((r.get("main_status") or {}).get("culprit") or {}).get("sha")),
+         link(r["repo"], ((r.get("main_status") or {}).get("culprit") or {}).get("pr")),
+         esc((r.get("main_status") or {}).get("issue"))] for r in data["repos"]])
     body += '<h2>ETA</h2><p>ETA = open issues / merge rate; rate24 = merges in last 24h / 24h; rate7 = merges in last 7d / 7 days; total uses summed open issues and summed rates.</p>'
     body += table(["Repo", "Open issues", "ETA (24h rate)", "Date (Warsaw)", "ETA (7d rate)", "Date (Warsaw)"], [
         [esc(r["repo"]), esc(r["open_issues"]), esc(r["eta24"]["text"]), esc(r["eta24"]["date"]), esc(r["eta7"]["text"]), esc(r["eta7"]["date"])]

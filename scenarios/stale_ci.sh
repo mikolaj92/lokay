@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
 
     with ExitStack() as stack:
         stack.enter_context(patch('lokay.start.load_repos', return_value=[
-            {'name': picked['repo'], 'clone_path': str(root)}]))
+            {'name': picked['repo'], 'clone_path': str(root), 'test': tests}]))
         stack.enter_context(patch('lokay.git._git', side_effect=git))
         stack.enter_context(patch('lokay.fix.fix_publish', side_effect=lambda *a:
             {'result': 'pushed', 'sha': a[2]}))
@@ -68,7 +68,8 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
             saved = state.state_read(picked['repo'], 7)
             assert saved['local_ci'] is None and saved['test_log'] is None, saved
             assert commands == [tests] and worktree == root
-            return {'sha': sha, 'result': 'green', 'log': 'fresh', 'failed': [], 'notes': []}
+            return {'sha': sha, 'result': 'green', 'tested': True, 'tested_cwds': [str(worktree.resolve())],
+                    'log': 'fresh: 1 passed', 'failed': [], 'notes': []}
 
         # Every Check run invalidates CI, even with a matching SHA.
         for ci_sha, published_sha, expected in ((old, head, 1), (old, old, 1), (head, old, 1), (head, head, 1)):
