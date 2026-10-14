@@ -280,7 +280,11 @@ with tempfile.TemporaryDirectory() as tmp:
             from lokay.checks import CHECKS, ok
             assert merge.call_args.args[3] == {
                 **green, 'evidence': {'extra': [1, 2]},
-                'checks': [ok(check.__name__) for check in CHECKS], 'failed': [],
+                'checks': [{**ok(check.__name__), **({
+                    'reason': 'no new comments' if check.__name__ == 'no_new_comments'
+                    else 'no documentation expansion'}
+                    if check.__name__ in {'no_new_comments', 'docs'} else {})}
+                    for check in CHECKS], 'failed': [],
             }
 
         # main owns a real lock through Check, Fix and Merge, including failures.

@@ -108,8 +108,10 @@ Proza wspomina `outside.py`.
         return {'result': 'green', 'sha': sha, 'failed': [], 'notes': [], 'log': ''}
     def fix(*args, **kwargs):
         events.append('fix')
-        assert state.state_read(repo['name'], 1)['verdict']['uwagi'][-1]['warstwa'] == 'scope'
+        assert any(note.get('warstwa') == 'scope'
+                   for note in state.state_read(repo['name'], 1)['verdict']['uwagi'])
         if events.count('fix') == 1:
+            (root / 'plan.md').unlink()
             (root / 'code.py').write_text('implemented\n')
             (root / 'outside.py').write_text('unplanned\n')
         else:
