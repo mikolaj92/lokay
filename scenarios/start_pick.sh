@@ -9,6 +9,10 @@ printf '%s
 ' "$*" >> "$GH_LOG"
 if [ "$1" = "auth" ]; then exit 0; fi
 if [ "$1" = "issue" ]; then
+  if [ "$2" = "view" ]; then
+    printf '%s\n' '{"title":"fix","labels":[]}'
+    exit 0
+  fi
   printf '%s
 ' '[{"number":2,"createdAt":"2026-10-09T01:00:00Z","title":"b"},{"number":3,"createdAt":"2026-10-08T01:00:00Z","title":"ePiC: tasks"},{"number":1,"createdAt":"2026-10-09T01:00:00Z","title":"a"},{"number":4,"createdAt":"2026-10-07T01:00:00Z","title":"lokay-stalled"}]'
   exit 0

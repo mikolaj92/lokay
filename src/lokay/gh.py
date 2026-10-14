@@ -48,7 +48,7 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str
 
 def open_issues(repo: str) -> list[dict]:
     code, out, err = _gh(
-        ["issue", "list", "--repo", repo, "--state", "open", "--limit", "1000000", "--json", "number,createdAt,title"]
+        ["issue", "list", "--repo", repo, "--state", "open", "--limit", "1000000", "--json", "number,createdAt,title,labels"]
     )
     if code != 0:
         raise RuntimeError(err.strip() or "issue list failed")
