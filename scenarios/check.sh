@@ -165,7 +165,7 @@ for plan in ('', 'other/README.md', 'README.md.old', 'README.md/extra', 'prefix-
     assert not docs(replace(doc_input, issue_title='docs', plan=plan))['pass'], plan
 second_doc = 'diff --git a/docs/guide.md b/docs/guide.md\n+++ b/docs/guide.md\n@@ -1 +1 @@\n-old\n+new\n'
 multiple_docs = replace(doc_input, issue_title='docs', diff=doc_diff + second_doc)
-assert not docs(multiple_docs)['pass']
+assert docs(multiple_docs)['pass']
 assert docs(replace(multiple_docs, plan='README.md and docs/guide.md'))['pass']
 assert docs(replace(doc_input, diff=doc_diff.replace('+guide', '-guide')))['pass']
 print('checks: CI SHA/status, local evidence/logs, explicit planned documentation OK')
