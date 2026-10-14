@@ -166,11 +166,19 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
     body = (f"### Lokay Check {round_number}\n"
             f"SHA: `{verdict['sha']}`\n\n"
             f"Wynik: **{verdict['result']}** · CI: **{ci.get('ci', ci['result'])}** · "
-            f"tests: **{ci['result']}** · tested={str(ci.get('tested', False)).lower()}\n\n"
-            "Uwagi i CI:\n```json\n" + json.dumps({
+            f"tests: **{ci['result']}** · tested={str(ci.get('tested', False)).lower()}\n\n")
+    if verdict.get("checks"):
+        def cell(value):
+            return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")[:1000]
+
+        body += "| name | pass | reason |\n| --- | --- | --- |\n" + "\n".join(
+            f"| {cell(row['name'])} | {str(row['pass']).lower()} | {cell(row['reason'])} |"
+            for row in verdict["checks"]
+        ) + "\n\n"
+    body += "Uwagi i CI:\n```json\n" + json.dumps({
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
                 "failed": ci.get("failed", []), "pending": ci.get("pending", []),
-            }, ensure_ascii=False, indent=2) + "\n```")
+            }, ensure_ascii=False, indent=2) + "\n```"
     notes = [note for note in verdict.get("notes", []) if note.get("pytanie")]
     if notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(

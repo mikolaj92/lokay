@@ -714,6 +714,7 @@ def dismissed_key(row: dict) -> list:
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks, local_ci
+    from lokay.checks import CheckInput, run_checks
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
     from lokay.git import _git
@@ -867,7 +868,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                              result="check")
                 return {"result": "check", "sha": sha}
             findings = {
-                json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")), row.get("zmiana")])
+                json.dumps([row["name"], row.get("location")] if "name" in row else
+                           [row.get("plik"), row.get("pytanie", row.get("warstwa")), row.get("zmiana")])
                 for row in uwagi
             }
             fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
@@ -1178,10 +1180,20 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             raise RuntimeError(err or "scope diff failed")
         files = changed.splitlines()
         plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-        scope = code_scope_issue(files, plan_path.read_text() if plan_path.is_file() else "")
+        plan_text = plan_path.read_text() if plan_path.is_file() else ""
+        scope = code_scope_issue(files, plan_text)
         if scope and dismissed_key(scope) not in dismissed_keys:
             verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
             rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
+        check_input = CheckInput(
+            repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
+            issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
+            plan=plan_text, diff=diff.stdout or "", hunks=rows, ci=ci, worktree=worktree,
+        )
+        checks_verdict = run_checks(check_input)
+        verdict.update(checks=checks_verdict["checks"], failed=checks_verdict["failed"])
+        if checks_verdict["failed"]:
+            verdict = {**verdict, "result": "fix", "uwagi": [*verdict["uwagi"], *checks_verdict["failed"]]}
         rounds += 1
         check_history = state_read(picked["repo"], picked["issue"]).get("check_history", []) + [{
             "round": rounds, "sha": sha,
@@ -1204,7 +1216,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         )
         rounds_append(
             picked["repo"], picked["issue"],
-            f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}",
+            f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}, "
+            + "checks=" + json.dumps(verdict["checks"]),
         )
         lens_notes = [note.get("pytanie", "") for note in verdict.get("notes", []) if note.get("pytanie")]
         if lens_notes:

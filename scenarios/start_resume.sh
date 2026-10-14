@@ -277,7 +277,11 @@ with tempfile.TemporaryDirectory() as tmp:
             assert checks[0] == expected_fixes + 1
             assert result['result'] == 'merged', result
             merge.assert_called_once()
-            assert merge.call_args.args[3] == {**green, 'evidence': {'extra': [1, 2]}}
+            from lokay.checks import CHECKS, ok
+            assert merge.call_args.args[3] == {
+                **green, 'evidence': {'extra': [1, 2]},
+                'checks': [ok(check.__name__) for check in CHECKS], 'failed': [],
+            }
 
         # main owns a real lock through Check, Fix and Merge, including failures.
         from lokay.lock import acquire, release as real_release
