@@ -299,7 +299,7 @@ def _tick() -> int:
     return 0
 
 
-def _retry(picked: dict, node: str, action, expected: str | None = None):
+def _retry(picked: dict, node: str, action, expected: str | None = None, *, plan_branch: bool = False):
     repo, issue = picked["repo"], picked["issue"]
     state_update(repo, issue, node=node)
     try:
@@ -311,7 +311,7 @@ def _retry(picked: dict, node: str, action, expected: str | None = None):
         reason = outcome.get("reason") or outcome.get("error") or str(outcome)
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
-    needs_help(picked, reason)
+    needs_help(picked, reason, plan_branch=plan_branch)
     raise RetryLater(reason)
 
 
@@ -350,7 +350,8 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     prompt = prompt_for(saved.get("issue_title") or "", saved.get("issue_body")) + (
         "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
         + "\n\nUwagi:\n" + json.dumps(history, ensure_ascii=False)
-        + "\n\nLast state:\n" + json.dumps({key: value for key, value in saved.items() if key != "plan_prompt"}, ensure_ascii=False)
+        + "\n\nLast state:\n" + json.dumps({key: value for key, value in saved.items()
+                                     if key not in ("plan_prompt", "plan_branches", "plan_synthesis")}, ensure_ascii=False)
         + "\n\nFix history:\n" + json.dumps(saved.get("fix_history", []), ensure_ascii=False)
         + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
         + "\n\n" + reason + "\n"
@@ -370,13 +371,119 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     return prompt
 
 
+def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
+    from lokay import plan
+    from lokay.decide import decide
+
+    repo, issue = picked["repo"], picked["issue"]
+    art.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        saved = state_read(repo, issue)
+        context = saved.get("plan_prompt") or plan.prompt_for(title, body)
+        branches = saved.get("plan_branches") or {}
+        synthesis = saved.get("plan_synthesis") or {}
+        rounds = saved.get("plan_rounds", 0)
+        paths = {}
+        for perspective in plan.PERSPECTIVES:
+            branch_art = art.parent / "plans" / f"{perspective}.md"
+            branch_art.parent.mkdir(parents=True, exist_ok=True)
+            branch = branches.setdefault(perspective, {
+                "phase": "write", "rounds": 0, "accepted_sha": None,
+                "prompt": context, "fingerprint": None,
+            })
+            accepted = (plan.valid_plan(branch_art) and branch.get("accepted_sha") ==
+                        hashlib.sha256(branch_art.read_bytes()).hexdigest())
+            if accepted:
+                paths[perspective] = branch_art
+                continue
+            if branch["phase"] == "failed":
+                continue
+            if branch["phase"] == "accepted":
+                branch.update(phase="write", accepted_sha=None)
+            while True:
+                state_update(repo, issue, node="plan", plan_phase="write", plan_prompt=context,
+                             plan_branches=branches, plan_synthesis=synthesis)
+                check_deadline()
+                def written():
+                    nonlocal rounds
+                    rounds += 1
+                    branch.update(phase="check", rounds=branch["rounds"] + 1)
+                    state_update(repo, issue, plan_branches=branches, plan_rounds=rounds)
+                    rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: write")
+                try:
+                    outcome = _retry(picked, "plan", lambda: plan.plan_one(
+                        perspective, branch["prompt"], branch_art,
+                        phase=branch["phase"], on_written=written), "done", plan_branch=True)
+                except RetryLater as exc:
+                    branch.update(phase="failed", reason=str(exc), accepted_sha=None)
+                    state_update(repo, issue, plan_branches=branches)
+                    rounds_append(repo, issue, f"Plan {perspective}: failed: {exc}")
+                    break
+                rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: Decision {outcome['next']}")
+                if outcome["next"] == "ok":
+                    branch.update(phase="accepted", accepted_sha=hashlib.sha256(branch_art.read_bytes()).hexdigest())
+                    paths[perspective] = branch_art
+                    state_update(repo, issue, plan_branches=branches)
+                    break
+                fingerprint = hashlib.sha256(json.dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
+                branch.update(phase="write", fingerprint=fingerprint,
+                              prompt=context + "\n\nPrevious branch plan:\n" + branch_art.read_text()
+                              + "\n\nUwagi:\n" + json.dumps(outcome["uwagi"], ensure_ascii=False))
+                state_update(repo, issue, plan_branches=branches)
+                retry_sleep(20)
+        if not paths:
+            reasons = [{"perspective": name, "reason": branch.get("reason")} for name, branch in branches.items()]
+            prompt = replan_prompt(picked, "Wszystkie 3 plany nieudane", reasons)
+            state_update(repo, issue, plan_branches={}, plan_synthesis={}, plan_prompt=prompt,
+                         plan_phase="write", plan_accepted_sha=None)
+            retry_sleep(20)
+            continue
+        synthesis = synthesis or {"phase": "write", "fingerprint": None, "uwagi": [], "rounds": 0}
+        fresh = False
+        while True:
+            state_update(repo, issue, node="plan", plan_phase="write", plan_synthesis=synthesis)
+            check_deadline()
+            if synthesis["phase"] == "write" or not plan.valid_plan(art):
+                failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
+                prompt = context + "\n\nFailed branches:\n" + json.dumps(failed, ensure_ascii=False)
+                prompt += "\n\nUwagi:\n" + json.dumps(synthesis["uwagi"], ensure_ascii=False)
+                _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art), "done")
+                rounds += 1
+                synthesis.update(phase="check", rounds=synthesis["rounds"] + 1)
+                state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
+                rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: write")
+            check_deadline()
+            outcome = plan.verdict(decide(plan.plan_questions(art.read_text())))
+            if outcome.get("next") not in ("ok", "revise"):
+                raise RuntimeError(f"unknown plan verdict: {outcome.get('next')}")
+            rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: Decision {outcome['next']}")
+            if outcome["next"] == "ok":
+                synthesis["phase"] = "accepted"
+                state_update(repo, issue, node="build", plan_phase=None, plan_prompt=None,
+                             plan_synthesis=synthesis,
+                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                             plan_notes=outcome.get("notes", []))
+                return rounds
+            fingerprint = hashlib.sha256(json.dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
+            if synthesis["fingerprint"] == fingerprint:
+                prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
+                state_update(repo, issue, plan_branches={}, plan_synthesis={}, plan_prompt=prompt,
+                             plan_phase="write", plan_accepted_sha=None)
+                fresh = True
+            else:
+                synthesis.update(phase="write", fingerprint=fingerprint, uwagi=outcome["uwagi"])
+                state_update(repo, issue, plan_synthesis=synthesis)
+            retry_sleep(20)
+            if fresh:
+                break
+
+
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
     from lokay.gh import _gh
     from lokay.git import worktree_add
 
     from lokay import plan
-    from lokay.decide import decide
 
     saved = state_read(picked["repo"], picked["issue"])
     if "issue_title" not in saved or "issue_body" not in saved:
@@ -404,48 +511,7 @@ def _prepare(picked: dict) -> tuple | dict:
     accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
-        art.parent.mkdir(parents=True, exist_ok=True)
-        prompt = saved.get("plan_prompt") or plan.prompt_for(title, body)
-        phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
-        evaluations = saved.get("plan_evaluations", 0) if saved.get("plan_phase") else 0
-        while True:
-            check_deadline()
-            if phase == "write" or not plan.valid_plan(art):
-                state_update(picked["repo"], picked["issue"], plan_phase="write", plan_prompt=prompt)
-                def write_plan():
-                    written = plan.plan_write(prompt, art)
-                    if written["result"] == "done" and not plan.valid_plan(art):
-                        return {"result": "failed", "reason": "invalid plan"}
-                    return written
-                _retry(picked, "plan", write_plan, "done")
-                plan_rounds += 1
-            state_update(picked["repo"], picked["issue"], plan_phase="check", plan_rounds=plan_rounds)
-            plan_text = art.read_text()
-            evaluations += 1
-            state_update(picked["repo"], picked["issue"], plan_evaluations=evaluations)
-            check_deadline()
-            answers = decide(plan.plan_questions(plan_text))
-            verdict = plan.verdict(answers)
-            if verdict.get("next") not in ("ok", "revise"):
-                raise RuntimeError(f"unknown plan verdict: {verdict.get('next')}")
-            state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result=verdict["next"])
-            rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
-            if verdict["next"] == "ok":
-                state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None,
-                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
-                             plan_notes=verdict.get("notes", []))
-                break
-            fingerprint = hashlib.sha256(json.dumps(verdict["uwagi"], sort_keys=True).encode()).hexdigest()
-            repeated = state_read(picked["repo"], picked["issue"]).get("plan_fingerprint") == fingerprint
-            state_update(picked["repo"], picked["issue"], plan_fingerprint=fingerprint)
-            prompt = replan_prompt(picked, "Repeated plan rejection" if repeated else "Revise the plan",
-                                   verdict["uwagi"],
-                                   build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None)
-            evaluations = 0
-            phase = "write"
-            state_update(picked["repo"], picked["issue"], plan_evaluations=0,
-                         plan_phase=phase, plan_prompt=prompt)
-            retry_sleep(20)
+        plan_rounds = _plan_graph(picked, art, title, body)
     branch = f"lokay/{picked['issue']}"
     check_deadline()
     if not worktree.exists():
@@ -478,7 +544,7 @@ def _prepare(picked: dict) -> tuple | dict:
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
         rounds_append(picked["repo"], picked["issue"], f"Build → Plan: {reason}")
-        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
                      plan_evaluations=0, plan_accepted_sha=None,
                      plan_prompt=replan_prompt(picked, f"Uwagi (Build): {reason}: {explanation}", [built],
                                                build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None),
@@ -508,7 +574,7 @@ def _prepare(picked: dict) -> tuple | dict:
     return worktree, branch, published["sha"], repo.get("test") or [], plan_rounds
 
 
-def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
+def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch: bool = False) -> dict:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
     failures = saved.get("failures", 0) + 1
@@ -518,10 +584,10 @@ def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
         reason, re.IGNORECASE))
     delay = min(3600, 60 * 2 ** min(failures - 1, 6)) if transient else 0
     fields = {"node": saved.get("node") or "check"}
-    to_plan = not transient and (repeated or reason.startswith("fix_code"))
+    to_plan = not plan_branch and not transient and (repeated or reason.startswith("fix_code"))
     if to_plan:
         rounds_append(repo, issue, f"{saved.get('node', picked.get('node', 'check'))} → Plan: {reason}")
-        fields.update(node="plan", plan_phase="write", plan_evaluations=0,
+        fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={}, plan_evaluations=0,
                       plan_accepted_sha=None,
                       plan_prompt=replan_prompt(picked, f"Repeated failure: {reason}",
                                                 (saved.get("verdict") or {}).get("uwagi", []),
@@ -595,7 +661,7 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
         return outcome
     if node == "fix_code" and outcome.get("reason") == "outside_worktree":
         prompt = replan_prompt(picked, outcome.get("explanation") or "outside_worktree", [outcome], sha)
-        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
                      plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None,
                      result="failed", reason="outside_worktree", retry_at=0)
         return {**outcome, "next": "plan"}
@@ -918,7 +984,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 prompt = replan_prompt(picked, "Fix made no progress; revise the plan.", uwagi, head)
                 prompt += "\n\nTest log:\n" + test_log
                 rounds_append(picked["repo"], picked["issue"], "Re-Plan test log:\n" + test_log)
-                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
                              plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
                 prepared = _prepare({**picked, "node": "plan"})
                 if isinstance(prepared, dict):
@@ -1230,7 +1296,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             reason = "\n".join(item["prompt"] for item in verdict["replan"])
             rounds_append(picked["repo"], picked["issue"], "Check → Plan: " + reason)
             prompt = replan_prompt(picked, reason, findings, head)
-            state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+            state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
                          plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
             prepared = _prepare({**picked, "node": "plan"})
             if isinstance(prepared, dict):
