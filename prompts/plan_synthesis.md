@@ -8,4 +8,5 @@ Write a JSON object with required fields:
 Each zrodla array must be nonempty and name only accepted input branches (minimal, risk, gates).
 Record failed branches and discarded proposals in odrzucone. Never attribute selected content to a failed branch.
 Required CI checks must pass. Changes needed for CI are in scope.
+Hard rule: write no code comments at all (no comment lines, no docstrings), keep documentation to a minimum, and add no unit tests.
 Do not write Markdown. lokay will render the JSON deterministically.
