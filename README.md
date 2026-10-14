@@ -5,6 +5,9 @@ Plan, Build, Check, Fix, Merge. Merge is the only end.
 `lokay start` runs the graph in Python (`src/lokay/start.py`), the only runtime.
 Plan revisions return to Plan checking; Fix returns to Check. Failed steps retry.
 
+Analiza przypiętej rewizji: [maszyna stanów](STATE_MACHINE.md),
+[ryzyka R1–R25](RISKS.md) i [weryfikacja incydentów](INCIDENTS.md).
+
 Install the LaunchAgents with `bash scripts/install_service.sh` from a checkout with
 `.venv/bin/lokay`. The template is `scripts/ai.mikolaj.lokay2.plist`.
 `ai.mikolaj.lokay2` runs the caretaker with KeepAlive, RunAtLoad and a 60-second
