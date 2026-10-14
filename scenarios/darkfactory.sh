@@ -55,7 +55,20 @@ if tool == "pi":
     assert args[0] == "-p"
     prompt = args[-1]
     match = re.search(r"Write the plan only to (.+)\.\n$", prompt)
-    if match:
+    synthesis = re.search(r"Write JSON only to (.+)\. Do not write plan\.md\.\n$", prompt)
+    if synthesis:
+        sources = re.findall(r"Accepted branch: (\w+)", prompt)
+        assert sources == ['minimal', 'risk', 'gates'], sources
+        Path(synthesis[1]).write_text(json.dumps({
+            'cel': 'Return 42.',
+            'kryteria': [{'tresc': 'value == 42', 'zrodla': ['gates']}],
+            'kroki': [{'tresc': 'Set value to 42.', 'zrodla': ['minimal']}],
+            'pliki': [{'sciezka': 'app.py', 'zmiana': 'Return 42.', 'zrodla': ['minimal']}],
+            'testy': [{'tresc': 'python verify.py', 'zrodla': ['gates']}],
+            'poza_zakresem': [{'tresc': 'No other files.', 'zrodla': ['risk']}],
+            'odrzucone': [],
+        }))
+    elif match:
         Path(match[1]).write_text("## Cel\nReturn 42.\n## Pliki\n- app.py\n"
                                  "## Testy\npython verify.py\n## Poza zakresem\nNo other files.\n")
     else:
@@ -204,12 +217,16 @@ def verify_rounds(rounds, sha):
     lenses = [line for line in rounds if 'Check lens ' in line]
     assert len(lenses) == 14, rounds
     rounds = [line for line in rounds if 'Fix progress:' not in line and 'Check lens ' not in line]
-    assert len(rounds) == 5, rounds
-    assert 'Plan 1: ok' in rounds[0], rounds
-    assert 'Check 1:' in rounds[1] and 'result=fix' in rounds[1] and 'ci=red' in rounds[1], rounds
-    assert 'Fix: sha=' in rounds[2], rounds
-    assert 'Check 2:' in rounds[3] and 'result=merge' in rounds[3] and 'ci=green' in rounds[3], rounds
-    assert f'Merge: sha={sha}' in rounds[4], rounds
+    assert len(rounds) == 12, rounds
+    assert [line.split(' ', 2)[2] for line in rounds[:8]] == [
+        f'Plan {perspective} 1: {phase}'
+        for perspective in ('minimal', 'risk', 'gates')
+        for phase in ('write', 'Decision ok')
+    ] + ['Synteza 1: write', 'Synteza 1: Decision ok'], rounds
+    assert 'Check 1:' in rounds[8] and 'result=fix' in rounds[8] and 'ci=red' in rounds[8], rounds
+    assert 'Fix: sha=' in rounds[9], rounds
+    assert 'Check 2:' in rounds[10] and 'result=merge' in rounds[10] and 'ci=green' in rounds[10], rounds
+    assert f'Merge: sha={sha}' in rounds[11], rounds
 
 def verify_runs(runs):
     assert sorted(path.name for path in runs.iterdir() if path.is_dir()) == ['1', '2'], 'missing second tick'
@@ -333,7 +350,17 @@ for line in sys.stdin:
             state = json.loads((runs / str(issue) / "state.json").read_text())
             assert state["node"] == "merge" and state["result"] == "merged", state
             assert state['pr'] == issue and state['branch'] == f'lokay/{issue}', state
-            assert state["plan_rounds"] == 1 and state["check_rounds"] == 2, state
+            assert state["plan_rounds"] == 4 and state["check_rounds"] == 2, state
+            assert set(state['plan_branches']) == {'minimal', 'risk', 'gates'}, state
+            assert all(branch['phase'] == 'accepted' and branch['rounds'] == 1
+                       for branch in state['plan_branches'].values()), state
+            assert state['plan_synthesis']['phase'] == 'accepted', state
+            assert state['plan_synthesis']['rounds'] == 1, state
+            plan_dir = runs / str(issue)
+            assert all((plan_dir / 'plans' / f'{name}.md').is_file()
+                       for name in ('minimal', 'risk', 'gates'))
+            assert (plan_dir / 'synthesis.json').is_file()
+            assert '[źródła: gates]' in (plan_dir / 'plan.md').read_text()
             assert state["failures"] == 0 and state["retry_at"] == 0, state
             assert state["local_ci"]["result"] == "green", state
             assert state["sha"] == state["verdict"]["sha"] == result["merge_sha"], state
@@ -377,14 +404,17 @@ for line in sys.stdin:
         assert (runs / '1/rounds.md').read_bytes() == first_rounds
         assert (runs / '2/state.json').read_bytes() == second_state
         assert (runs / '2/rounds.md').read_bytes() == second_rounds
-        assert len(requests) == 30, requests  # Plan + seven lenses per Check, twice.
+        assert len(requests) == 36, requests  # Three branches + synthesis + seven lenses per Check, twice.
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
             assert len(comments) == 2, comments
             assert "**fix** · CI: **no_ci** · tests: **red**" in comments[0], comments
             assert "**merge** · CI: **no_ci** · tests: **green** · tested=true" in comments[1], comments
         calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
-        assert sum(tool == "pi" for tool, _ in calls) == 6, calls
+        pi_prompts = [args[-1] for tool, args in calls if tool == 'pi']
+        assert len(pi_prompts) == 12, calls
+        assert sum('Write the plan only to ' in prompt for prompt in pi_prompts) == 6, pi_prompts
+        assert sum('Write JSON only to ' in prompt for prompt in pi_prompts) == 2, pi_prompts
         for issue in (1, 2):
             state = json.loads((runs / str(issue) / 'state.json').read_text())
             merges = [args for tool, args in calls
