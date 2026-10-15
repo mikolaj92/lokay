@@ -165,7 +165,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             saved = state_read(name, issue)
             if ((saved.get("node") in ("check", "build") and saved.get("result") == "pending")
                     or (saved.get("node") in ("plan", "build", "check", "fix", "merge")
-                        and saved.get("result") == "failed" and saved.get("retry_at", 0) <= time.time())):
+                        and saved.get("result") in ("failed", "check") and saved.get("retry_at", 0) <= time.time())):
                 states[issue] = saved
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}), states=states))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
