@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gzip
 import html
 import json
 import os
@@ -57,7 +58,9 @@ def select(data: dict, fields: tuple) -> dict:
 
 def read_json(path: Path) -> dict:
     try:
-        data = json.loads(path.read_text())
+        if not path.exists() and path.with_suffix(".gz").exists():
+            path = path.with_suffix(".gz")
+        data = json.loads(gzip.decompress(path.read_bytes()) if path.suffix == ".gz" else path.read_text())
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
