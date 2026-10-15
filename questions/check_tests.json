@@ -1,6 +1,6 @@
 {
   "id": "tests",
   "type": "bool",
-  "question": "Is this change missing a test that would fail without it, or does it break an existing test? Missing test results are not evidence of success.",
+  "question": "Does this change break or invalidate existing tests, leave existing tests inconsistent with the changed behaviour, or rely on missing test results as evidence of success? A missing new unit or regression test is not an issue because new unit tests are forbidden.",
   "veto": 0.85
 }
