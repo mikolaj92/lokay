@@ -1032,6 +1032,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 outcome = fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path)
                 if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
                     response = outcome.get("pi_response") or outcome.get("explanation") or ""
+                    retry_response = ""
                     state_update(picked["repo"], picked["issue"], pi_response=response)
                     if can_dispute:
                         justification = (response.split("## Dispute", 1)[1].strip()
@@ -1092,14 +1093,31 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         retry_prompt += ". Make a concrete change.\nRemaining findings:\n"
                         retry_prompt += dumps(remaining)
                         outcome = fix_code(worktree, sha, retry_prompt, dict(os.environ), clone_path=clone_path)
-                        state_update(picked["repo"], picked["issue"],
-                                     pi_response=outcome.get("pi_response") or outcome.get("explanation") or "")
+                        retry_response = outcome.get("pi_response") or outcome.get("explanation") or ""
+                        state_update(picked["repo"], picked["issue"], pi_response=retry_response)
                     if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
+                        if "## Dispute" in response or "## Dispute" in retry_response:
+                            questions_hash = hashlib.sha256(dumps([
+                                [path.name, path.read_bytes().hex()]
+                                for path in sorted(QUESTIONS.glob("check_*.json"))
+                            ]).encode()).hexdigest()
+                            recheck_key = hashlib.sha256(dumps([fingerprint, questions_hash]).encode()).hexdigest()
+                            current = state_read(picked["repo"], picked["issue"])
+                            rechecks = current.get("dispute_rechecks", [])
+                            if recheck_key not in rechecks:
+                                state_update(picked["repo"], picked["issue"],
+                                             dispute_rechecks=rechecks + [recheck_key])
+                                return {"result": "done", "dispute_recheck": True}
                         redirected = fix_to_build(picked, worktree)
                         if redirected:
                             return redirected
                 return outcome
             fixed = fix_step(picked, "fix_code", fix_action, sha)
+            if fixed.get("dispute_recheck"):
+                state_update(picked["repo"], picked["issue"], node="check", verdict=None,
+                             local_ci=None, test_log=None, fix_reason=None, result="check")
+                rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
+                return {"result": "check", "sha": sha}
             if fixed.get("dispute_rejected"):
                 verdict = {**verdict, "result": "merge", "uwagi": []}
                 pending = "merge"
