@@ -486,7 +486,7 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     return prompt
 
 
-def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
+def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: Path | None = None) -> int:
     from lokay import plan
     from lokay.effects.decide import decide
 
@@ -528,7 +528,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
                 try:
                     outcome = _retry(picked, "plan", lambda: plan.plan_one(
                         perspective, branch["prompt"], branch_art,
-                        phase=branch["phase"], on_written=written), "done", plan_branch=True)
+                        cwd=cwd, phase=branch["phase"], on_written=written), "done", plan_branch=True)
                 except RetryLater as exc:
                     branch.update(phase="failed", reason=str(exc), accepted_sha=None)
                     state_update(repo, issue, plan_branches=branches)
@@ -562,7 +562,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
                 failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
                 prompt = context + "\n\nFailed branches:\n" + dumps(failed, ensure_ascii=False)
                 prompt += "\n\nUwagi:\n" + dumps(synthesis["uwagi"], ensure_ascii=False)
-                _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art), "done")
+                _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art, cwd=cwd), "done")
                 rounds += 1
                 synthesis.update(phase="check", rounds=synthesis["rounds"] + 1)
                 state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
@@ -626,7 +626,7 @@ def _prepare(picked: dict) -> tuple | dict:
     accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
-        plan_rounds = _plan_graph(picked, art, title, body)
+        plan_rounds = _plan_graph(picked, art, title, body, cwd=root)
     branch = f"lokay/{picked['issue']}"
     check_deadline()
     if not worktree.exists():

@@ -58,14 +58,15 @@ def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dic
     return payload
 
 
-def plan_one(perspective: str, prompt: str, art: Path, *, phase: str = "write", on_written=None) -> dict:
+def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = None, phase: str = "write", on_written=None) -> dict:
     from lokay.effects.decide import decide
 
     if perspective not in PERSPECTIVES:
         raise ValueError("unknown plan perspective")
     if phase == "write" or not valid_plan(art):
         prompt += "\n" + (PROMPTS / f"plan_perspective_{perspective}.md").read_text()
-        written = plan_write(prompt, art)
+        prompt += "\nThe current directory is a read-only checkout of the repository at main, to be read but not modified.\n"
+        written = plan_write(prompt, art, cwd=cwd)
         if written["result"] != "done":
             return written
         if not valid_plan(art):
@@ -142,7 +143,7 @@ def render_synthesis(data: dict) -> str:
             f"### Odrzucone\n{rejected}\n")
 
 
-def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
+def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | None = None) -> dict:
     artifact = art.parent / "synthesis.json"
     prompt = (PROMPTS / "plan_synthesis.md").read_text() + "\n" + issue
     for perspective, path in paths.items():
@@ -151,7 +152,7 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
         prompt += f"\n\nAccepted branch: {perspective}\n{path.read_text()}"
     prompt += f"\nWrite JSON only to {artifact}. Do not write plan.md.\n"
     store.remove_file(artifact)
-    payload = pi_step(prompt, artifact)
+    payload = pi_step(prompt, artifact, cwd=cwd)
     if payload["result"] != "done":
         return payload
     try:
