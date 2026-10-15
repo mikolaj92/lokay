@@ -10,7 +10,6 @@ import shutil
 import signal
 import time
 from collections.abc import Callable
-from functools import wraps
 from pathlib import Path
 
 from lokay import graph, store
@@ -38,32 +37,16 @@ def tick(repo: str, issue: int, act: Callable[[Run], Event]) -> Run:
 
 def act(run: Run) -> Event:
     picked = run.state
-    node = picked.get("node")
-    if node in ("plan", "build"):
-        outcome = advance(picked)
-    elif node in ("check", "fix", "merge"):
-        outcome = resume(picked)
-    else:
-        outcome = {}
-    return Updated(time.time(), outcome=outcome)
 
-
-def _repo_paths(repo: dict, issue: int) -> tuple[Path, Path]:
-    root = Path(os.path.expanduser(repo["clone_path"]))
-    return root, root.parent / f"{root.name}-wt-{issue}"
-
-
-class RetryLater(RuntimeError):
-    pass
-
-
-def guarded_step(step):
-    @wraps(step)
-    def guarded(picked: dict) -> dict:
+    def dispatch() -> dict:
+        node = picked.get("node")
+        if node not in ("plan", "build", "check", "fix", "merge"):
+            return {}
         before = state_read(picked["repo"], picked["issue"]).get("updated_at")
         try:
             check_deadline()
-            outcome = step(picked)
+            prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
+            outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
         except TickExpired:
             repo, issue = picked["repo"], picked["issue"]
             state_update(repo, issue, result="pending", reason="tick budget exhausted")
@@ -80,10 +63,6 @@ def guarded_step(step):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
-            from lokay.observe import current
-
-            current(result="merged", node=None, node_since=None, issue_since=None,
-                    idle_reason=None, last_merge=time.time())
             return outcome
         state = state_read(repo, issue)
         if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
@@ -91,7 +70,17 @@ def guarded_step(step):
             return outcome
         reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
         return needs_help(picked, reason)
-    return guarded
+    outcome = dispatch()
+    return Updated(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
+
+
+def _repo_paths(repo: dict, issue: int) -> tuple[Path, Path]:
+    root = Path(os.path.expanduser(repo["clone_path"]))
+    return root, root.parent / f"{root.name}-wt-{issue}"
+
+
+class RetryLater(RuntimeError):
+    pass
 
 
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -335,10 +324,20 @@ def _tick() -> dict:
         return outcome
     try:
         print(dumps({k: v for k, v in outcome.items() if k != "held"}, separators=(",", ":")))
-        event = act(Run.from_state(outcome))
+        result = {}
+        def execute(run: Run) -> Event:
+            event = act(Run.from_state({**run.state, **{key: outcome[key] for key in ("repo", "issue", "held")}}))
+            result.update(event.outcome)
+            return event
+        tick(outcome["repo"], outcome["issue"], execute)
+        if result.get("result") == "merged":
+            from lokay.observe import current
+
+            current(result="merged", node=None, node_since=None, issue_since=None,
+                    idle_reason=None, last_merge=time.time())
         if outcome.get("node") in ("plan", "build", "check", "fix", "merge"):
-            print(dumps(event.outcome, separators=(",", ":")))
-        return event.outcome
+            print(dumps(result, separators=(",", ":")))
+        return result
     finally:
         release(outcome["held"])
 
@@ -359,15 +358,6 @@ def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | 
         reason = f"{type(exc).__name__}: {exc}"
     needs_help(picked, reason, plan_branch=plan_branch)
     raise RetryLater(reason)
-
-
-@guarded_step
-def advance(picked: dict) -> dict:
-    prepared = _prepare(picked)
-    if isinstance(prepared, dict):
-        return prepared
-    worktree, branch, sha, tests, plan_rounds = prepared
-    return _finish(picked, worktree, branch, sha, tests, plan_rounds)
 
 
 def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = None) -> str:
@@ -713,8 +703,7 @@ def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
     return None
 
 
-@guarded_step
-def resume(picked: dict) -> dict:
+def _resume(picked: dict) -> tuple | dict:
     from lokay.effects.git import _git
 
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
@@ -791,7 +780,7 @@ def resume(picked: dict) -> dict:
     if saved.get("sha") != sha or (saved.get("verdict") or {}).get("sha") != sha:
         state_update(picked["repo"], picked["issue"], node="check", verdict=None, fix_fingerprint=None)
     state_update(picked["repo"], picked["issue"], sha=sha)
-    return _finish(picked, worktree, branch, sha, repo.get("test") or [])
+    return worktree, branch, sha, repo.get("test") or [], 1
 
 
 def finding_summary(raw: dict) -> dict:
@@ -864,6 +853,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         return []
 
     while True:
+        if pending == "plan":
+            prepared = _prepare({**picked, "node": "plan"})
+            if isinstance(prepared, dict):
+                return prepared
+            worktree, branch, sha, tests, plan_rounds = prepared
+            pending = "check"
         check_deadline()
         if pending == "merge" and verdict and verdict.get("sha") == sha:
             pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
@@ -999,11 +994,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 prompt += "\n\nTest log:\n" + test_log
                 rounds_append(picked["repo"], picked["issue"], "Re-Plan test log:\n" + test_log)
                 state_update(picked["repo"], picked["issue"], _event={"action": "replan"}, plan_prompt=prompt)
-                prepared = _prepare({**picked, "node": "plan"})
-                if isinstance(prepared, dict):
-                    return prepared
-                worktree, branch, sha, tests, plan_rounds = prepared
-                pending = "check"
+                pending = "plan"
                 continue
             prompt = (
                 Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
@@ -1313,10 +1304,5 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             prompt = replan_prompt(picked, reason, findings, head)
             state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
                          plan_prompt=prompt)
-            prepared = _prepare({**picked, "node": "plan"})
-            if isinstance(prepared, dict):
-                return prepared
-            worktree, branch, sha, tests, plan_rounds = prepared
-            pending = "check"
             continue
         state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})
