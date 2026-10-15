@@ -19,7 +19,7 @@ After a successful update, the caretaker replaces itself with the new script.
 It parses the entire script before running, so an update cannot change a running loop.
 
 - `lokay status` prints runs from `~/.lokay/runs/*/*/state.json`.
-- Ticks log calls and transitions in `~/.lokay/ticks/`, with large values in `blobs/`.
+- Ticks log calls and transitions in `~/.lokay/ticks/`, capped by `LOKAY2_TICKS_MAX_MB` (default 300 MB; today's log is kept).
   `uv run lokay replay <file.jsonl|file.jsonl.gz|dir> [--repo R --issue N]` verifies transitions without external calls.
 - `~/.lokay/heartbeat.json` records UTC time, result, version, current repo/issue/node
   and node start time every tick, including during long steps and retries.

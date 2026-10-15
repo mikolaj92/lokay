@@ -19,6 +19,18 @@ CONTEXT: dict = {}
 EVENT_LOCK = RLock()
 
 
+def prune_blobs(directory: Path) -> None:
+    references = set()
+    for path in (*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz")):
+        opener = gzip.open if path.suffix == ".gz" else open
+        with opener(path, "rt") as stream:
+            for line in stream:
+                references.update(re.findall(r'"blob"\s*:\s*"sha256:([a-f0-9]{64})"', line))
+    for blob in (directory / "blobs").glob("*"):
+        if blob.name.removesuffix(".gz") not in references:
+            blob.unlink()
+
+
 def log_event(kind: str, **fields) -> None:
     global TICK, SEQ, CONTEXT
     try:
@@ -28,7 +40,7 @@ def log_event(kind: str, **fields) -> None:
             if kind == "start":
                 TICK, SEQ, CONTEXT = str(uuid.uuid4()), 0, {}
                 directory.mkdir(parents=True, exist_ok=True)
-                for path in directory.glob("*.jsonl*"):
+                for path in (*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz")):
                     age = (now.date() - datetime.strptime(path.name[:10], "%Y-%m-%d").date()).days
                     if age > 180:
                         path.unlink()
@@ -38,15 +50,24 @@ def log_event(kind: str, **fields) -> None:
                             shutil.copyfileobj(source, target)
                         temporary.replace(path.with_suffix(".jsonl.gz"))
                         path.unlink()
-                references = set()
-                for path in directory.glob("*.jsonl*"):
-                    opener = gzip.open if path.suffix == ".gz" else open
-                    with opener(path, "rt") as stream:
-                        for line in stream:
-                            references.update(re.findall(r'sha256:([a-f0-9]{64})', line))
+                prune_blobs(directory)
                 for blob in (directory / "blobs").glob("*"):
-                    if blob.name not in references:
+                    if re.fullmatch(r"[a-f0-9]{64}", blob.name) and now.timestamp() - blob.stat().st_mtime > 86400:
+                        temporary = blob.with_suffix(".gz.tmp")
+                        with blob.open("rb") as source, gzip.open(temporary, "wb") as target:
+                            shutil.copyfileobj(source, target)
+                        temporary.replace(blob.with_suffix(".gz"))
                         blob.unlink()
+                maximum = max(0, float(os.environ.get("LOKAY2_TICKS_MAX_MB", "300"))) * 1024 * 1024
+                size = sum(path.stat().st_size for path in directory.rglob("*") if path.is_file())
+                for path in sorted((*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz"))):
+                    if size <= maximum:
+                        break
+                    if path.name[:10] >= f"{now:%Y-%m-%d}":
+                        continue
+                    path.unlink()
+                    prune_blobs(directory)
+                    size = sum(item.stat().st_size for item in directory.rglob("*") if item.is_file())
                 return
             CONTEXT.update({key: fields[key] for key in ("repo", "issue", "node") if key in fields})
             if kind == "context":
@@ -67,13 +88,30 @@ def log_event(kind: str, **fields) -> None:
                 sha = hashlib.sha256(raw).hexdigest()
                 if key == "output":
                     row["output_sha"] = "sha256:" + sha
+                if kind == "call":
+                    if key == "output":
+                        value = row[key]
+                        if isinstance(value, dict):
+                            value = {k: v[:500] if isinstance(v, str) else v
+                                     for k, v in value.items() if k in ("result", "reason", "returncode", "next")}
+                            if len(json.dumps(value, ensure_ascii=False).encode()) <= 2048:
+                                row[key] = value
+                                continue
+                        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+                        text = text.encode()[:2048].decode("utf-8", errors="ignore")
+                        while len(json.dumps(text, ensure_ascii=False).encode()) > 2048:
+                            text = text[:-1]
+                        row[key] = text
+                    else:
+                        row.pop(key)
+                    continue
                 if len(raw) > (2048 if key == "output" else 768):
                     blobs = directory / "blobs"
                     blobs.mkdir(parents=True, exist_ok=True)
-                    with (blobs / sha).open("wb") as stream:
+                    temporary = blobs / (sha + ".gz.tmp")
+                    with gzip.open(temporary, "wb") as stream:
                         stream.write(raw)
-                        stream.flush()
-                        os.fsync(stream.fileno())
+                    temporary.replace(blobs / (sha + ".gz"))
                     row[key] = {"blob": "sha256:" + sha}
             line = json.dumps(row, separators=(",", ":"), ensure_ascii=False) + "\n"
             directory.mkdir(parents=True, exist_ok=True)
