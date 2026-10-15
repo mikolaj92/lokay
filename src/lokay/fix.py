@@ -4,7 +4,7 @@ from pathlib import Path
 
 from lokay.build import tidy_and_commit, worktree_status
 from lokay.effects.git import command, push, guard, failure
-from lokay.effects.pi import cleanup_worktree_caches, pi_argv, pi_env, run_process, sandboxed
+from lokay.effects.pi import cleanup_worktree_caches, durable_context, pi_argv, pi_env, run_process, sandboxed
 
 
 def _git(repo: Path, args: list[str]) -> str:
@@ -22,7 +22,7 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
             proc = run_process(
-                sandboxed(pi_argv(prompt, env), worktree, clean),
+                sandboxed(pi_argv(prompt, clean, session_id=durable_context("fix", worktree)), worktree, clean),
                 cwd=worktree,
                 env=clean,
                 timeout=3600,
