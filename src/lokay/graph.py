@@ -29,6 +29,8 @@ def step(run: Run, event: Event) -> Run:
                 fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
                               plan_evaluations=0, plan_accepted_sha=None)
         case Planned():
+            if (current.get("verdict") or {}).get("result") == "wait":
+                fields["verdict"] = None
             fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
                           plan_evaluations=0, plan_accepted_sha=None)
         case Built():
@@ -85,6 +87,30 @@ def step(run: Run, event: Event) -> Run:
     return Run(current, current.get("diff_fingerprint"))
 
 
+def docs_only(state: dict, candidate: dict) -> bool:
+    if state.get("docs_only") is True or candidate.get("docs_only") is True:
+        return True
+    if any(re.search(r"\b(?:docs[-_ ]audit|documentation[-_ ]only|docs[-_ ]only|docs_only)\b", str(value), re.IGNORECASE)
+           for row in (state, candidate)
+           for key, value in row.items()
+           if key in ("issue_title", "issue_body", "title", "body", "branch", "headRefName")):
+        return True
+    text = "\n".join(str(row.get(key) or "") for row in (state, candidate)
+                     for key in ("issue_title", "issue_body", "title", "body"))
+    if re.search(r"\b(?:implement|add|fix|update|change|modify|refactor|remove)\b[^\n.!?;]*"
+                 r"\b(?:code|API|runtime|functions?|tests?|behaviou?r)\b|"
+                 r"(?:\b(?:and|or|also|plus)\b|[&;])\s*"
+                 r"(?:(?:code|API|runtime|functions?|tests?|behaviou?r)\b|"
+                 r"(?:implement|add|fix|update|change|modify|refactor|remove|improve)\s+"
+                 r"(?!(?:the\s+)?(?:README(?:\.md)?|docs?|documentation)\b))",
+                 text, re.IGNORECASE):
+        return False
+    return any(re.search(r"^\s*(?:(?:update|fix|add|improve|revise|write)\s+(?:the\s+)?"
+                         r"(?:README(?:\.md)?|docs?|documentation)\b|document\s+\w)",
+                         str(row.get(key) or ""), re.IGNORECASE)
+               for row in (state, candidate) for key in ("issue_title", "title"))
+
+
 def pick(snapshot: Snapshot) -> Pick | None:
     for repo in sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name)):
         if repo.busy:
@@ -107,17 +133,22 @@ def pick(snapshot: Snapshot) -> Pick | None:
             state = repo.states[issue]
             if (state.get("waiting_on", "ready" if not state else None) == "ready"
                     and state.get("result") != "parked"):
-                ready.append((state.get("last_attempt", 0), pr["number"], issue, pr))
+                ready.append((docs_only(state, pr), state.get("last_attempt", 0), pr["number"], issue, pr))
         if ready:
-            _, _, issue, target = min(ready, key=lambda row: row[:3])
+            _, _, _, issue, target = min(ready, key=lambda row: row[:3])
             return Pick(repo.name, issue, "pr", target)
         if repo.issues is None:
             return Pick(repo.name, 0, "issues")
+        eligible = []
         for issue in repo.issues:
             number = issue["number"]
             if ((snapshot.only_issue is None or snapshot.only_issue == number)
                     and repo.states[number].get("result") != "parked"
                     and repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready"
                     and number not in repo.open_prs):
-                return Pick(repo.name, number, "issue", issue)
+                state = repo.states[number]
+                eligible.append((docs_only(state, issue), state.get("last_attempt", 0), number, issue))
+        if eligible:
+            _, _, number, target = min(eligible, key=lambda row: row[:3])
+            return Pick(repo.name, number, "issue", target)
     return None
