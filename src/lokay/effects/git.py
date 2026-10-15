@@ -7,8 +7,9 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from contextlib import contextmanager
 
-from lokay.run import run_process
+from lokay.effects.pi import run_process
 from lokay.safety import validate_argv
 
 REF_LOCK = ("cannot lock ref", "unable to resolve reference", ".lock")
@@ -102,10 +103,27 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
         locked = any(mark in last for mark in REF_LOCK)
         if not locked or attempt == attempts:
             return {"result": "failed", "error": (err or out).strip()}
-        from lokay.run import retry_sleep
+        from lokay.effects.pi import retry_sleep
 
         retry_sleep(0.2 * attempt)
     return {"result": "failed", "error": last}
+
+
+def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
+    def checked(args: list[str]) -> str:
+        code, out, err = _git(repo, ["--literal-pathspecs", *args])
+        if code:
+            raise RuntimeError((err or out).strip())
+        return out
+
+    if not paths:
+        return []
+    checked(["add", "--", *paths])
+    staged = set(filter(None, checked(["diff", "--cached", "--name-only", "-z"]).split("\0")))
+    committed = sorted(set(paths) & staged)
+    if committed:
+        checked(["commit", "--only", "-m", message, "--", *committed])
+    return committed
 
 
 def emit(payload: dict) -> None:
@@ -128,3 +146,86 @@ def path_at_head(path: Path, head: str, name: str) -> bool:
         ["git", "-C", str(path), "cat-file", "-e", f"{head}:{name}"],
         capture_output=True, timeout=60,
     ).returncode == 0
+
+
+def _snapshot(path: Path) -> dict:
+    status = guarded_command(path, "status", "--porcelain", "-z", "--untracked-files=all")
+    head = guarded_command(path, "rev-parse", "HEAD").decode().strip()
+    names = set(guarded_command(path, "diff", "--name-only", "-z").split(b"\0"))
+    names.update(guarded_command(path, "diff", "--cached", "--name-only", "-z").split(b"\0"))
+
+    patches = {
+        name.decode(): (
+            guarded_command(path, "diff", "--binary", "--cached", "--", name.decode()),
+            guarded_command(path, "diff", "--binary", "--", name.decode()),
+        )
+        for name in names if name
+    }
+    untracked = set(guarded_command(path, "ls-files", "--others", "--exclude-standard", "-z").split(b"\0")) - {b""}
+    return {"status": status, "head": head, "patches": patches, "untracked": untracked}
+
+
+def restore_changes(snapshots: dict[Path, dict]) -> dict:
+    report = {"changed": False, "paths": [], "files": []}
+    for path, before in snapshots.items():
+        after = _snapshot(path)
+        moved = after["head"] != before["head"]
+        files = {
+            name for name in before["patches"].keys() | after["patches"].keys()
+            if before["patches"].get(name) != after["patches"].get(name)
+        }
+        if moved:
+            files.update(name.decode() for name in guarded_command(
+                path, "diff", "--name-only", "-z", before["head"], after["head"],
+            ).split(b"\0") if name)
+        new = after["untracked"] - before["untracked"]
+        changed = moved or after["status"] != before["status"] or bool(files)
+        if not changed:
+            continue
+        report["changed"] = True
+        report["paths"].append(str(path))
+        report["files"].extend(f"{path}/{name}" for name in sorted(files | {n.decode() for n in new}))
+        if moved and not before["status"]:
+            guarded_command(path, "reset", "--hard", before["head"])
+        else:
+
+            for name in sorted(files):
+                exists = path_at_head(path, before["head"], name)
+                if exists:
+                    guarded_command(path, "checkout", before["head"], "--", name)
+                elif name.encode() in before["untracked"]:
+                    guarded_command(path, "rm", "--cached", "-f", "--ignore-unmatch", "--", name)
+                else:
+                    guarded_command(path, "rm", "-f", "--ignore-unmatch", "--", name)
+                staged, unstaged = before["patches"].get(name, (b"", b""))
+                if staged:
+                    guarded_command(path, "apply", "--binary", "--index", input=staged)
+                if unstaged:
+                    guarded_command(path, "apply", "--binary", input=unstaged)
+        for name in sorted(new):
+            guarded_command(path, "--literal-pathspecs", "clean", "-fd", "--", name.decode())
+    return report
+
+
+@contextmanager
+def guard(paths):
+    snapshots = {Path(path).expanduser().resolve(): None for path in paths if path is not None}
+    snapshots = {path: _snapshot(path) for path in snapshots}
+    report = {"changed": False, "paths": [], "files": []}
+    try:
+        yield report
+    finally:
+        report.update(restore_changes(snapshots))
+
+
+def failure(report: dict, worktree: Path) -> dict:
+    details = "; ".join(
+        f"{path}: {', '.join(name.removeprefix(path + '/') for name in report['files'] if name.startswith(path + '/')) or 'HEAD/status'}"
+        for path in report["paths"]
+    )
+    return {
+        "result": "failed", "reason": "outside_worktree",
+        "explanation": f"pi modified {details}; restored. Work only inside {worktree}.",
+        "artifact": str(worktree),
+        "paths": report["paths"], "files": report["files"],
+    }

@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from lokay.gh import merge as gh_merge
-from lokay.git import worktree_remove
+from lokay.effects.gh import merge as gh_merge
+from lokay.effects.git import worktree_remove
 from lokay.store import write_run
 from lokay.main_guard import check_main, pre_deploy
 

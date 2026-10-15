@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Mapping
+from typing import Any, cast
 
 EPS = 1e-5
 
@@ -40,7 +41,7 @@ def _check(internal: Mapping, response: Mapping) -> dict:
         out[qid] = {
             "choice": choice,
             "probabilities": {name: round(float(probs[name]), 6) for name in options},
-            "confidence": float(answer.get("confidence")),
+            "confidence": float(cast(Any, answer.get("confidence"))),
         }
         if "reason" in answer:
             out[qid]["reason"] = answer["reason"]
@@ -69,7 +70,7 @@ def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
     while (size := len(dumps(wire))) >= limit:
         available = [(parent, key) for parent, key in strings if parent[key]]
         if not available:
-            # Containers and numeric state metadata can also exceed the budget.
+
             wire[field] = {}
             strings = []
             if len(dumps(wire)) < limit:
@@ -264,7 +265,7 @@ def decide(internal: Mapping) -> dict:
 
 
 def _decide(internal: Mapping) -> dict:
-    from lokay.run import run_process
+    from lokay.effects.pi import run_process
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")

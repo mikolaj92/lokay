@@ -10,7 +10,7 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
-from lokay.run import run_process
+from lokay.effects.pi import run_process
 from lokay.safety import validate_argv
 from lokay.types import Note, parse_finding
 
@@ -149,7 +149,7 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
                     if code == 0 and log.strip():
                         failed_logs[name] = log[-4000:]
                 except Exception:
-                    pass  # Keep the check name when GitHub logs are unavailable.
+                    pass
     if pending:
         return {"result": "pending", "sha": sha, "failed": failed,
                 "failed_logs": failed_logs, "pending": pending}

@@ -3,9 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from lokay.build import tidy_and_commit, worktree_status
-from lokay.git import command, push
-from lokay.host_guard import guard, failure
-from lokay.run import cleanup_worktree_caches, pi_env, run_process, sandboxed
+from lokay.effects.git import command, push, guard, failure
+from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
 
 
 def _git(repo: Path, args: list[str]) -> str:

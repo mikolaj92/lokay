@@ -13,13 +13,13 @@ from functools import wraps
 from pathlib import Path
 
 from lokay import store
-from lokay.git import command
+from lokay.effects.git import command
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, tick_budget
-from lokay.gh import _gh, auth_status, open_issues, open_pr_for
+from lokay.effects.gh import _gh, auth_status, open_issues, open_pr_for
 from lokay.lock import acquire, release
-from lokay.run import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
+from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
                        process_groups, retry_sleep, run_process, tick_deadline)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
@@ -326,7 +326,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
 
 def refresh_body(repo: str, issue: int) -> dict:
     from lokay.build import pr_body
-    from lokay.gh import pr_set_body
+    from lokay.effects.gh import pr_set_body
 
     config = next(row for row in load_repos() if row["name"] == repo)
     root = Path(os.path.expanduser(config["clone_path"]))
@@ -450,7 +450,7 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
             root = Path(os.path.expanduser(configured["clone_path"]))
             worktree = root.parent / f"{root.name}-wt-{issue}"
             if worktree.exists():
-                from lokay.git import _git
+                from lokay.effects.git import _git
 
                 code, out, err = _git(worktree, ["rev-parse", "HEAD"])
                 if code != 0:
@@ -488,7 +488,7 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
 
 def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
     from lokay import plan
-    from lokay.decide import decide
+    from lokay.effects.decide import decide
 
     repo, issue = picked["repo"], picked["issue"]
     store.ensure_directory(art.parent)
@@ -595,8 +595,8 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
 
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
-    from lokay.gh import _gh
-    from lokay.git import worktree_add
+    from lokay.effects.gh import _gh
+    from lokay.effects.git import worktree_add
 
     from lokay import plan
 
@@ -707,7 +707,7 @@ def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch
 
 
 def fix_to_build(picked: dict, worktree: Path) -> dict | None:
-    from lokay.git import _git
+    from lokay.effects.git import _git
     from lokay.scope import is_test
 
     saved = state_read(picked["repo"], picked["issue"])
@@ -789,7 +789,7 @@ def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
 
 @guarded_step
 def resume(picked: dict) -> dict:
-    from lokay.git import _git
+    from lokay.effects.git import _git
 
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root = Path(os.path.expanduser(repo["clone_path"]))
@@ -914,12 +914,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks
     from lokay.main_guard import local_baseline, run_repo_tests
     from lokay.checks import CheckInput, run_checks
-    from lokay.decide import decide
+    from lokay.effects.decide import decide
     from lokay.fix import fix_code, fix_publish
-    from lokay.git import _git
-    from lokay.gh import _gh, open_pr_for, pr_checks, check_comment
+    from lokay.effects.git import _git
+    from lokay.effects.gh import _gh, open_pr_for, pr_checks, check_comment
     from lokay.merge import merge_sha
-    from lokay.run import run_process
+    from lokay.effects.pi import run_process
 
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     clone_path = Path(os.path.expanduser(repo["clone_path"]))

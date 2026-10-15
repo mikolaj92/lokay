@@ -4,7 +4,7 @@ import re
 import tokenize
 from pathlib import Path
 
-from lokay.git import _git
+from lokay.effects.git import _git
 
 
 def git_output(cwd: Path, args: list[str]) -> str:
@@ -73,8 +73,13 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
         if kind != "+" or not path.endswith(".py"):
             continue
         added.setdefault(path, set()).add(number)
-        if lokay_rules and path != "src/lokay/lint.py" and re.search(r"\badd\s+-A\b|['\"]add['\"]\s*,\s*['\"]-A['\"]", text):
-            errors.append(f"{path}:{number}: git add -A -> use lokay.git.commit_paths(changed)")
+        if lokay_rules and path != "src/lokay/lint.py":
+            if re.search(r"\badd\s+(?:-A\b|--all\b|\.(?:\s|$))|['\"]add['\"]\s*,\s*['\"](?:-A|--all|\.)['\"]", text):
+                errors.append(f"{path}:{number}: staging all files -> use lokay.effects.git.commit_paths(changed)")
+            if path.startswith("src/lokay/") and not path.startswith("src/lokay/effects/") and re.search(
+                r"\bimport\s+subprocess\b|\bfrom\s+subprocess\b|\bsubprocess\.", text
+            ):
+                errors.append(f"{path}:{number}: process execution outside effects -> use lokay.effects")
         if lokay_rules and re.search(r"\.get\(['\"](?:plik|zmiana|pytanie|linia_od|linia_do|note)['\"]|\[['\"](?:plik|zmiana|pytanie|linia_od|linia_do|note)['\"]\]", text):
             errors.append(f"{path}:{number}: raw finding dict access -> use lokay.types.Finding/Note fields")
     for path, numbers in added.items():
@@ -98,11 +103,11 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
                 if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
                     if numbers.intersection(range(first.lineno, (first.end_lineno or first.lineno) + 1)):
                         errors.append(f"{path}:{first.lineno}: docstring -> delete it")
-            if lokay_rules and isinstance(node, ast.List) and node.elts and path not in {"src/lokay/git.py", "src/lokay/gh.py"}:
+            if lokay_rules and isinstance(node, ast.List) and node.elts and path not in {"src/lokay/effects/git.py", "src/lokay/effects/gh.py"}:
                 first = node.elts[0]
                 if isinstance(first, ast.Constant) and first.value in ("git", "gh"):
                     if numbers.intersection(range(node.lineno, (node.end_lineno or node.lineno) + 1)):
-                        errors.append(f"{path}:{node.lineno}: subprocess git/gh outside git.py/gh.py -> call lokay.git / lokay.gh")
+                        errors.append(f"{path}:{node.lineno}: git/gh outside effects/git.py or effects/gh.py -> call lokay.effects.git / lokay.effects.gh")
     errors.extend(f"{path}: new unit test -> add a replay fixture under fixtures/replay and run uv run lokay replay"
                   for path in unit_test_files(diff))
     return sorted(set(errors))
