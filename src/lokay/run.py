@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import math
+import shutil
 import os
 import signal
 import subprocess
@@ -11,6 +13,78 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 
+process_groups: dict[int, subprocess.Popen | None] = {}
+
+
+def save_process_groups() -> None:
+    path = Path.home() / ".lokay" / "procs.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(f".{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(sorted(process_groups)))
+    temporary.replace(path)
+
+
+def kill_process_groups(pgids: Sequence[int]) -> None:
+    pending = set(pgids)
+    deadline = time.monotonic() + 3
+    for pgid in pending:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+    while pending and time.monotonic() < deadline:
+        for pgid in tuple(pending):
+            process = process_groups.get(pgid)
+            if process is not None:
+                process.poll()
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                pending.remove(pgid)
+        if pending:
+            time.sleep(0.05)
+    for pgid in pending:
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+    for pgid in pgids:
+        process_groups.pop(pgid, None)
+    save_process_groups()
+
+
+def cleanup_process_groups() -> None:
+    path = Path.home() / ".lokay" / "procs.json"
+    if path.exists():
+        saved = json.loads(path.read_text())
+        if not isinstance(saved, list) or any(type(pgid) is not int or pgid <= 1 or pgid == os.getpgrp() for pgid in saved):
+            raise ValueError("invalid process group registry")
+        for pgid in saved:
+            process_groups.setdefault(pgid, None)
+    kill_process_groups(list(process_groups))
+
+
+def cleanup_worktree_caches(worktree: Path) -> None:
+    token = tick_deadline.set(None)
+    try:
+        for name in (".cache", ".validation"):
+            directory = worktree / name
+            if directory.is_symlink() or not directory.is_dir():
+                continue
+            tracked = run_process(["git", "ls-files", "-z", "--", name], cwd=worktree, timeout=30)
+            if tracked.returncode != 0:
+                raise RuntimeError(tracked.stderr or "tracked cache lookup failed")
+            if tracked.stdout:
+                continue
+            ignored = run_process(["git", "check-ignore", "-q", "--", name + "/"], cwd=worktree, timeout=30)
+            if ignored.returncode == 0:
+                shutil.rmtree(directory)
+            elif ignored.returncode != 1:
+                raise RuntimeError(ignored.stderr or "ignored cache lookup failed")
+    finally:
+        tick_deadline.reset(token)
+
+
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     env = dict(base)
     for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
@@ -18,6 +92,7 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
         env.pop(key, None)
     env.update({
         "GH_CONFIG_DIR": tempfile.mkdtemp(dir=os.path.realpath(env.get("TMPDIR") or "/tmp")),
+        "UV_CACHE_DIR": str(Path(env.get("HOME") or Path.home()) / ".cache" / "uv"),
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_COUNT": "2",
         "GIT_CONFIG_KEY_0": "credential.helper",
@@ -112,17 +187,35 @@ def _run_process(
     remaining = None if deadline is None else deadline - time.monotonic()
     if remaining is not None and remaining <= 0:
         raise TickExpired()
-    process = subprocess.Popen(
-        list(argv),
-        cwd=cwd,
-        env=None if env is None else dict(env),
-        stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
-    cleanup_deadline = None
+    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+    process = None
+    try:
+        process = subprocess.Popen(
+            list(argv),
+            cwd=cwd,
+            env=None if env is None else dict(env),
+            stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+            preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
+        )
+        process_groups[process.pid] = process
+        save_process_groups()
+    except BaseException:
+        if process is not None:
+            kill_process_groups([process.pid])
+            process.wait(timeout=5)
+        raise
+    finally:
+        try:
+            signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
+        except BaseException:
+            if process is not None:
+                kill_process_groups([process.pid])
+                process.wait(timeout=5)
+            raise
     try:
         # Process creation consumes the same tick budget as communication.
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
@@ -134,13 +227,9 @@ def _run_process(
             else:
                 stdout, stderr = process.communicate(input=input, timeout=effective_timeout)
         except subprocess.TimeoutExpired as error:
-            cleanup_deadline = time.monotonic() + 5
+            kill_process_groups([process.pid])
             try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            try:
-                stdout, stderr = process.communicate(timeout=max(0, cleanup_deadline - time.monotonic()))
+                stdout, stderr = process.communicate(timeout=5)
             except subprocess.TimeoutExpired as drain_error:
                 stdout = drain_error.output if drain_error.output is not None else error.output
                 stderr = drain_error.stderr if drain_error.stderr is not None else error.stderr
@@ -149,13 +238,11 @@ def _run_process(
             raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr) from None
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)
     finally:
-        # Popen.__exit__ waits without a limit, even if draining pipes timed out.
-        for stream in (process.stdin, process.stdout, process.stderr):
-            if stream is not None:
-                stream.close()
-        # communicate() already reaps the process unless pipe draining failed.
-        if process.returncode is None:
-            try:
-                process.wait(timeout=5 if cleanup_deadline is None else max(0, cleanup_deadline - time.monotonic()))
-            except subprocess.TimeoutExpired:
-                pass
+        try:
+            if process.pid in process_groups:
+                kill_process_groups([process.pid])
+            process.wait(timeout=5)
+        finally:
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()

@@ -9,7 +9,7 @@ from pathlib import Path
 from lokay.git import push, worktree_add
 from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
-from lokay.run import pi_env, run_process, sandboxed
+from lokay.run import cleanup_worktree_caches, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
@@ -204,6 +204,8 @@ def build_code(
         if changes["changed"]:
             return failure(changes, worktree)
         raise
+    finally:
+        cleanup_worktree_caches(worktree)
     if changes["changed"]:
         return failure(changes, worktree)
     if proc.returncode != 0:

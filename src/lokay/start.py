@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import time
 from functools import wraps
 from pathlib import Path
@@ -12,7 +13,8 @@ from pathlib import Path
 from lokay.config import load_repos, tick_budget
 from lokay.gh import _gh, gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
-from lokay.run import TickExpired, check_deadline, retry_sleep, run_process, tick_deadline
+from lokay.run import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
+                       process_groups, retry_sleep, run_process, tick_deadline)
 from lokay.state import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
@@ -355,14 +357,26 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if host_ready(report) else 1
     from lokay.state import log_event
 
-    log_event("start")
-    token = tick_deadline.set(time.monotonic() + tick_budget())
+    def shutdown(signum, frame):
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        kill_process_groups(list(process_groups))
+        raise SystemExit(128 + signum)
+
+    handlers = {sig: signal.signal(sig, shutdown) for sig in (signal.SIGTERM, signal.SIGINT)}
     try:
-        return _tick()
-    except TickExpired:
-        return 0
+        cleanup_process_groups()
+        log_event("start")
+        token = tick_deadline.set(time.monotonic() + tick_budget())
+        try:
+            return _tick()
+        except TickExpired:
+            return 0
+        finally:
+            tick_deadline.reset(token)
     finally:
-        tick_deadline.reset(token)
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
 
 
 def _tick() -> int:
