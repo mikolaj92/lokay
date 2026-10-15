@@ -20,7 +20,8 @@ def is_cache(path: str) -> bool:
 
 def is_artifact(path: str) -> bool:
     parts = PurePosixPath(path).parts
-    return (is_cache(path) or path.endswith(".log") or path.startswith(".validation/")
+    return (is_cache(path) or path.endswith((".log", ".sqlite", ".sqlite-shm", ".sqlite-wal"))
+            or any(part in {".validation", ".sandbox", "sandbox"} for part in parts[:-1])
             or (path.startswith("tmp/") and path.endswith(".lock"))
             or parts[-2:] == ("bin", "gh"))
 

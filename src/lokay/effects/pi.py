@@ -5,13 +5,19 @@ import math
 import shutil
 import os
 import selectors
+import sys
 import signal
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from subprocess import TimeoutExpired
+from typing import Any, BinaryIO, cast
+
+from lokay import store
 
 
 PI_IDLE_SECONDS = 300
@@ -20,11 +26,7 @@ process_groups: dict[int, subprocess.Popen | None] = {}
 
 
 def save_process_groups() -> None:
-    path = Path.home() / ".lokay" / "procs.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(sorted(process_groups)))
-    temporary.replace(path)
+    store.save_process_groups(sorted(process_groups))
 
 
 def kill_process_groups(pgids: Sequence[int]) -> None:
@@ -57,7 +59,7 @@ def kill_process_groups(pgids: Sequence[int]) -> None:
 
 
 def cleanup_process_groups() -> None:
-    path = Path.home() / ".lokay" / "procs.json"
+    path = store.process_groups_path()
     if path.exists():
         saved = json.loads(path.read_text())
         if not isinstance(saved, list) or any(type(pgid) is not int or pgid <= 1 or pgid == os.getpgrp() for pgid in saved):
@@ -68,18 +70,20 @@ def cleanup_process_groups() -> None:
 
 
 def cleanup_worktree_caches(worktree: Path) -> None:
+    from lokay.effects.git import command
+
     token = tick_deadline.set(None)
     try:
         for name in (".cache", ".validation"):
             directory = worktree / name
             if directory.is_symlink() or not directory.is_dir():
                 continue
-            tracked = run_process(["git", "ls-files", "-z", "--", name], cwd=worktree, timeout=30)
+            tracked = command(worktree, ["ls-files", "-z", "--", name])
             if tracked.returncode != 0:
                 raise RuntimeError(tracked.stderr or "tracked cache lookup failed")
             if tracked.stdout:
                 continue
-            ignored = run_process(["git", "check-ignore", "-q", "--", name + "/"], cwd=worktree, timeout=30)
+            ignored = command(worktree, ["check-ignore", "-q", "--", name + "/"])
             if ignored.returncode == 0:
                 shutil.rmtree(directory)
             elif ignored.returncode != 1:
@@ -114,15 +118,18 @@ def pi_argv(prompt: str, env: Mapping[str, str], *, json_mode: bool = False) -> 
     ]
 
 
-def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> list[str]:
+def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], extra_dir: str | Path | None = None) -> list[str]:
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
     worktree = Path(worktree).resolve()
-    git = run_process(["git", "-C", str(worktree), "rev-parse", "--git-common-dir"], timeout=30)
+    from lokay.effects.git import command
+
+    git = command(worktree, ["rev-parse", "--git-common-dir"])
     gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
     return [
-        "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[2] / "sandbox/pi.sb"),
+        "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[3] / "sandbox/pi.sb"),
         "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
+        "-D", f"ARTIFACT_DIR={Path(extra_dir).resolve() if extra_dir is not None else worktree}",
         "-D", f"TMPDIR={os.path.realpath(env.get('TMPDIR') or '/tmp')}",
         "-D", f"HOME={os.path.realpath(env.get('HOME') or os.environ['HOME'])}",
         *argv,
@@ -130,7 +137,7 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> 
 
 
 class TickExpired(BaseException):
-    """Yield to the next tick without treating the saved node as failed."""
+    pass
 
 
 tick_deadline: ContextVar[float | None] = ContextVar("tick_deadline", default=None)
@@ -180,7 +187,7 @@ def run_process(
     input: str | None = None,
     pi_idle_retry: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     command = next((index for index, arg in enumerate(argv)
                     if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
@@ -206,6 +213,127 @@ def run_process(
                   output=output, started=started, ok=ok)
 
 
+def _pi_pids(expires: float) -> set[int]:
+    proc = subprocess.run(["ps", "-ww", "-axo", "pid=,comm=,args="], capture_output=True,
+                          text=True, timeout=max(0.001, expires - time.monotonic()), check=True)
+    pids = set()
+    for line in proc.stdout.splitlines():
+        row = line.strip().split(None, 2)
+        if len(row) < 3:
+            continue
+        pid, executable, command = row
+        args = command.split()
+        name = Path(executable).name
+        if "-p" not in args[1:]:
+            continue
+        if not pid.isdecimal() or not args:
+            continue
+        native = Path(args[0]).name == "pi" and name not in ("sh", "bash", "zsh", "dash", "env")
+        node = name in ("node", "nodejs") and len(args) > 1 and (
+            Path(args[1]).name == "pi" or (
+                Path(args[1]).name in ("cli.js", "cli.mjs", "index.js")
+                and ("/pi/" in args[1] or "pi-coding-agent/" in args[1])))
+        if native or node:
+            pids.add(int(pid))
+    return pids
+
+
+@contextmanager
+def _pi_admission(argv, env, expires, expired):
+    if pi_command(argv) is None:
+        yield
+        return
+    child = os.environ if env is None else env
+    workers = child.get("LOKAY2_WORKERS", "2")
+    if workers not in ("1", "2", "3"):
+        raise ValueError("LOKAY2_WORKERS must be 1, 2 or 3")
+    idle = None
+    while True:
+        check_deadline()
+        if time.monotonic() >= expires:
+            expired()
+        held = None
+        reason = "disk"
+        if shutil.disk_usage(Path.home()).free >= 5000000000:
+            reason = "pi_capacity"
+            held = store.acquire_lock(Path.home() / ".lokay" / "pi-admission.lock")
+            if held["result"] == "held":
+                try:
+                    admitted = len(_pi_pids(expires)) < int(workers)
+                except Exception:
+                    admitted = False
+                if admitted:
+                    try:
+                        if time.monotonic() >= expires:
+                            expired()
+                        if idle is not None:
+                            from lokay.observe import current
+
+                            current(idle_reason=None)
+                        yield
+                    finally:
+                        store.release_lock(held)
+                    return
+                store.release_lock(held)
+        if idle != reason:
+            from lokay.observe import current
+
+            current(idle_reason=reason)
+            print(f"idle {reason}", file=sys.stderr, flush=True)
+            store.log_event("idle", reason=reason)
+            idle = reason
+        time.sleep(min(1, max(0, expires - time.monotonic())))
+
+
+@contextmanager
+def _process(argv, cwd, env, input, *, text=False, expires=None, expired=None):
+    process: subprocess.Popen[Any] | None = None
+    try:
+        with _pi_admission(argv, env, expires, expired):
+            blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+            try:
+                process = subprocess.Popen(
+                    list(argv),
+                    cwd=cwd,
+                    env=None if env is None else dict(env),
+                    stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=text,
+                    start_new_session=True,
+                    preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
+                )
+                process_groups[process.pid] = process
+                save_process_groups()
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
+            assert process is not None
+            if pi_command(argv) is not None:
+                assert expires is not None and expired is not None
+                while process.poll() is None:
+                    check_deadline()
+                    if time.monotonic() >= expires:
+                        expired()
+                    try:
+                        if process.pid in _pi_pids(expires):
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(min(0.05, max(0, expires - time.monotonic())))
+        assert process is not None
+        yield process
+    finally:
+        if process is not None:
+            try:
+                if process.pid in process_groups:
+                    kill_process_groups([process.pid])
+                process.wait(timeout=5)
+            finally:
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    if stream is not None:
+                        stream.close()
+
+
 def _run_process(
     argv: Sequence[str],
     *,
@@ -225,36 +353,7 @@ def _run_process(
         raise TickExpired()
     if pi_command(argv) is not None:
         return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
-    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
-    process = None
-    try:
-        process = subprocess.Popen(
-            list(argv),
-            cwd=cwd,
-            env=None if env is None else dict(env),
-            stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-            preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
-        )
-        process_groups[process.pid] = process
-        save_process_groups()
-    except BaseException:
-        if process is not None:
-            kill_process_groups([process.pid])
-            process.wait(timeout=5)
-        raise
-    finally:
-        try:
-            signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
-        except BaseException:
-            if process is not None:
-                kill_process_groups([process.pid])
-                process.wait(timeout=5)
-            raise
-    try:
+    with _process(argv, cwd, env, input, text=True) as process:
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
         tick_limited = remaining is not None and remaining <= timeout
         effective_timeout = timeout if remaining is None else min(timeout, remaining)
@@ -274,15 +373,6 @@ def _run_process(
                 raise TickExpired() from None
             raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr) from None
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)
-    finally:
-        try:
-            if process.pid in process_groups:
-                kill_process_groups([process.pid])
-            process.wait(timeout=5)
-        finally:
-            for stream in (process.stdin, process.stdout, process.stderr):
-                if stream is not None:
-                    stream.close()
 
 
 def _run_pi_process(
@@ -294,7 +384,7 @@ def _run_pi_process(
     input: str | None,
     pi_idle_retry: bool,
 ) -> subprocess.CompletedProcess[str]:
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     argv = list(argv)
     command = pi_command(argv)
@@ -323,35 +413,7 @@ def _run_pi_process(
         if time.monotonic() >= expires:
             expired()
         attempt = time.monotonic()
-        process = None
-        blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
-        try:
-            process = subprocess.Popen(
-                argv,
-                cwd=cwd,
-                env=None if env is None else dict(env),
-                stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=True,
-                preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
-            )
-            process_groups[process.pid] = process
-            save_process_groups()
-        except BaseException:
-            if process is not None:
-                kill_process_groups([process.pid])
-                process.wait(timeout=5)
-            raise
-        finally:
-            try:
-                signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
-            except BaseException:
-                if process is not None:
-                    kill_process_groups([process.pid])
-                    process.wait(timeout=5)
-                raise
-        try:
+        with _process(argv, cwd, env, input, expires=expires, expired=expired) as process:
             with selectors.DefaultSelector() as selector:
                 for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
                     assert stream is not None
@@ -401,7 +463,7 @@ def _run_pi_process(
                                 pending = memoryview(b"")
                             if not pending:
                                 selector.unregister(key.fileobj)
-                                key.fileobj.close()
+                                cast(BinaryIO, key.fileobj).close()
                         else:
                             chunk = os.read(key.fd, 65536)
                             if chunk:
@@ -409,12 +471,30 @@ def _run_pi_process(
                                 last_output = time.monotonic()
                             else:
                                 selector.unregister(key.fileobj)
-        finally:
-            try:
-                if process.pid in process_groups:
-                    kill_process_groups([process.pid])
-                process.wait(timeout=5)
-            finally:
-                for stream in (process.stdin, process.stdout, process.stderr):
-                    if stream is not None:
-                        stream.close()
+
+
+def pi_step(
+    prompt: str,
+    artifact: Path,
+    *,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout: float = 3600,
+    pi_idle_retry: bool = True,
+) -> dict[str, str]:
+    worktree = cwd if cwd is not None else Path.cwd()
+    child = pi_env(os.environ if env is None else env, worktree)
+    provider = child.get("LOKAY2_PROVIDER", "")
+    model = child.get("LOKAY2_MODEL", "")
+    if not provider or not model:
+        return {"result": "failed", "artifact": ""}
+    proc = run_process(
+        sandboxed(pi_argv(prompt, child, json_mode=True), worktree, child, artifact.parent.resolve()),
+        cwd=cwd,
+        env=child,
+        timeout=timeout,
+        pi_idle_retry=pi_idle_retry,
+    )
+    if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
+        return {"result": "failed", "artifact": ""}
+    return {"result": "done", "artifact": str(artifact)}

@@ -6,24 +6,23 @@ import hashlib
 from contextlib import contextmanager
 from pathlib import Path
 
-from lokay.git import push, worktree_add
-from lokay.host_guard import guard, failure
-from lokay.gh import pr_create
-from lokay.run import cleanup_worktree_caches, pi_argv, pi_env, run_process, sandboxed
+from lokay import store
+
+from lokay.effects.git import command, commit_paths, push, guard, failure
+from lokay.effects.gh import pr_create
+from lokay.effects.pi import cleanup_worktree_caches, pi_argv, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
 LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
-             "yarn.lock": "package.json"}
-
-
-def child_env(base: dict[str, str]) -> dict[str, str]:
-    return pi_env(base, Path.cwd())
+             "yarn.lock": "package.json", "pixi.lock": "pixi.toml",
+             "Cargo.lock": "Cargo.toml", "Gemfile.lock": "Gemfile",
+             "composer.lock": "composer.json", "bun.lockb": "package.json"}
 
 
 def _git(repo: Path, args: list[str]) -> str:
-    proc = run_process(["git", *args], cwd=repo, timeout=30)
+    proc = command(repo, args)
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout or "").strip())
     return (proc.stdout or "").strip()
@@ -34,19 +33,23 @@ def exclude_caches(worktree: Path) -> None:
     existing = exclude.read_text() if exclude.exists() else ""
     missing = [pattern for pattern in CACHE_PATTERNS if pattern not in existing.splitlines()]
     if missing:
-        exclude.parent.mkdir(parents=True, exist_ok=True)
-        with exclude.open("a") as file:
-            file.write(("\n" if existing and not existing.endswith("\n") else "")
-                       + "\n".join(missing) + "\n")
+        store.append_text(exclude, ("\n" if existing and not existing.endswith("\n") else "")
+                          + "\n".join(missing) + "\n")
 
 
 def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
     """Snapshot dirty paths, including edits with unchanged status codes."""
-    _git(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
+    status = command(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
+    if status.returncode:
+        raise RuntimeError((status.stderr or status.stdout or "").strip())
+    entries = iter(status.stdout.split("\0"))
     names = set()
-    for args in (["ls-files", "-m", "-d", "--others", "--exclude-standard", "-z"],
-                 ["diff", "--cached", "--name-only", "-z"]):
-        names.update(filter(None, _git(worktree, args).split("\0")))
+    for entry in entries:
+        if not entry:
+            continue
+        names.add(entry[3:])
+        if "R" in entry[:2] or "C" in entry[:2]:
+            names.add(next(entries))
     result = {}
     for name in names:
         file = worktree / name
@@ -124,7 +127,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
             continue
         file = worktree / path
         if file.is_file() or file.is_symlink():
-            file.unlink()
+            store.remove_file(file)
         for parent in path.parents:
             if is_cache(parent.as_posix()):
                 directories.add(worktree / parent)
@@ -146,11 +149,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     index_paths = names(["ls-files", "-z"])
     stage = [path for path in selected if path in index_paths or (worktree / path).exists()
              or (worktree / path).is_symlink()]
-    if stage:
-        _git(worktree, ["--literal-pathspecs", "add", "-A", "--", *stage])
-    committed = sorted(set(selected) & names(["diff", "--cached", "--name-only", "-z"]))
-    if committed:
-        _git(worktree, ["--literal-pathspecs", "commit", "--only", "-m", message, "--", *committed])
+    committed = commit_paths(worktree, stage, message)
     return committed, junk
 
 
@@ -226,7 +225,7 @@ def build_code(
         _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
         file = worktree / path
         if file.exists() or file.is_symlink():
-            file.unlink()
+            store.remove_file(file)
     tidy_and_commit(worktree, "lokay build", before)
     if removed:
         remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
@@ -254,7 +253,7 @@ def build_code(
     if not log:
         upstream = (_git(worktree, ["for-each-ref", "--format=%(upstream:short)",
                                    f"refs/heads/{expected_branch}"]) if expected_branch else "")
-        if upstream == f"origin/{expected_branch}":
+        if expected_branch is not None and upstream == f"origin/{expected_branch}":
             _git(worktree, ["fetch", "origin", expected_branch])
             if int(_git(worktree, ["rev-list", "--count", f"{upstream}..HEAD"])) > 0:
                 return {"result": "done", "artifact": head, "pi_response": pi_tail}
@@ -268,7 +267,7 @@ def build_code(
 
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
-    from lokay.state import state_read
+    from lokay.store import state_read
 
     body = pr_body(worktree, plan_path, state_read(repo_name, issue).get("pi_response") or "")
     pushed = push(worktree, branch, expected)

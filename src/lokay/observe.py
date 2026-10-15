@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+from json import dumps
+from lokay.store import write_heartbeat
+
 import json
 import os
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from threading import Event, Thread
-from tempfile import NamedTemporaryFile
 import sys
 
-from lokay.gh import _gh
-from lokay.state import RUNS, main_status
+from lokay.effects.gh import _gh
+from lokay.store import RUNS, main_status
 
 CURRENT: dict = {}
 
@@ -50,43 +51,7 @@ def ticking():
 
 
 def heartbeat(result: str | None = None, **fields) -> dict:
-    path = Path.home() / ".lokay" / "heartbeat.json"
-    previous = json.loads(path.read_text()) if path.exists() else {}
-    previous.setdefault("failures", 0)
-    previous.setdefault("last_error", None)
-    previous.setdefault("idle_reason", None)
-    previous.setdefault("issue_since", None)
-    previous.update(fields)
-    if fields.get("failures") == 0:
-        previous["last_error"] = None
-    if result is not None:
-        previous["result"] = result
-    if previous.get("idle_reason") == "no_work":
-        previous["queue_since"] = None
-    elif result == "merged":
-        previous["last_merge"] = time.time()
-        previous["queue_since"] = time.time()
-    elif fields.get("repo") and not previous.get("queue_since"):
-        previous["queue_since"] = fields.get("issue_since") or time.time()
-    try:
-        installed = version("lokay")
-    except PackageNotFoundError:
-        installed = "unknown"
-    previous["main_status"] = main_status()
-    previous.update(time=datetime.now(timezone.utc).isoformat(),
-                    version=os.environ.get("LOKAY_VERSION", installed))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Concurrent pulses must not share the file used for atomic replacement.
-    with NamedTemporaryFile(mode="w", dir=path.parent, prefix="heartbeat.",
-                            suffix=".tmp", delete=False) as file:
-        temporary = Path(file.name)
-        try:
-            file.write(json.dumps(previous) + "\n")
-            file.close()
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
-    return previous
+    return write_heartbeat(result, **fields)
 
 
 def status() -> None:
@@ -133,7 +98,7 @@ def monitor() -> dict:
     if code != 0:
         raise RuntimeError(err or "alarm lookup failed")
     if not any(row["title"] == "lokay-stalled" for row in json.loads(out or "[]")):
-        body = "\n".join(reasons) + "\n\n```json\n" + json.dumps(beat, indent=2) + "\n```"
+        body = "\n".join(reasons) + "\n\n```json\n" + dumps(beat, indent=2) + "\n```"
         code, _, err = _gh(["issue", "create", "--repo", repo, "--title", "lokay-stalled", "--body", body])
         if code != 0:
             raise RuntimeError(err or "alarm creation failed")

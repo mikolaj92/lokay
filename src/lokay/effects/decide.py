@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import math
 import os
@@ -7,6 +9,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Mapping
+from typing import Any, cast
 
 EPS = 1e-5
 
@@ -38,7 +41,7 @@ def _check(internal: Mapping, response: Mapping) -> dict:
         out[qid] = {
             "choice": choice,
             "probabilities": {name: round(float(probs[name]), 6) for name in options},
-            "confidence": float(answer.get("confidence")),
+            "confidence": float(cast(Any, answer.get("confidence"))),
         }
         if "reason" in answer:
             out[qid]["reason"] = answer["reason"]
@@ -64,13 +67,12 @@ def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
 
     field = "state" if "state" in wire else "input"
     wire[field] = trim(wire[field])
-    while (size := len(json.dumps(wire))) >= limit:
+    while (size := len(dumps(wire))) >= limit:
         available = [(parent, key) for parent, key in strings if parent[key]]
         if not available:
-            # Containers and numeric state metadata can also exceed the budget.
             wire[field] = {}
             strings = []
-            if len(json.dumps(wire)) < limit:
+            if len(dumps(wire)) < limit:
                 break
             questions = wire["questions"]
             items = list(questions.values()) if isinstance(questions, dict) else questions
@@ -78,7 +80,7 @@ def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
                          for item in items if item.get("question", item.get("instructions"))]
             if not available:
                 raise DecisionError("request metadata exceeds character limit")
-            size = len(json.dumps(wire))
+            size = len(dumps(wire))
         parent, key = max(available, key=lambda item: len(item[0][item[1]]))
         parent[key] = parent[key][:max(0, len(parent[key]) - max(1, (size - limit + 1) // 6))]
     return wire
@@ -114,7 +116,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                  "state.history lists earlier findings on this PR and how they were addressed. "
                  "Do not re-raise a finding that was resolved or rejected in a dispute unless the current "
                  "diff reintroduces it; raise a new concern only if it is concrete and give its exact reason."},
-                {"role": "user", "content": json.dumps(user)},
+                {"role": "user", "content": dumps(user)},
             ],
             "response_format": {"type": "json_schema", "json_schema": {
                 "name": "decisions", "strict": True,
@@ -123,16 +125,12 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
             }},
         }
     if api == "tensorfold":
-        questions = []
-        for question in internal["questions"]:
-            questions.append(
-                {
-                    "id": question["id"],
-                    "type": "choice",
-                    "question": question["instructions"],
-                    "options": [{"name": k, "description": v} for k, v in question["options"].items()],
-                }
-            )
+        questions = [{
+            "id": question["id"],
+            "type": "choice",
+            "question": question["instructions"],
+            "options": [{"name": k, "description": v} for k, v in question["options"].items()],
+        } for question in internal["questions"]]
         return _trim_wire({
             "model": model,
             "input": internal.get("state") or {},
@@ -169,13 +167,13 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
 def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict:
     if api not in ("mini", "chat") and payload.get("model") not in (None, model):
         raise DecisionError("model mismatch")
+    mapped = {}
     if api == "chat":
         try:
             content = payload["choices"][0]["message"]["content"].strip()
             if content.startswith("```"):
                 content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
             answers = json.loads(content)
-            mapped = {}
             for question in internal["questions"]:
                 qid = question["id"]
                 raw = answers[qid]["probabilities"]
@@ -198,28 +196,23 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
                     mapped[qid]["reason"] = reason.strip()[:1500]
         except (KeyError, IndexError, TypeError, ValueError, AttributeError) as exc:
             raise DecisionError("invalid chat decision response") from exc
-        return _check(internal, mapped)
-    if api == "mini":
+    elif api == "mini":
         mapped = {
             qid: {"choice": answer.get("label"), "probabilities": answer.get("probabilities"),
                   "confidence": answer.get("confidence")}
             for qid, answer in payload.items()
         }
-        return _check(internal, mapped)
-    if api == "tensorfold":
+    elif api == "tensorfold":
         usage = payload.get("usage") or {}
         if int(usage.get("completion_tokens") or 0) > 0:
             raise DecisionError("completion tokens")
-        mapped = {}
         for qid, answer in (payload.get("answers") or {}).items():
             probs = answer["probabilities"]
             choice = answer["choice"]
             if choice not in probs:
                 raise DecisionError(f"choice {qid}")
             mapped[qid] = {"choice": choice, "probabilities": probs, "confidence": float(probs[choice])}
-        return _check(internal, mapped)
-    if api == "openai-decisions":
-        mapped = {}
+    elif api == "openai-decisions":
         for answer in payload.get("answers") or []:
             probs = {row["value"]: row["probability"] for row in answer.get("probabilities") or []}
             choice = answer["choice"]
@@ -228,9 +221,7 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
                 probs = {"true": p, "false": 1 - p}
                 choice = "true" if p >= 0.5 else "false"
             mapped[answer["name"]] = {"choice": choice, "probabilities": probs, "confidence": answer.get("confidence")}
-        return _check(internal, mapped)
-    if api == "systemone":
-        mapped = {}
+    elif api == "systemone":
         for qid, answer in (payload.get("answers") or {}).items():
             probs = dict(answer.get("probabilities") or {})
             choice = answer["choice"]
@@ -239,12 +230,13 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
                 probs = {"true": 1 - noul, "false": noul}
                 choice = "false" if choice == "noul" else "true"
             mapped[qid] = {"choice": choice, "probabilities": probs, "confidence": answer.get("confidence")}
-        return _check(internal, mapped)
-    raise DecisionError(f"unknown api {api}")
+    else:
+        raise DecisionError(f"unknown api {api}")
+    return _check(internal, mapped)
 
 
 def decide(internal: Mapping) -> dict:
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     started = time.monotonic()
     output = None
@@ -262,12 +254,12 @@ def decide(internal: Mapping) -> dict:
 
 
 def _decide(internal: Mapping) -> dict:
-    from lokay.run import run_process
+    from lokay.effects.pi import run_process
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
     path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone", "chat": "/chat/completions"}[api]
-    body = json.dumps(to_wire(api, model, internal))
+    body = dumps(to_wire(api, model, internal))
     timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or (180 if api == "chat" else 30))))
     cmd = [
         "curl", "-sS", "-m", timeout,
@@ -295,8 +287,6 @@ def _decide(internal: Mapping) -> dict:
 
 
 def main() -> int:
-    import sys
-
     if len(sys.argv) > 1 and sys.argv[1] == "--probe":
         internal = {
             "state": {},
@@ -307,7 +297,7 @@ def main() -> int:
     else:
         internal = json.load(sys.stdin)
     try:
-        print(json.dumps(decide(internal), separators=(",", ":")))
+        print(dumps(decide(internal), separators=(",", ":")))
     except Exception as exc:
         print(f"decide: {exc}", file=sys.stderr)
         return 1

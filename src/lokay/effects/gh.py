@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import os
 import re
 import shutil
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
-from lokay.run import run_process
+from lokay.effects.pi import run_process
 from lokay.safety import validate_argv
+from lokay.types import CheckResult, Note, parse_finding
 
 ORIGIN = "lokay"
 GH_CANDIDATES = (
@@ -40,6 +44,10 @@ def gh_bin() -> str:
     return "gh"
 
 
+def auth_status(env: Mapping[str, str]):
+    return run_process([gh_bin(), "auth", "status"], env=env, timeout=15)
+
+
 def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str, str]:
     validate_argv(["gh", *args])
     proc = run_process([gh_bin(), *args], env=env, timeout=60)
@@ -54,17 +62,6 @@ def open_issues(repo: str) -> list[dict]:
         raise RuntimeError(err.strip() or "issue list failed")
     rows = json.loads(out or "[]")
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
-
-
-def issues_with_label(repo: str, label: str | None = None) -> list[dict]:
-    args = ["issue", "list", "--repo", repo, "--state", "open", "--json", "number,createdAt,title"]
-    if label:
-        args[4:4] = ["--label", label]
-    code, out, err = _gh(args)
-    if code != 0:
-        raise RuntimeError(err.strip() or "issue list failed")
-    rows = json.loads(out or "[]")
-    return sorted(rows, key=lambda row: row["createdAt"])
 
 
 def open_pr_for(repo: str, branch: str) -> dict | None:
@@ -141,32 +138,13 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
                     if code == 0 and log.strip():
                         failed_logs[name] = log[-4000:]
                 except Exception:
-                    pass  # Keep the check name when GitHub logs are unavailable.
+                    pass
     if pending:
         return {"result": "pending", "sha": sha, "failed": failed,
                 "failed_logs": failed_logs, "pending": pending}
     if failed:
         return {"result": "red", "sha": sha, "failed": failed, "failed_logs": failed_logs}
     return {"result": "green", "sha": sha, "failed": []}
-
-
-def comment_upsert(repo: str, number: int, marker: str, body: str) -> dict:
-    code, out, err = _gh(["pr", "view", str(number), "--repo", repo, "--json", "comments"])
-    if code != 0:
-        raise RuntimeError(err.strip() or "comments failed")
-    comments = json.loads(out).get("comments") or []
-    text = fit_body(f"<!-- {marker} -->\n{body}")
-    for comment in comments:
-        if marker in (comment.get("body") or ""):
-            cid = comment["id"]
-            code, out, err = _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={text}"])
-            if code != 0:
-                raise RuntimeError(err.strip() or "comment patch failed")
-            return {"result": "updated", "id": cid}
-    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", text])
-    if code != 0:
-        raise RuntimeError(err.strip() or "comment failed")
-    return {"result": "created", "url": out.strip()}
 
 
 def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: dict) -> dict:
@@ -178,18 +156,25 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
         def cell(value):
             return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")[:1000]
 
-        body += "| name | pass | reason |\n| --- | --- | --- |\n" + "\n".join(
-            f"| {cell(row['name'])} | {str(row['pass']).lower()} | {cell(row['reason'])} |"
-            for row in verdict["checks"]
+        def check_cells(row):
+            if isinstance(row, CheckResult):
+                return row.name, row.status, row.reason
+            status = row.get("status") or ("unknown" if row["pass"] is None else "pass" if row["pass"] else "fail")
+            return row["name"], status, row["reason"]
+
+        body += "| name | status | reason |\n| --- | --- | --- |\n" + "\n".join(
+            f"| {cell(name)} | {cell(status)} | {cell(reason)} |"
+            for name, status, reason in map(check_cells, verdict["checks"])
         ) + "\n\n"
-    body += "Uwagi i CI:\n```json\n" + json.dumps({
+    body += "Uwagi i CI:\n```json\n" + dumps({
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
                 "failed": ci.get("failed", []), "pending": ci.get("pending", []),
             }, ensure_ascii=False, indent=2) + "\n```"
-    notes = [note for note in verdict.get("notes", []) if note.get("pytanie")]
+    notes = [parsed for note in verdict.get("notes", [])
+             if isinstance(parsed := parse_finding(note), Note) and parsed.pytanie]
     if notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
-            f"- {note.get('pytanie', '')}: {note.get('note', '')}" for note in notes)
+            f"- {note.pytanie}: {note.note}" for note in notes)
     code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", fit_body(body)])
     if code != 0:
         raise RuntimeError(err.strip() or "Check comment failed")
@@ -223,3 +208,18 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     if not sha:
         raise RuntimeError("merge commit missing")
     return {"result": "merged", "merge_sha": sha}
+
+
+def dashboard_request(*args):
+    try:
+        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("gh timed out after 60s") from None
+    except OSError:
+        raise RuntimeError("gh could not start") from None
+    if result.returncode:
+        raise RuntimeError(f"gh {args[0]} failed (exit {result.returncode})")
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        raise RuntimeError("gh returned invalid JSON") from None

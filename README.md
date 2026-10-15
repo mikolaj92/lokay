@@ -2,7 +2,7 @@
 
 Plan, Build, Check, Fix, Merge. Merge is the only end.
 
-`lokay start` runs the graph in Python (`src/lokay/start.py`), the only runtime.
+`lokay start` runs the graph in Python (`src/lokay/tick.py`), the only runtime.
 Plan revisions return to Plan checking; Fix returns to Check. Failed steps retry.
 
 Analiza przypiętej rewizji: [maszyna stanów](STATE_MACHINE.md),

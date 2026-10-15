@@ -1,6 +1,9 @@
 """Read-only factory dashboard; GitHub reads happen only in the refresh thread."""
 from __future__ import annotations
 
+from lokay.store import write_json
+from lokay.effects.gh import dashboard_request as gh
+
 import argparse
 import copy
 import gzip
@@ -9,7 +12,6 @@ import json
 import os
 import re
 import shlex
-import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -37,8 +39,7 @@ def redact(value: str) -> str:
     value = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]+)", "[redacted]", value)
     value = re.sub(r"(?i)\b(?:bearer|basic)\s+\S+", "[redacted]", value)
     value = re.sub(r"(?i)\b\S*(?:key|token|secret|auth|password)\S*\s*[:=]\s*[^\s,;]+", "[redacted]", value)
-    value = re.sub(r"https?://[^\s]+", "[url]", value)
-    return value
+    return re.sub(r"https?://[^\s]+", "[url]", value)
 
 
 def safe(value):
@@ -78,7 +79,8 @@ def stamp(value) -> float:
 
 def date(value) -> str:
     try:
-        return datetime.fromtimestamp(stamp(value), WARSAW).strftime("%Y-%m-%d %H:%M") if stamp(value) else "—"
+        timestamp = stamp(value)
+        return datetime.fromtimestamp(timestamp, WARSAW).strftime("%Y-%m-%d %H:%M") if timestamp else "—"
     except (ValueError, OverflowError, OSError):
         return "—"
 
@@ -140,22 +142,6 @@ def enabled_repos(path: Path) -> list[str]:
         return []
 
 
-def gh(*args):
-    try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("gh timed out after 60s") from None
-    except OSError:
-        raise RuntimeError("gh could not start") from None
-    if result.returncode:
-        # CLI stderr can contain credentials: never retain or display it.
-        raise RuntimeError(f"gh {args[0]} failed (exit {result.returncode})")
-    try:
-        return json.loads(result.stdout)
-    except ValueError:
-        raise RuntimeError("gh returned invalid JSON") from None
-
-
 def prs(data, merged: bool) -> list[dict]:
     if not isinstance(data, list):
         raise RuntimeError("gh returned an invalid PR list")
@@ -184,8 +170,8 @@ class Dashboard:
         for repo, item in cached.get("repos", {}).items() if isinstance(cached.get("repos"), dict) else []:
             if REPO.fullmatch(repo) and isinstance(item, dict):
                 self.cache["repos"][repo] = {
-                    "merged": prs(item["merged"] if isinstance(item.get("merged"), list) else [], False),
-                    "open": prs(item["open"] if isinstance(item.get("open"), list) else [], False),
+                    **{key: prs(item[key] if isinstance(item.get(key), list) else [], False)
+                       for key in ("merged", "open")},
                     "open_issues": number(item["open_issues"]) if item.get("open_issues") is not None else None,
                     "last_refresh": item.get("last_refresh"),
                     "error": redact(str(item.get("error") or "")),
@@ -202,10 +188,7 @@ class Dashboard:
         with self.lock:
             data = copy.deepcopy(self.cache)
         try:
-            self.home.mkdir(parents=True, exist_ok=True)
-            temporary = self.cache_path.with_suffix(".json.tmp")
-            temporary.write_text(json.dumps(data, ensure_ascii=False) + "\n")
-            temporary.replace(self.cache_path)
+            write_json(self.cache_path, data, ensure_ascii=False)
         except OSError:
             with self.lock:
                 self.cache["error"] = "Could not save dashboard cache"
@@ -217,10 +200,11 @@ class Dashboard:
             if number(limits["resources"]["core"]["remaining"]) < 200:
                 raise RuntimeError("Refresh skipped: core rate limit remaining < 200")
         except (RuntimeError, KeyError, TypeError) as error:
+            message = redact(str(error))
             with self.lock:
-                self.cache["error"] = redact(str(error))
+                self.cache["error"] = message
                 for repo in repos:
-                    self.cache["repos"].setdefault(repo, {})["error"] = redact(str(error))
+                    self.cache["repos"].setdefault(repo, {})["error"] = message
             self.persist()
             return
         for index, repo in enumerate(repos):
@@ -321,7 +305,7 @@ class Dashboard:
             recent.append({"repo": path.parent.parent.name.replace("__", "/"), "issue": path.parent.name, **data})
         with self.lock:
             cache = copy.deepcopy(self.cache)
-        from lokay.state import main_status
+        from lokay.store import main_status
 
         statuses = main_status(self.home)
         merged, opened, per_repo = [], [], []
@@ -384,9 +368,10 @@ def esc(value) -> str:
 
 
 def link(repo, pr) -> str:
-    if not isinstance(repo, str) or not REPO.fullmatch(repo) or not number(pr):
+    if not isinstance(repo, str) or not REPO.fullmatch(repo):
         return "—"
-    return f'<a href="{esc(f"https://github.com/{repo}/pull/{number(pr)}")}">#{number(pr)}</a>'
+    pr = number(pr)
+    return f'<a href="{esc(f"https://github.com/{repo}/pull/{pr}")}">#{pr}</a>' if pr else "—"
 
 
 def table(headers, rows) -> str:
@@ -403,7 +388,8 @@ def duration(seconds: float) -> str:
 
 def render(data: dict) -> str:
     hb, run, now = data["heartbeat"], data["current"], data["now"]
-    age = now - stamp(hb.get("time")) if stamp(hb.get("time")) else None
+    heartbeat_time = stamp(hb.get("time"))
+    age = now - heartbeat_time if heartbeat_time else None
     since = stamp(hb.get("node_since"))
     active = run if data.get("current_label") else hb
     fields = [("Repo", esc(active.get("repo"))), ("Issue", esc(active.get("issue"))),
@@ -491,12 +477,12 @@ def handler(dashboard: Dashboard):
             path = self.path.split("?", 1)[0]
             if path == "/healthz":
                 content, mime, status = b"ok\n", "text/plain", 200
-            elif path == "/api/ticks.json":
-                query = parse_qs(urlsplit(self.path).query)
-                data = dashboard.ticks(number(query.get("offset", [0])[0]), query.get("date", [""])[0])
-                content, mime, status = json.dumps(data, ensure_ascii=False).encode(), "application/json", 200
-            elif path in ("/", "/api/state.json"):
-                data = dashboard.state()
+            elif path in ("/", "/api/state.json", "/api/ticks.json"):
+                if path == "/api/ticks.json":
+                    query = parse_qs(urlsplit(self.path).query)
+                    data = dashboard.ticks(number(query.get("offset", [0])[0]), query.get("date", [""])[0])
+                else:
+                    data = dashboard.state()
                 if path == "/":
                     content, mime = render(data).encode(), "text/html"
                 else:

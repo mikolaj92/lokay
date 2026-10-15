@@ -1,7 +1,9 @@
-import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from lokay.lint import diff_lines, lint_diff, unit_test_files
+from lokay.types import CheckResult, Finding, parse_finding
 
 
 @dataclass
@@ -18,36 +20,45 @@ class CheckInput:
     worktree: Path
 
 
-def ok(name: str) -> dict:
-    return {"name": name, "pass": True, "reason": "stub", "location": None, "fix_hint": ""}
-
-
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
-             log: str, fix_hint: str) -> dict:
+             log: str, fix_hint: str) -> CheckResult:
     details = "; ".join(
         f"{item.get('warstwa', '')}: {item.get('log', '')[-limit:]}" for item in failures
     ) or log[-limit:]
-    first = failures[0] if failures else {}
-    location = first.get("plik") or first.get("warstwa") or None
-    if first.get("plik") and first.get("linia") is not None:
-        location = f"{location}:{first['linia']}"
-    return {"name": name, "pass": passed, "reason": reason + (f": {details}" if details else ""),
-            "location": location, "fix_hint": "" if passed else fix_hint + (f": {details}" if details else "")}
+    findings = []
+    if not passed:
+        for failure in failures:
+            item = parse_finding(failure)
+            if isinstance(item, Finding):
+                line = item.linia_od or int(failure.get("linia") or 1)
+                findings.append(Finding(item.plik, line, item.linia_do or line,
+                                        fix_hint + (f": {details}" if details else ""), name))
+    return CheckResult(name, "pass" if passed else "fail",
+                       reason + (f": {details}" if details else ""), tuple(findings))
 
 
-def ci_green(x: CheckInput) -> dict:
-    passed = x.ci.get("sha") == x.sha and x.ci.get("ci") in ("green", "no_ci")
+def ci_green(x: CheckInput) -> CheckResult:
+    if x.ci.get("ci") in (None, "no_ci", "pending") and x.ci.get("sha") == x.sha:
+        return CheckResult("ci_green", "unknown", f"GitHub CI {x.ci.get('ci')}: no completed check runs", ())
+    passed = x.ci.get("sha") == x.sha and x.ci.get("ci") == "green"
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") == "GitHub CI"]
     return evidence("ci_green", passed,
                     f"GitHub CI {x.ci.get('ci')} at {x.ci.get('sha')}; expected green or no_ci at {x.sha}",
                     failures, 3000, "", "run and fix GitHub CI for the current SHA")
 
 
-def local_tests(x: CheckInput) -> dict:
+def local_tests(x: CheckInput) -> CheckResult:
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") != "GitHub CI"]
     github_failed = any(item.get("warstwa") == "GitHub CI" for item in x.ci.get("failed", []))
     green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
     passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
+    if not x.ci.get("tested") and not failures:
+        if (x.ci.get("sha") == x.sha and x.ci.get("result") == "green"
+                and x.ci.get("tested") is False and x.ci.get("notes")
+                and all(item.get("warstwa") == "tests" and item.get("log") == "no tests configured"
+                        for item in x.ci["notes"])):
+            return CheckResult("local_tests", "pass", "not applicable: no tests configured", ())
+        return CheckResult("local_tests", "unknown", "local tests not run", ())
     reason = "local tests green" if passed else "local tests not green or not run"
     timeout = next((item["timeout"] for item in failures if item.get("timeout") is not None), None)
     if not passed and timeout is not None:
@@ -58,55 +69,7 @@ def local_tests(x: CheckInput) -> dict:
                     "" if passed else x.ci.get("log", ""), "run and fix the complete local test suite")
 
 
-def merge_clean(x: CheckInput) -> dict:
-    return ok("merge_clean")
-
-
-def plan_files(x: CheckInput) -> dict:
-    return ok("plan_files")
-
-
-def lockfile(x: CheckInput) -> dict:
-    return ok("lockfile")
-
-
-def secrets(x: CheckInput) -> dict:
-    return ok("secrets")
-
-
-def permissions(x: CheckInput) -> dict:
-    return ok("permissions")
-
-
-def diff_lines(diff: str):
-    path = ""
-    line_number = 0
-    in_hunk = False
-    for line in diff.splitlines():
-        if line.startswith("diff --git "):
-            path = ""
-            in_hunk = False
-        elif not in_hunk and line.startswith("+++ "):
-            path = line[4:].split("\t", 1)[0]
-            if path.startswith('"'):
-                path = ast.literal_eval(path)
-            if path.startswith("b/"):
-                path = path[2:]
-            if Path(path).is_absolute() or ".." in Path(path).parts:
-                path = ""
-        elif line.startswith("@@ "):
-            match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
-            in_hunk = match is not None
-            if match:
-                line_number = int(match[1])
-        elif in_hunk and line[:1] in {"+", "-", " "}:
-            if path:
-                yield path, line_number, line[0], line[1:]
-            if line[0] != "-":
-                line_number += 1
-
-
-def no_new_comments(x: CheckInput) -> dict:
+def no_new_comments(x: CheckInput) -> CheckResult:
     ignored = {".md", ".rst", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock"}
     markers = {
         "#": {".py", ".pyi", ".sh", ".bash", ".zsh", ".fish", ".rb", ".pl", ".pm", ".ps1", ".r", ".jl", ".ex", ".exs", ".mojo", ".php", ".tcl", ""},
@@ -120,7 +83,7 @@ def no_new_comments(x: CheckInput) -> dict:
     offenders = []
     for path, number, kind, text in diff_lines(x.diff):
         suffix = Path(path).suffix.lower()
-        if kind != "+" or suffix in ignored or "docs" in Path(path).parts[:-1]:
+        if kind != "+" or suffix == ".py" or suffix in ignored or "docs" in Path(path).parts[:-1]:
             continue
         stripped = text.strip()
         if stripped.startswith("#!"):
@@ -131,46 +94,31 @@ def no_new_comments(x: CheckInput) -> dict:
             continue
         comment = any(stripped.startswith(marker) and suffix in extensions
                       for marker, extensions in markers.items())
-        docstring = suffix == ".py" and re.match(r"(?i)r?(?:\"\"\"|''')", stripped)
-        if comment or docstring:
+        if comment:
             offenders.append((f"{path}:{number}", stripped))
-    if offenders:
-        return {"name": "no_new_comments", "pass": False,
-                "reason": f"{len(offenders)} added comments/docstrings: " + "; ".join(
-                    f"{location}: {text}" for location, text in offenders[:3]),
-                "location": offenders[0][0], "fix_hint": "remove the added comments/docstrings"}
-    return {**ok("no_new_comments"), "reason": "no new comments"}
+    errors = lint_diff(x.diff, x.sha, x.worktree, lokay_rules=x.repo.rsplit("/", 1)[-1] == "lokay")
+    errors.extend(f"{location}: added comment -> remove it" for location, _ in offenders)
+    if errors:
+        findings = []
+        for error in errors:
+            location, _, hint = error.partition(": ")
+            path, separator, line = location.rpartition(":")
+            number = int(line) if separator and line.isdecimal() else 1
+            findings.append(Finding(path if separator and line.isdecimal() else location,
+                                    number, number, hint, "no_new_comments"))
+        return CheckResult("no_new_comments", "fail", "; ".join(errors), tuple(findings))
+    return CheckResult("no_new_comments", "pass", "no new comments or lint errors", ())
 
 
-def issue_goal(x: CheckInput) -> dict:
-    return ok("issue_goal")
+def no_unit_tests(x: CheckInput) -> CheckResult:
+    paths = unit_test_files(x.diff)
+    if paths:
+        return CheckResult("no_unit_tests", "fail", "new unit tests: " + ", ".join(paths), tuple(
+            Finding(path, 1, 1, "add a replay fixture under fixtures/replay", "no_unit_tests") for path in paths))
+    return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 
-def scope(x: CheckInput) -> dict:
-    return ok("scope")
-
-
-def correctness(x: CheckInput) -> dict:
-    return ok("correctness")
-
-
-def tests_cover(x: CheckInput) -> dict:
-    return ok("tests_cover")
-
-
-def regression(x: CheckInput) -> dict:
-    return ok("regression")
-
-
-def architecture(x: CheckInput) -> dict:
-    return ok("architecture")
-
-
-def security_review(x: CheckInput) -> dict:
-    return ok("security_review")
-
-
-def docs(x: CheckInput) -> dict:
+def docs(x: CheckInput) -> CheckResult:
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
         file = Path(path)
@@ -194,37 +142,36 @@ def docs(x: CheckInput) -> dict:
         for candidate in (path, str(Path(path).parent)) if candidate != ".")]
     offenders = unplanned if requested else expanded
     if expanded and not offenders:
-        return {**ok("docs"), "reason": "requested documentation changes match the plan"}
+        return CheckResult("docs", "pass", "requested documentation changes match the plan", ())
     if offenders:
-        path, change = offenders[0]
-        return {"name": "docs", "pass": False,
-                "reason": "documentation expanded without request or plan: " + "; ".join(
-                    f"{path}: +{change['net']} net lines" for path, change in offenders),
-                "location": f"{path}:{change['line']}",
-                "fix_hint": "trim only these expanded files: " + ", ".join(
-                    path for path, _ in offenders)
-                + "; never delete documentation that the issue or plan requires"}
-    return {**ok("docs"), "reason": "no documentation expansion"}
+        hint = "trim only these expanded files: " + ", ".join(path for path, _ in offenders)
+        hint += "; never delete documentation that the issue or plan requires"
+        return CheckResult("docs", "fail", "documentation expanded without request or plan: " + "; ".join(
+            f"{path}: +{change['net']} net lines" for path, change in offenders), tuple(
+                Finding(path, change["line"], change["line"], hint, "docs") for path, change in offenders))
+    return CheckResult("docs", "pass", "no documentation expansion", ())
 
 
-def style(x: CheckInput) -> dict:
-    return ok("style")
+CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", "lockfile", "secrets", "permissions",
+          no_new_comments, no_unit_tests, "issue_goal", "scope", "correctness", "tests_cover", "regression",
+          "architecture", "security_review", docs, "style"]
 
 
-CHECKS = [ci_green, local_tests, merge_clean, plan_files, lockfile, secrets, permissions, no_new_comments,
-          issue_goal, scope, correctness, tests_cover, regression, architecture,
-          security_review, docs, style]
+def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
+    failed = tuple(result for result in results if result.status != "pass" and not (
+        result.status == "unknown" and result.name == "ci_green" and ci is not None and ci.get("ci") == "no_ci"))
+    return {"result": "fix" if failed else "merge", "checks": results, "failed": failed}
 
 
-def run_checks(x: CheckInput) -> dict:
+def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
     results = []
     for check in CHECKS:
+        if isinstance(check, str):
+            results.append(CheckResult(check, "pass", "stub", ()))
+            continue
         try:
             results.append(check(x))
         except Exception as exc:
-            results.append({"name": check.__name__, "pass": False,
-                            "reason": f"{type(exc).__name__}: {exc}", "location": None,
-                            "fix_hint": "check crashed; fix the check or its input"})
-    failed = [r for r in results if not r["pass"]]
-    verdict = {"result": "merge" if not failed else "fix", "sha": x.sha, "checks": results, "failed": failed}
-    return verdict
+            results.append(CheckResult(check.__name__, "fail",
+                                       f"{type(exc).__name__}: {exc}; check crashed; fix the check or its input", ()))
+    return tuple(results)

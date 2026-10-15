@@ -8,9 +8,15 @@ import re
 import shutil
 import time
 import uuid
+from contextlib import contextmanager
+from json import dumps as dumps
+from tempfile import NamedTemporaryFile
+from importlib.metadata import PackageNotFoundError, version
 from threading import RLock
 from datetime import datetime, timezone
 from pathlib import Path
+
+from lokay.types import CheckResult, Event, Run, event_record, parse_event
 
 RUNS = Path.home() / ".lokay" / "runs"
 TICK = str(uuid.uuid4())
@@ -34,7 +40,7 @@ def prune_blobs(directory: Path) -> None:
 def log_event(kind: str, **fields) -> None:
     global TICK, SEQ, CONTEXT
     try:
-        with EVENT_LOCK:
+        with shared_file_lock(RUNS.parent / "events.lock"):
             directory = RUNS.parent / "ticks"
             now = datetime.now(timezone.utc)
             if kind == "start":
@@ -84,7 +90,7 @@ def log_event(kind: str, **fields) -> None:
             for key in ("output", "before", "event", "after"):
                 if key not in row:
                     continue
-                raw = json.dumps(row[key], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+                raw = json.dumps(row[key], sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=json_default).encode()
                 sha = hashlib.sha256(raw).hexdigest()
                 if key == "output":
                     row["output_sha"] = "sha256:" + sha
@@ -113,7 +119,7 @@ def log_event(kind: str, **fields) -> None:
                         stream.write(raw)
                     temporary.replace(blobs / (sha + ".gz"))
                     row[key] = {"blob": "sha256:" + sha}
-            line = json.dumps(row, separators=(",", ":"), ensure_ascii=False) + "\n"
+            line = json.dumps(row, separators=(",", ":"), ensure_ascii=False, default=json_default) + "\n"
             directory.mkdir(parents=True, exist_ok=True)
             with (directory / f"{now:%Y-%m-%d}.jsonl").open("a") as stream:
                 stream.write(line)
@@ -135,10 +141,7 @@ def main_status(home: Path | None = None) -> dict:
 
 def save_main_status(repo: str, status: dict) -> None:
     path = RUNS / repo.replace("/", "__") / "main.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(status) + "\n")
-    temporary.replace(path)
+    write_json(path, status)
 
 
 def repo_last_attempt(repo: str) -> float:
@@ -151,10 +154,7 @@ def repo_last_attempt(repo: str) -> float:
 
 def repo_attempt(repo: str, timestamp: float) -> None:
     path = RUNS / repo.replace("/", "__") / "attempt.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps({"last_attempt": timestamp}) + "\n")
-    temporary.replace(path)
+    write_json(path, {"last_attempt": timestamp})
 
 
 def state_read(repo: str, issue: int) -> dict:
@@ -163,14 +163,22 @@ def state_read(repo: str, issue: int) -> dict:
 
 
 def state_update(repo: str, issue: int, **fields) -> Path:
-    path = run_dir(repo, issue) / "state.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    current = json.loads(path.read_text()) if path.exists() else {}
-    before = {key: value for key, value in current.items() if key != "updated_at"}
-    from lokay.start import step
+    from lokay.tick import tick
 
     event = {"ts": time.time(), **fields.pop("_event", {}), "fields": fields}
-    current = step(before, event)
+    tick(repo, issue, lambda run: parse_event(event))
+    return run_dir(repo, issue) / "state.json"
+
+
+def load(repo: str, issue: int) -> Run:
+    return Run.from_state({key: value for key, value in state_read(repo, issue).items()
+                           if key != "updated_at"})
+
+
+def save(repo: str, issue: int, run: Run, event: Event) -> None:
+    before = load(repo, issue).state
+    current = dict(run.state)
+    raw = event_record(event)
     from lokay.observe import current as observe_current
 
     failures = current.get("failures", 0)
@@ -181,15 +189,12 @@ def state_update(repo: str, issue: int, **fields) -> Path:
                     issue_since=current.get("issue_since"), idle_reason=None,
                     failures=failures, last_error=reason)
     current["updated_at"] = datetime.now(timezone.utc).isoformat()
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(current, indent=2) + "\n")
-    temporary.replace(path)
+    save_run(repo, issue, current)
     after = {key: value for key, value in current.items() if key != "updated_at"}
     log_event("context", repo=repo, issue=issue, node=current.get("node"))
     if before != after:
         log_event("transition", repo=repo, issue=issue, node=current.get("node"),
-                  event=event, before=before, after=after)
-    return path
+                  event=raw, before=before, after=after)
 
 
 def rounds_append(repo: str, issue: int, line: str) -> Path:
@@ -200,13 +205,165 @@ def rounds_append(repo: str, issue: int, line: str) -> Path:
     return path
 
 
-def run_path(owner: str, repo: str, issue: int) -> Path:
-    return run_dir(repo if "/" in repo else f"{owner}/{repo}", issue) / "state.json"
-
-
 def write_run(owner: str, repo: str, issue: int, fields: dict) -> Path:
     return state_update(repo if "/" in repo else f"{owner}/{repo}", issue, **fields)
 
 
-def read_run(owner: str, repo: str, issue: int) -> dict:
-    return state_read(repo if "/" in repo else f"{owner}/{repo}", issue)
+def write_artifact(path: Path, text: str) -> None:
+    ensure_directory(path.parent)
+    path.write_text(text)
+
+
+def ensure_directory(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def remove_file(path: Path) -> None:
+    path.unlink(missing_ok=True)
+
+
+def append_text(path: Path, text: str) -> None:
+    ensure_directory(path.parent)
+    with path.open("a") as stream:
+        stream.write(text)
+
+
+def write_text_atomic(path: Path, text: str, *, temporary: Path | None = None) -> None:
+    ensure_directory(path.parent)
+    with NamedTemporaryFile(mode="w", dir=path.parent, prefix=path.name + ".",
+                            suffix=".tmp", delete=False) as file:
+        temporary = Path(file.name)
+        try:
+            file.write(text)
+            file.close()
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def check_record(result: CheckResult) -> dict:
+    first = next(iter(result.findings), None)
+    record = {"name": result.name, "pass": None if result.status == "unknown" else result.status == "pass",
+              "reason": result.reason,
+              "location": f"{first.plik}:{first.linia_od}" if first else None,
+              "fix_hint": "; ".join(item.zmiana for item in result.findings) if result.status == "fail" else ""}
+    if result.status == "unknown":
+        record["status"] = "unknown"
+    return record
+
+
+def json_default(value: object) -> dict:
+    if isinstance(value, CheckResult):
+        return check_record(value)
+    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+
+
+def write_json(path: Path, value: object, *, indent: int | None = None,
+               ensure_ascii: bool = True) -> None:
+    write_text_atomic(path, json.dumps(value, indent=indent, ensure_ascii=ensure_ascii, default=json_default) + "\n")
+
+
+def save_run(repo: str, issue: int, state: dict) -> None:
+    write_json(run_dir(repo, issue) / "state.json", state, indent=2)
+
+
+def worker_index() -> str | None:
+    worker = os.environ.get("LOKAY2_WORKER")
+    if worker is not None and worker not in ("0", "1", "2"):
+        raise ValueError("LOKAY2_WORKER must be 0, 1 or 2")
+    return worker
+
+
+def process_groups_path() -> Path:
+    worker = worker_index()
+    return Path.home() / ".lokay" / ("procs.json" if worker is None else f"procs-{worker}.json")
+
+
+def save_process_groups(pgids: list[int]) -> None:
+    write_text_atomic(process_groups_path(), json.dumps(pgids))
+
+
+@contextmanager
+def shared_file_lock(path: Path):
+    import fcntl
+
+    with EVENT_LOCK:
+        ensure_directory(path.parent)
+        with path.open("a+") as file:
+            fcntl.flock(file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(file.fileno(), fcntl.LOCK_UN)
+
+
+def write_heartbeat(result: str | None = None, **fields) -> dict:
+    path = Path.home() / ".lokay" / "heartbeat.json"
+    with shared_file_lock(path.with_suffix(".lock")):
+        return _write_heartbeat(path, result, **fields)
+
+
+def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
+    previous = json.loads(path.read_text()) if path.exists() else {}
+    worker = worker_index()
+    workers = previous.get("workers", {})
+    if worker is not None:
+        previous = dict(workers.get(worker, {}))
+        previous["worker"] = worker
+    previous.setdefault("failures", 0)
+    previous.setdefault("last_error", None)
+    previous.setdefault("idle_reason", None)
+    previous.setdefault("issue_since", None)
+    previous.update(fields)
+    if fields.get("failures") == 0:
+        previous["last_error"] = None
+    if result is not None:
+        previous["result"] = result
+    if previous.get("idle_reason") == "no_work":
+        previous["queue_since"] = None
+    elif result == "merged":
+        previous["last_merge"] = time.time()
+        previous["queue_since"] = time.time()
+    elif fields.get("repo") and not previous.get("queue_since"):
+        previous["queue_since"] = fields.get("issue_since") or time.time()
+    try:
+        installed = version("lokay")
+    except PackageNotFoundError:
+        installed = "unknown"
+    previous["main_status"] = main_status()
+    previous.update(time=datetime.now(timezone.utc).isoformat(),
+                    version=os.environ.get("LOKAY_VERSION", installed))
+    if worker is not None:
+        workers[worker] = dict(previous)
+        previous["workers"] = workers
+    write_json(path, previous)
+    return previous
+
+
+def acquire_lock(path: Path) -> dict:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        os.write(fd, str(os.getpid()).encode())
+    except BlockingIOError:
+        os.close(fd)
+        return {"result": "busy", "path": str(path)}
+    except BaseException:
+        os.close(fd)
+        raise
+    return {"result": "held", "fd": fd, "path": str(path)}
+
+
+def release_lock(held: dict) -> None:
+    fd = held.pop("fd", None)
+    if not isinstance(fd, int):
+        return
+    import fcntl
+
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import os
 import re
 from pathlib import Path
 
-from lokay.decide import DecisionError, from_wire
+from lokay import store
+
+from lokay.effects.decide import DecisionError, from_wire
+from lokay.types import CheckResult, Finding, parse_finding, to_dict
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
@@ -28,29 +33,37 @@ def hunks(diff: str) -> list[dict]:
         elif line.startswith("+++ "):
             name = line[6:] if line.startswith("+++ b/") else old_file
             if name is not None:
-                current = rows.setdefault(name, {"plik": name, "linia_od": None,
-                                                  "linia_do": 1, "added": 0, "deleted": 0, "body": ""})
+                current = rows.setdefault(name, {"path": name, "start": None,
+                                                  "end": 1, "added": 0, "deleted": 0, "body": ""})
         elif line.startswith("@@") and current is not None:
             current["body"] = (current["body"] + line + "\n")[:HUNK_LIMIT]
             plus = line.split("+", 1)[1].split(" ", 1)[0]
             start, _, count = plus.partition(",")
             start = int(start)
             end = start + max(int(count or "1") - 1, 0)
-            current["linia_od"] = min(current["linia_od"], start) if current["linia_od"] is not None else start
-            current["linia_do"] = max(current["linia_do"], end)
+            current["start"] = min(current["start"], start) if current["start"] is not None else start
+            current["end"] = max(current["end"], end)
         elif current is not None:
             current["body"] = (current["body"] + line + "\n")[:HUNK_LIMIT]
             if line.startswith("+"):
                 current["added"] += 1
             elif line.startswith("-"):
                 current["deleted"] += 1
-    return [{**row, "linia_od": row["linia_od"] if row["linia_od"] is not None else 1}
+    return [{"plik": row["path"], "linia_od": row["start"] if row["start"] is not None else 1,
+             "linia_do": row["end"], "added": row["added"], "deleted": row["deleted"], "body": row["body"]}
             for row in rows.values()]
 
 
 def lens(kind: str) -> str:
     path = QUESTIONS / f"check_{kind}.json"
     return json.loads(path.read_text())["question"]
+
+
+def hunk_finding(raw: dict) -> Finding:
+    item = parse_finding(raw)
+    if not isinstance(item, Finding):
+        raise ValueError("hunk has no file")
+    return item
 
 
 def questions(kind: str, rows: list[dict]) -> dict:
@@ -61,11 +74,12 @@ def questions(kind: str, rows: list[dict]) -> dict:
         "instructions": text,
         "options": {"ok": "no real bug", "issue": "real bug"},
     }]
-    for index, row in enumerate(rows, start=1):
+    for index, raw in enumerate(rows, start=1):
+        row = hunk_finding(raw)
         items.append({
             "id": f"h{index}",
             "type": "bool",
-            "instructions": f"{text} {row['plik']}:{row['linia_od']}-{row['linia_do']}",
+            "instructions": f"{text} {row.plik}:{row.linia_od}-{row.linia_do}",
             "options": {"true": "problem", "false": "fine"},
         })
     return {"state": {}, "questions": items}
@@ -76,9 +90,10 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
     answers = from_wire("tensorfold", model, wire, internal)
     uwagi = []
     nits = []
-    for index, row in enumerate(rows, start=1):
+    for index, raw in enumerate(rows, start=1):
+        row = hunk_finding(raw)
         p = answers[f"h{index}"]["probabilities"]["true"]
-        item = {"plik": row["plik"], "linia_od": row["linia_od"], "linia_do": row["linia_do"], "pytanie": kind, "p": p}
+        item = {"plik": row.plik, "linia_od": row.linia_od, "linia_do": row.linia_do, "pytanie": kind, "p": p}
         if p >= THRESHOLD:
             uwagi.append(item)
         elif p >= NIT:
@@ -90,11 +105,11 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
 
 
 def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **state) -> dict:
-    directory.mkdir(parents=True, exist_ok=True)
+    store.ensure_directory(directory)
     patch = directory / f"check-{round}-diff.patch"
     log = directory / f"check-{round}-test.log"
-    patch.write_text(diff)
-    log.write_text(ci["log"])
+    store.write_artifact(patch, diff)
+    store.write_artifact(log, ci["log"])
     return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
             "test_log_path": str(log), "test_result": ci["result"],
             "tested": ci.get("tested", False), "ci": ci.get("ci"),
@@ -104,7 +119,7 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
 
 
 def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None) -> dict:
-    from lokay.decide import decide
+    from lokay.effects.decide import decide
 
     decide_request = decide_request or decide
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
@@ -116,8 +131,8 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                              "issue_title": (state.get("issue_title") or "")[:4000],
                              "issue_body": (state.get("issue_body") or "")[:4000],
                              "kind": kind, "hunks": {
-            f"{row['plik']}:{row['linia_od']}-{row['linia_do']}": row.get("body", "")
-            for row in batch}}
+            f"{row.plik}:{row.linia_od}-{row.linia_do}": raw.get("body", "")
+            for raw in batch for row in [hunk_finding(raw)]}}
         return internal
 
     results = []
@@ -127,12 +142,13 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
             "model": model, "usage": {"completion_tokens": 0}, "answers": answers,
         }, model)
         for index, row in enumerate(batch, start=1):
-            reasons[row["plik"]] = "\n".join(reason for reason in (
+            reasons[hunk_finding(row).plik] = "\n".join(reason for reason in (
                 answers["next"].get("reason"), answers[f"h{index}"].get("reason")
             ) if reason)
         for finding in result["uwagi"] + result["nits"]:
-            if reasons[finding["plik"]]:
-                finding["uzasadnienie"] = reasons[finding["plik"]]
+            parsed = parse_finding(finding)
+            if isinstance(parsed, Finding) and reasons[parsed.plik]:
+                finding["uzasadnienie"] = reasons[parsed.plik]
         results.append(result)
     result = {"next": "issue" if any(item["next"] == "issue" for item in results) else "ok",
               "confidence": min(item["confidence"] for item in results),
@@ -144,7 +160,8 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                  "security", "docs/plan only instead of code", "other")
 
         def followup(batch):
-            options = {f"{row['plik']}:{row['linia_od']}-{row['linia_do']}": row['plik'] for row in batch}
+            options = {f"{row.plik}:{row.linia_od}-{row.linia_do}": row.plik
+                       for row in map(hunk_finding, batch)}
             return {"state": request(batch)["state"], "questions": [
                 {"id": "where", "type": "choice",
                  "instructions": lens_text + " Where is the problem?",
@@ -168,33 +185,34 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
             top = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)[:3]
             change = answers["change"]["choice"]
             if state.get("repo") and state.get("issue") is not None:
-                from lokay.state import rounds_append
+                from lokay.store import rounds_append
 
                 rounds_append(state["repo"], state["issue"],
                               f"Check follow-up {kind}: chosen={chosen}, p={p}, none={none}, "
-                              f"top-3={json.dumps(top)}, change={change}, "
+                              f"top-3={dumps(top)}, change={change}, "
                               f"change_p={answers['change']['probabilities'][change]}")
             if (chosen != "none" and p == max(probabilities.values())
                     and p >= 2 * none):
-                row = next(row for row in batch if f"{row['plik']}:{row['linia_od']}-{row['linia_do']}" == chosen)
-                result["uwagi"].append({key: row[key] for key in ("plik", "linia_od", "linia_do")})
+                row = next(row for row in map(hunk_finding, batch)
+                           if f"{row.plik}:{row.linia_od}-{row.linia_do}" == chosen)
+                result["uwagi"].append({"plik": row.plik, "linia_od": row.linia_od, "linia_do": row.linia_do})
                 result["uwagi"][-1].update(pytanie=kind, p=p, zmiana=answers["change"]["choice"])
                 reason = "\n".join(reason for reason in (
-                    reasons.get(row["plik"]), answers["where"].get("reason"),
+                    reasons.get(row.plik), answers["where"].get("reason"),
                     answers["change"].get("reason")
                 ) if reason)
                 if reason:
                     result["uwagi"][-1]["uzasadnienie"] = reason
         if not result["uwagi"]:
-            result["replan"] = [{"pytanie": kind, "pliki": [row["plik"] for row in rows],
+            result["replan"] = [{"pytanie": kind, "pliki": [hunk_finding(row).plik for row in rows],
                                  "prompt": f"lens {kind} widzi problem w "
-                                           + ", ".join(row["plik"] for row in rows)
+                                           + ", ".join(hunk_finding(row).plik for row in rows)
                                            + ", wskaż konkret"}]
     return result
 
 
 def _decision_batches(rows, request, decide_request, api, model):
-    from lokay.decide import _trim_wire, to_wire
+    from lokay.effects.decide import _trim_wire, to_wire
 
     limit = 60000 if api == "chat" else 5500
 
@@ -209,7 +227,7 @@ def _decision_batches(rows, request, decide_request, api, model):
         try:
             internal = request(candidate)
             wire = review_wire(internal)
-            fits = (len(json.dumps(wire)) < limit
+            fits = (len(dumps(wire)) < limit
                     and wire.get("state", wire.get("input")) == internal["state"])
         except DecisionError:
             fits = False
@@ -240,62 +258,18 @@ def test_failures(log: str) -> set[str]:
                            if re.search(r"\berror\b|\w+Error:|^E\s|\bFAILED\b", line, re.IGNORECASE)}
 
 
-def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
-    from subprocess import CompletedProcess, TimeoutExpired
-    from lokay.run import run_process
-    from lokay.build import generated_cleanup
 
-    def execute(argv):
-        try:
-            with generated_cleanup(Path(cwd)):
-                return run_process(argv, cwd=cwd, timeout=timeout), False
-        except TimeoutExpired:
-            return CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s"), True
-        except OSError as exc:
-            return CompletedProcess(argv, 1, "", str(exc)), False
+def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
+    from lokay.checks import verdict
 
-    def did_run(proc):
-        log = (proc.stdout or "") + (proc.stderr or "")
-        markers = ("collected 0 items", "no tests ran", "error: failed to", "no solution found",
-                   "modulenotfounderror", "command not found", "no such file or directory")
-        if "LOKAY_TEST_CWD=" in log:
-            segments = re.split(r"^LOKAY_TEST_CWD=.+$", log, flags=re.MULTILINE)[1:]
-            if not all(did_run(CompletedProcess(proc.args, 0, segment, "")) for segment in segments):
-                return False
-        summary = re.search(
-            r"\b[1-9]\d* passed\b|\bRan [1-9]\d* tests?\b|\bExecuted [1-9]\d* tests?\b"
-            r"|\btests? [1-9]\d*\b|\breplay: ([1-9]\d*)/\1 transitions ok\b|\b\w+ tests passed\b", log)
-        return (proc.returncode == 0 and summary is not None
-                and not re.search(r"\b0 passed\b", log)
-                and not any(marker in log.lower() for marker in markers))
-
-    failed = []
-    notes = []
-    logs = []
-    tested_cwds = set()
-    if not tests:
-        notes.append({"warstwa": "tests", "plik": "", "log": "no tests configured"})
-    for argv in tests:
-        proc, timed_out = execute(argv)
-        log = (proc.stdout or "") + (proc.stderr or "")
-        ran = did_run(proc)
-        if not ran:
-            retry, retry_timed_out = execute(argv)
-            retry_log = (retry.stdout or "") + (retry.stderr or "")
-            flaky = did_run(retry)
-            ran = flaky
-            item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
-                    "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log,
-                    "timeout": timeout if timed_out or retry_timed_out else None}
-            (notes if flaky else failed).append(item)
-            log = item["log"]
-        if ran:
-            directories = re.findall(r"^LOKAY_TEST_CWD=(.+)$", log, re.MULTILINE)
-            tested_cwds.update(str(Path(path).resolve()) for path in directories or [cwd])
-        logs.append(log)
-    return {"result": "red" if failed else "green", "sha": sha,
-            "tested": bool(tested_cwds), "tested_cwds": sorted(tested_cwds),
-            "failed": failed, "notes": notes, "log": "\n".join(logs)}
+    checked = verdict(results, ci)
+    outcome = {**outcome, "checks": results, "failed": checked["failed"]}
+    if checked["result"] == "fix":
+        findings = [to_dict(finding) for result in checked["failed"] for finding in result.findings]
+        unlocated = [{"warstwa": result.name, "log": result.reason}
+                     for result in checked["failed"] if not result.findings]
+        outcome.update(result="fix", uwagi=[*outcome["uwagi"], *findings, *unlocated])
+    return outcome
 
 
 def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
@@ -314,5 +288,5 @@ def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
             "replan": replan,
             "notes": [*(ci.get("notes") or []),
                       *(note for item in decisions for note in item.get("notes") or []),
-                      *({**item, "pytanie": item.get("pytanie", ""), "note": item["prompt"]}
+                      *({**item, "pytanie": parse_finding(item).lens, "note": item["prompt"]}
                         for item in replan if fix)]}

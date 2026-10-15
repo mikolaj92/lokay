@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import argparse
 import sys
 
@@ -8,10 +10,12 @@ from lokay.safety import SafetyError, validate_argv
 NODES = (
     "decide",
     "start",
+    "dashboard",
     "refresh-body",
     "status",
     "monitor",
     "replay",
+    "lint",
 )
 
 
@@ -31,16 +35,33 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
     if args.node == "refresh-body":
-        from lokay.start import main as start_main
+        from lokay.tick import main as start_main
 
         return start_main(["refresh-body", *rest])
+    if args.node == "lint":
+        from pathlib import Path
+        from lokay.lint import lint
+
+        command = argparse.ArgumentParser(prog="lokay lint")
+        command.add_argument("base")
+        command.add_argument("head")
+        refs = command.parse_args(rest)
+        try:
+            errors = lint(refs.base, refs.head, Path.cwd())
+        except ValueError as exc:
+            print(f"lint: {exc}", file=sys.stderr)
+            return 1
+        for error in errors:
+            print(error)
+        return int(bool(errors))
     if args.node == "replay":
         import gzip
         import json
         import difflib
         import hashlib
         from pathlib import Path
-        from lokay.start import step
+        from lokay import graph
+        from lokay.types import Run, parse_event
 
         replay = argparse.ArgumentParser(prog="lokay replay")
         replay.add_argument("path", type=Path)
@@ -92,15 +113,15 @@ def main(argv: list[str] | None = None) -> int:
                                 row[key] = json.loads(raw)
                         if any(not isinstance(row[key], dict) for key in ("before", "event", "after")):
                             raise ValueError("expected before/event/after objects")
-                        got = step(row["before"], row["event"])
+                        got = graph.step(Run.from_state(row["before"]), parse_event(row["event"])).state
                         got = {key: value for key, value in got.items() if key != "updated_at"}
                         expected = {key: value for key, value in row["after"].items() if key != "updated_at"}
                         if got != expected:
                             print(f"replay: mismatch seq={row.get('seq')} node={row.get('node')} "
-                                  f"event={json.dumps(row['event'], ensure_ascii=False)}", file=sys.stderr)
+                                  f"event={dumps(row['event'], ensure_ascii=False)}", file=sys.stderr)
                             print("\n".join(difflib.unified_diff(
-                                json.dumps(expected, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
-                                json.dumps(got, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
+                                dumps(expected, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
+                                dumps(got, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
                                 fromfile="expected", tofile="got", lineterm="")), file=sys.stderr)
                             return 1
                         count += 1
@@ -119,10 +140,16 @@ def main(argv: list[str] | None = None) -> int:
         import json
         from lokay.observe import monitor
 
-        print(json.dumps(monitor()))
+        print(dumps(monitor()))
+        return 0
+    if args.node == "dashboard":
+        from lokay.dashboard import main as dashboard_main
+
+        sys.argv = ["lokay dashboard", *rest]
+        dashboard_main()
         return 0
     if args.node == "start":
-        from lokay.start import main as start_main
+        from lokay.tick import main as start_main
         from lokay.observe import ticking
 
         if args.check:
@@ -130,11 +157,12 @@ def main(argv: list[str] | None = None) -> int:
         with ticking():
             return start_main(rest)
     if args.node == "decide":
-        from lokay.decide import main as decide_main
+        from lokay.effects.decide import main as decide_main
 
         if args.probe:
             sys.argv = ["lokay", "--probe"]
         return decide_main()
+    return 0
 
 
 if __name__ == "__main__":

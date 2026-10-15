@@ -1,9 +1,13 @@
-# lokay
-
-The graph is Plan, Build, Check, Fix, Merge. Merge is the only end.
-
-`lokay start` runs the only graph, in Python (`src/lokay/start.py`). Decision steps return `next`. LLM and code steps return `result`. The runtime retries failed steps, checks revised plans again, and returns from Fix to Check.
-
-`pi -p` writes code. Decision steps return probabilities, not prose. Do not import `lokay` from `src/lokay`.
-
-No unit tests of this package. Recorded replay or a real run is the proof. Auto-merge is on for every repo. The only human approval is the nuke PR.
+| Rule | Enforcement |
+| --- | --- |
+| Plan → Build → Check → Fix → Merge; only Merge ends a run | `graph.step`, `tick.act` |
+| Decisions return probabilities, not prose | `effects.decide._check` |
+| LLM and code steps return `result`; decisions return `next` | `tick`, `plan.verdict`, `check.aggregate` |
+| Retry failed steps, recheck revised plans, return Fix to Check | `tick._retry`, `tick._plan_graph`, `graph.step` |
+| `pi -p` writes production code | `build.build_code`, `fix.fix_code` |
+| Only `store.py` writes persisted state | `store.save`, `store.write_json` |
+| Subprocess execution stays in `effects/` | `lokay lint` |
+| No new comments, docstrings, unit tests, or blanket staging | `lokay lint`, `checks.run_checks` |
+| Recorded replay or a real run proves behavior | `scripts/check.sh`, `lokay replay` |
+| Auto-merge stays on; only the nuke PR needs human approval | `config.load_repos`, `effects.gh.merge` |
+| Do not import `lokay` from `src/lokay` | `scripts/check.sh` isolated import check |

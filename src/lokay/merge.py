@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from lokay.gh import merge as gh_merge
-from lokay.git import worktree_remove
-from lokay.state import write_run
-from lokay.main_guard import check_main, pre_deploy
+from lokay.effects.gh import merge as gh_merge
+from lokay.effects.git import worktree_remove
+from lokay.store import write_run
+from lokay.main_guard import check_main
 
 
 def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, held: dict | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
@@ -23,7 +23,6 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
 
         clone_path = Path(next(row["clone_path"] for row in load_repos() if row["name"] == repo_name)).expanduser()
     check_main(repo_name, clone_path, sha, number)
-    pre_deploy(repo_name, sha)
     write_run(owner, repo_name, issue, {**rounds, "result": "merged", "sha": sha,
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     if worktree is not None:

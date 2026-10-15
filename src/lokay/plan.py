@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from lokay.decide import DecisionError, from_wire
-from lokay.pi_step import pi_step
+from lokay import store
+
+from lokay.effects.pi import pi_step
 from lokay.safety import untrusted_issue_block
 
 SECTIONS = ("## Cel", "## Pliki", "## Testy", "## Poza zakresem")
@@ -49,7 +50,7 @@ def valid_plan(path: Path) -> bool:
 
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
-    artifact.unlink(missing_ok=True)
+    store.remove_file(artifact)
     payload = pi_step(prompt + f"\nWrite the plan only to {artifact}.\n", artifact,
                       cwd=cwd, env=env, pi_idle_retry=False)
     if payload["result"] == "done" and not valid_plan(artifact):
@@ -57,21 +58,31 @@ def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dic
     return payload
 
 
-def plan_one(perspective: str, prompt: str, art: Path, *, phase: str = "write", on_written=None) -> dict:
-    from lokay.decide import decide
+def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = None, phase: str = "write", on_written=None, single: bool = False) -> dict:
+    from lokay.effects.decide import decide
 
     if perspective not in PERSPECTIVES:
         raise ValueError("unknown plan perspective")
     if phase == "write" or not valid_plan(art):
         prompt += "\n" + (PROMPTS / f"plan_perspective_{perspective}.md").read_text()
-        written = plan_write(prompt, art)
+        if single:
+            prompt += (
+                "\nWrite the final plan directly as Markdown in exactly this structure and order:\n"
+                "## Cel\nOutcome text\n\n### Kryteria\n- Criterion [źródła: minimal]\n\n"
+                "### Kroki\n- Step [źródła: minimal]\n\n## Pliki\n- path: change [źródła: minimal]\n\n"
+                "## Testy\n- Check [źródła: minimal]\n\n## Poza zakresem\n- Exclusion [źródła: minimal]\n\n"
+                "### Odrzucone\n- Rejected proposal [minimal]: reason\n"
+                "Replace placeholders with concrete content; leave Odrzucone empty if nothing was rejected.\n"
+            )
+        prompt += "\nThe current directory is a read-only checkout of the repository at main, to be read but not modified.\n"
+        written = plan_write(prompt, art, cwd=cwd)
         if written["result"] != "done":
             return written
         if not valid_plan(art):
             return {"result": "failed", "reason": "invalid plan"}
         if on_written is not None:
             on_written()
-    from lokay.run import check_deadline
+    from lokay.effects.pi import check_deadline
 
     check_deadline()
     result = verdict(decide(plan_questions(art.read_text())))
@@ -141,7 +152,7 @@ def render_synthesis(data: dict) -> str:
             f"### Odrzucone\n{rejected}\n")
 
 
-def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
+def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | None = None) -> dict:
     artifact = art.parent / "synthesis.json"
     prompt = (PROMPTS / "plan_synthesis.md").read_text() + "\n" + issue
     for perspective, path in paths.items():
@@ -149,25 +160,16 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
             raise ValueError("unknown synthesis input")
         prompt += f"\n\nAccepted branch: {perspective}\n{path.read_text()}"
     prompt += f"\nWrite JSON only to {artifact}. Do not write plan.md.\n"
-    artifact.unlink(missing_ok=True)
-    payload = pi_step(prompt, artifact, pi_idle_retry=False)
+    store.remove_file(artifact)
+    payload = pi_step(prompt, artifact, cwd=cwd, pi_idle_retry=False)
     if payload["result"] != "done":
         return payload
     try:
         data = validate_synthesis(json.loads(artifact.read_text()), set(paths))
     except (ValueError, OSError) as exc:
         return {"result": "failed", "reason": f"invalid synthesis: {exc}"}
-    art.write_text(render_synthesis(data))
+    store.write_artifact(art, render_synthesis(data))
     return {"result": "done", "artifact": str(art)}
-
-
-def plan_check(wire: dict, model: str, api: str = "tensorfold") -> dict:
-    internal = plan_questions()
-    try:
-        answers = from_wire(api, model, wire, internal)
-    except DecisionError:
-        raise
-    return verdict(answers)
 
 
 def verdict(answers: dict) -> dict:
@@ -184,4 +186,4 @@ def verdict(answers: dict) -> dict:
 
 
 def prompt_for(title: str, body: str | None) -> str:
-    return Path(__file__).resolve().parents[2].joinpath("prompts/plan_write.md").read_text() + "\n" + untrusted_issue_block(title, body)
+    return (PROMPTS / "plan_write.md").read_text() + "\n" + untrusted_issue_block(title, body)
