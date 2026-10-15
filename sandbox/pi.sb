@@ -1,5 +1,14 @@
 (version 1)
 (allow default)
+(deny file-read*
+    (subpath (string-append (param "HOME") "/Desktop"))
+    (subpath (string-append (param "HOME") "/Documents"))
+    (subpath (string-append (param "HOME") "/Downloads"))
+    (subpath (string-append (param "HOME") "/Movies"))
+    (subpath (string-append (param "HOME") "/Music"))
+    (subpath (string-append (param "HOME") "/Pictures"))
+    (subpath (string-append (param "HOME") "/.Trash"))
+    (subpath (string-append (param "HOME") "/Library")))
 (deny file-write*)
 (allow file-write*
     (subpath (param "WORKTREE"))
