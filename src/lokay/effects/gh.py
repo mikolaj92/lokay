@@ -12,7 +12,7 @@ from pathlib import Path
 
 from lokay.effects.pi import run_process
 from lokay.safety import validate_argv
-from lokay.types import Note, parse_finding
+from lokay.types import CheckResult, Note, parse_finding
 
 ORIGIN = "lokay"
 GH_CANDIDATES = (
@@ -186,9 +186,15 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
         def cell(value):
             return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")[:1000]
 
-        body += "| name | pass | reason |\n| --- | --- | --- |\n" + "\n".join(
-            f"| {cell(row['name'])} | {str(row['pass']).lower()} | {cell(row['reason'])} |"
-            for row in verdict["checks"]
+        def check_cells(row):
+            if isinstance(row, CheckResult):
+                return row.name, row.status, row.reason
+            status = row.get("status") or ("unknown" if row["pass"] is None else "pass" if row["pass"] else "fail")
+            return row["name"], status, row["reason"]
+
+        body += "| name | status | reason |\n| --- | --- | --- |\n" + "\n".join(
+            f"| {cell(name)} | {cell(status)} | {cell(reason)} |"
+            for name, status, reason in map(check_cells, verdict["checks"])
         ) + "\n\n"
     body += "Uwagi i CI:\n```json\n" + dumps({
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),

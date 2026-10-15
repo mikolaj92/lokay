@@ -15,7 +15,7 @@ from threading import RLock
 from datetime import datetime, timezone
 from pathlib import Path
 
-from lokay.types import Event, Run, event_record, parse_event
+from lokay.types import CheckResult, Event, Run, event_record, parse_event
 
 RUNS = Path.home() / ".lokay" / "runs"
 TICK = str(uuid.uuid4())
@@ -89,7 +89,7 @@ def log_event(kind: str, **fields) -> None:
             for key in ("output", "before", "event", "after"):
                 if key not in row:
                     continue
-                raw = json.dumps(row[key], sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+                raw = json.dumps(row[key], sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=json_default).encode()
                 sha = hashlib.sha256(raw).hexdigest()
                 if key == "output":
                     row["output_sha"] = "sha256:" + sha
@@ -118,7 +118,7 @@ def log_event(kind: str, **fields) -> None:
                         stream.write(raw)
                     temporary.replace(blobs / (sha + ".gz"))
                     row[key] = {"blob": "sha256:" + sha}
-            line = json.dumps(row, separators=(",", ":"), ensure_ascii=False) + "\n"
+            line = json.dumps(row, separators=(",", ":"), ensure_ascii=False, default=json_default) + "\n"
             directory.mkdir(parents=True, exist_ok=True)
             with (directory / f"{now:%Y-%m-%d}.jsonl").open("a") as stream:
                 stream.write(line)
@@ -242,9 +242,26 @@ def write_text_atomic(path: Path, text: str, *, temporary: Path | None = None) -
     temporary.replace(path)
 
 
+def check_record(result: CheckResult) -> dict:
+    first = next(iter(result.findings), None)
+    record = {"name": result.name, "pass": None if result.status == "unknown" else result.status == "pass",
+              "reason": result.reason,
+              "location": f"{first.plik}:{first.linia_od}" if first else None,
+              "fix_hint": "; ".join(item.zmiana for item in result.findings) if result.status == "fail" else ""}
+    if result.status == "unknown":
+        record["status"] = "unknown"
+    return record
+
+
+def json_default(value: object) -> dict:
+    if isinstance(value, CheckResult):
+        return check_record(value)
+    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+
+
 def write_json(path: Path, value: object, *, indent: int | None = None,
                ensure_ascii: bool = True) -> None:
-    write_text_atomic(path, json.dumps(value, indent=indent, ensure_ascii=ensure_ascii) + "\n")
+    write_text_atomic(path, json.dumps(value, indent=indent, ensure_ascii=ensure_ascii, default=json_default) + "\n")
 
 
 def load_run(repo: str, issue: int) -> dict:
