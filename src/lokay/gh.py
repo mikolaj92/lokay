@@ -108,6 +108,13 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
         return {"result": "sha_moved", "sha": view.get("headRefOid") or ""}
     rollup = view.get("statusCheckRollup") or []
     if not rollup:
+        code, out, err = _gh(["api", f"repos/{repo}/contents/.github/workflows?ref={sha}"])
+        if code and "404" not in err:
+            raise RuntimeError(err.strip() or "workflow lookup failed")
+        workflows = [] if code else json.loads(out)
+        if any(item.get("type") == "file" and Path(item["path"]).suffix in (".yml", ".yaml")
+               for item in workflows):
+            return {"result": "pending", "sha": sha, "failed": [], "pending": ["GitHub workflows"]}
         return {"result": "no_ci", "sha": sha, "failed": [],
                 "notes": [{"warstwa": "GitHub CI", "log": "no GitHub checks configured"}]}
     failed = []

@@ -233,6 +233,13 @@ def _decision_batches(rows, request, decide_request, api, model):
         yield batch, answers
 
 
+def test_failures(log: str) -> set[str]:
+    log = re.sub(r"\x1b\[[0-9;]*m", "", log)
+    identifiers = set(re.findall(r"^(?:FAILED|ERROR)\s+(\S+)", log, re.MULTILINE))
+    return identifiers or {line.strip() for line in log.splitlines()
+                           if re.search(r"\berror\b|\w+Error:|^E\s|\bFAILED\b", line, re.IGNORECASE)}
+
+
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.run import run_process

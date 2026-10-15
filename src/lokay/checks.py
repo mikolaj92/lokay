@@ -36,10 +36,10 @@ def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: 
 
 
 def ci_green(x: CheckInput) -> dict:
-    passed = x.ci.get("sha") == x.sha and x.ci.get("ci") == "green"
+    passed = x.ci.get("sha") == x.sha and x.ci.get("ci") in ("green", "no_ci")
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") == "GitHub CI"]
     return evidence("ci_green", passed,
-                    f"GitHub CI {x.ci.get('ci')} at {x.ci.get('sha')}; expected green at {x.sha}",
+                    f"GitHub CI {x.ci.get('ci')} at {x.ci.get('sha')}; expected green or no_ci at {x.sha}",
                     failures, 3000, "", "run and fix GitHub CI for the current SHA")
 
 
@@ -48,8 +48,11 @@ def local_tests(x: CheckInput) -> dict:
     github_failed = any(item.get("warstwa") == "GitHub CI" for item in x.ci.get("failed", []))
     green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
     passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
-    return evidence("local_tests", passed, "local tests green" if passed else "local tests not green or not run",
-                    failures, 800, x.ci.get("log", ""), "run and fix the complete local test suite")
+    reason = "local tests green" if passed else "local tests not green or not run"
+    if passed and x.ci.get("baseline"):
+        reason = f"no new local test failures against main at {x.ci['baseline']['sha']}"
+    return evidence("local_tests", passed, reason, failures, 800,
+                    "" if passed else x.ci.get("log", ""), "run and fix the complete local test suite")
 
 
 def merge_clean(x: CheckInput) -> dict:

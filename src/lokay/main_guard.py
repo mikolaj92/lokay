@@ -47,7 +47,7 @@ def guard_issue(repo: str, body: str) -> int:
     return int(out.strip().rstrip("/").rsplit("/", 1)[1])
 
 
-def check_main(repo: str, clone_path: Path, merge_sha: str, pr: int) -> dict:
+def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None) -> dict:
     config = next(row for row in load_repos() if row["name"] == repo)
 
     def git(path, args):
@@ -58,33 +58,60 @@ def check_main(repo: str, clone_path: Path, merge_sha: str, pr: int) -> dict:
 
     git(clone_path, ["fetch", "origin", "main"])
     sha = git(clone_path, ["rev-parse", "origin/main"])
-    with tempfile.TemporaryDirectory(prefix="lokay-main-") as temporary:
-        worktree = Path(temporary) / "checkout"
-        git(clone_path, ["worktree", "add", "--detach", str(worktree), sha])
-        try:
-            from lokay.setup import prepare_dependencies
+    previous = main_status().get(repo, {})
+    baseline = previous.get("baseline", {})
+    argv = config.get("test") or []
+    if baseline.get("sha") != sha or baseline.get("argv") != argv:
+        with tempfile.TemporaryDirectory(prefix="lokay-main-") as temporary:
+            worktree = Path(temporary) / "checkout"
+            git(clone_path, ["worktree", "add", "--detach", str(worktree), sha])
+            try:
+                from lokay.setup import prepare_dependencies
 
-            setup = prepare_dependencies(worktree, config, pr)
-            setup = setup if isinstance(setup, dict) else {}
-            ci = run_repo_tests(config, sha, worktree)
-            ci["log"] = setup.get("log", "") + "\n" + ci["log"]
-            green = ci.get("tested") is True and ci["result"] == "green" and not setup.get("failed")
-            diff = git(worktree, ["show", "--format=fuller", "--first-parent", merge_sha])
-            previous = main_status().get(repo, {})
-            status = "green" if green else "red"
-            result = {"status": status,
-                      "since": previous.get("since", time.time()) if previous.get("status") == status else time.time(),
-                      "culprit": {"sha": merge_sha, "pr": pr}, "issue": previous.get("issue")}
-            if not green:
-                body = (f"Main czerwony. Napraw przez Plan → Build → Check → Fix → Merge.\n"
-                        f"Merge SHA: `{merge_sha}` · PR: #{pr} · tested SHA: `{sha}`\n\n"
-                        f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
-                        f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```")
-                result["issue"] = guard_issue(repo, body)
-            save_main_status(repo, result)
-            return result
-        finally:
-            git(clone_path, ["worktree", "remove", "--force", str(worktree)])
+                setup = prepare_dependencies(worktree, config, pr or 0)
+                setup = setup if isinstance(setup, dict) else {}
+                ci = run_repo_tests(config, sha, worktree)
+                ci["log"] = setup.get("log", "") + "\n" + ci["log"]
+                if setup.get("failed"):
+                    ci.update(result="red", tested=False, failed=[*setup["failed"], *ci["failed"]])
+                baseline = {"sha": sha, "argv": argv, "ci": ci}
+            finally:
+                git(clone_path, ["worktree", "remove", "--force", str(worktree)])
+    ci = baseline["ci"]
+    green = ci.get("tested") is True and ci["result"] == "green"
+    status = "green" if green else "red"
+    culprit = {"sha": merge_sha or sha, "pr": pr}
+    result = {"status": status,
+              "since": previous.get("since", time.time()) if previous.get("status") == status else time.time(),
+              "culprit": culprit, "issue": previous.get("issue"), "baseline": baseline}
+    if not green:
+        diff = git(clone_path, ["show", "--format=fuller", "--first-parent", merge_sha]) if merge_sha else ""
+        body = (f"Main czerwony. Napraw przez Plan → Build → Check → Fix → Merge.\n"
+                f"Culprit: {json.dumps(culprit)} · tested SHA: `{sha}`\n\n"
+                f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
+                f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```")
+        result["issue"] = guard_issue(repo, body)
+    save_main_status(repo, result)
+    return result
+
+
+def local_baseline(repo: str, clone_path: Path, ci: dict) -> dict:
+    from lokay.check import test_failures
+
+    main = check_main(repo, clone_path)["baseline"]
+    if main["ci"]["result"] != "red" or any(
+        item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
+    ):
+        return ci
+    failures = test_failures(ci["log"])
+    inherited = test_failures(main["ci"]["log"])
+    if not failures or not inherited:
+        return ci
+    novel = sorted(failures - inherited)
+    failed = [{"warstwa": "tests", "plik": item, "log": item} for item in novel]
+    return {**ci, "baseline": {"sha": main["sha"], "failures": sorted(inherited)},
+            "result": "red" if novel else "green", "failed": failed,
+            "tested": ci.get("tested", False) or not novel}
 
 
 def pre_deploy(repo: str, sha: str) -> dict:
