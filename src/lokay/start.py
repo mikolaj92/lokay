@@ -859,7 +859,7 @@ def dismissed_key(row: dict) -> list:
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks
-    from lokay.main_guard import run_repo_tests
+    from lokay.main_guard import local_baseline, run_repo_tests
     from lokay.checks import CheckInput, run_checks
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
@@ -1186,11 +1186,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         else:
             ci = _retry(picked, "check", lambda: run_repo_tests(repo, sha, worktree))
             ci = {**ci, "log": setup.get("log", "") + "\n" + ci["log"]}
+        if ci["result"] == "red" and not setup.get("failed"):
+            ci = _retry(picked, "check", lambda: local_baseline(picked["repo"], clone_path, ci))
         ci = {**ci, "argv": list(tests)}
         state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
         if ci["notes"]:
             rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
-        if tests:
+        if tests and not ci.get("baseline"):
             tested_cwds = set(ci.get("tested_cwds") or [])
             for row in rows:
                 directory = (Path(worktree) / row["plik"]).parent
