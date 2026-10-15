@@ -12,6 +12,7 @@ NODES = (
     "status",
     "monitor",
     "replay",
+    "lint",
 )
 
 
@@ -34,6 +35,22 @@ def main(argv: list[str] | None = None) -> int:
         from lokay.start import main as start_main
 
         return start_main(["refresh-body", *rest])
+    if args.node == "lint":
+        from pathlib import Path
+        from lokay.lint import lint
+
+        command = argparse.ArgumentParser(prog="lokay lint")
+        command.add_argument("base")
+        command.add_argument("head")
+        refs = command.parse_args(rest)
+        try:
+            errors = lint(refs.base, refs.head, Path.cwd())
+        except ValueError as exc:
+            print(f"lint: {exc}", file=sys.stderr)
+            return 1
+        for error in errors:
+            print(error)
+        return int(bool(errors))
     if args.node == "replay":
         import gzip
         import json
