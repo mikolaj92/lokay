@@ -7,7 +7,7 @@ from subprocess import TimeoutExpired
 
 from lokay.build import _git, child_env, generated_cleanup
 from lokay.run import run_process
-from lokay.state import rounds_append
+from lokay.store import rounds_append
 
 
 def remove_venv(worktree: Path, venv: Path) -> None:

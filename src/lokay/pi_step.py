@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import os
 from collections.abc import Mapping
@@ -36,4 +38,4 @@ def pi_step(
 def emit(payload: dict[str, str]) -> None:
     if payload.get("result") not in ("done", "failed"):
         raise SystemExit(1)
-    print(json.dumps(payload, separators=(",", ":")))
+    print(dumps(payload, separators=(",", ":")))

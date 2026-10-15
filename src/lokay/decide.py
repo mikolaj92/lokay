@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import math
 import os
@@ -64,13 +66,13 @@ def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
 
     field = "state" if "state" in wire else "input"
     wire[field] = trim(wire[field])
-    while (size := len(json.dumps(wire))) >= limit:
+    while (size := len(dumps(wire))) >= limit:
         available = [(parent, key) for parent, key in strings if parent[key]]
         if not available:
             # Containers and numeric state metadata can also exceed the budget.
             wire[field] = {}
             strings = []
-            if len(json.dumps(wire)) < limit:
+            if len(dumps(wire)) < limit:
                 break
             questions = wire["questions"]
             items = list(questions.values()) if isinstance(questions, dict) else questions
@@ -78,7 +80,7 @@ def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
                          for item in items if item.get("question", item.get("instructions"))]
             if not available:
                 raise DecisionError("request metadata exceeds character limit")
-            size = len(json.dumps(wire))
+            size = len(dumps(wire))
         parent, key = max(available, key=lambda item: len(item[0][item[1]]))
         parent[key] = parent[key][:max(0, len(parent[key]) - max(1, (size - limit + 1) // 6))]
     return wire
@@ -114,7 +116,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                  "state.history lists earlier findings on this PR and how they were addressed. "
                  "Do not re-raise a finding that was resolved or rejected in a dispute unless the current "
                  "diff reintroduces it; raise a new concern only if it is concrete and give its exact reason."},
-                {"role": "user", "content": json.dumps(user)},
+                {"role": "user", "content": dumps(user)},
             ],
             "response_format": {"type": "json_schema", "json_schema": {
                 "name": "decisions", "strict": True,
@@ -244,7 +246,7 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
 
 
 def decide(internal: Mapping) -> dict:
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     started = time.monotonic()
     output = None
@@ -267,7 +269,7 @@ def _decide(internal: Mapping) -> dict:
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
     path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone", "chat": "/chat/completions"}[api]
-    body = json.dumps(to_wire(api, model, internal))
+    body = dumps(to_wire(api, model, internal))
     timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or (180 if api == "chat" else 30))))
     cmd = [
         "curl", "-sS", "-m", timeout,
@@ -307,7 +309,7 @@ def main() -> int:
     else:
         internal = json.load(sys.stdin)
     try:
-        print(json.dumps(decide(internal), separators=(",", ":")))
+        print(dumps(decide(internal), separators=(",", ":")))
     except Exception as exc:
         print(f"decide: {exc}", file=sys.stderr)
         return 1

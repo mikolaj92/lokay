@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import tempfile
 import time
@@ -8,7 +10,7 @@ from pathlib import Path
 from lokay.config import load_repos
 from lokay.gh import _gh, fit_body
 from lokay.git import _git
-from lokay.state import main_status, save_main_status
+from lokay.store import main_status, save_main_status
 
 TITLE = "lokay: main czerwony"
 MARKER = "lokay-main-red"
@@ -87,7 +89,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     if not green:
         diff = git(clone_path, ["show", "--format=fuller", "--first-parent", merge_sha]) if merge_sha else ""
         body = (f"Main czerwony. Napraw przez Plan → Build → Check → Fix → Merge.\n"
-                f"Culprit: {json.dumps(culprit)} · tested SHA: `{sha}`\n\n"
+                f"Culprit: {dumps(culprit)} · tested SHA: `{sha}`\n\n"
                 f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
                 f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```")
         result["issue"] = guard_issue(repo, body)

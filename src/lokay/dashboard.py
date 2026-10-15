@@ -1,6 +1,10 @@
 """Read-only factory dashboard; GitHub reads happen only in the refresh thread."""
 from __future__ import annotations
 
+from json import dumps
+from lokay.store import write_json
+from lokay.gh import dashboard_request as gh
+
 import argparse
 import copy
 import gzip
@@ -9,7 +13,6 @@ import json
 import os
 import re
 import shlex
-import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -140,22 +143,6 @@ def enabled_repos(path: Path) -> list[str]:
         return []
 
 
-def gh(*args):
-    try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("gh timed out after 60s") from None
-    except OSError:
-        raise RuntimeError("gh could not start") from None
-    if result.returncode:
-        # CLI stderr can contain credentials: never retain or display it.
-        raise RuntimeError(f"gh {args[0]} failed (exit {result.returncode})")
-    try:
-        return json.loads(result.stdout)
-    except ValueError:
-        raise RuntimeError("gh returned invalid JSON") from None
-
-
 def prs(data, merged: bool) -> list[dict]:
     if not isinstance(data, list):
         raise RuntimeError("gh returned an invalid PR list")
@@ -202,10 +189,7 @@ class Dashboard:
         with self.lock:
             data = copy.deepcopy(self.cache)
         try:
-            self.home.mkdir(parents=True, exist_ok=True)
-            temporary = self.cache_path.with_suffix(".json.tmp")
-            temporary.write_text(json.dumps(data, ensure_ascii=False) + "\n")
-            temporary.replace(self.cache_path)
+            write_json(self.cache_path, data, ensure_ascii=False)
         except OSError:
             with self.lock:
                 self.cache["error"] = "Could not save dashboard cache"
@@ -321,7 +305,7 @@ class Dashboard:
             recent.append({"repo": path.parent.parent.name.replace("__", "/"), "issue": path.parent.name, **data})
         with self.lock:
             cache = copy.deepcopy(self.cache)
-        from lokay.state import main_status
+        from lokay.store import main_status
 
         statuses = main_status(self.home)
         merged, opened, per_repo = [], [], []
@@ -494,13 +478,13 @@ def handler(dashboard: Dashboard):
             elif path == "/api/ticks.json":
                 query = parse_qs(urlsplit(self.path).query)
                 data = dashboard.ticks(number(query.get("offset", [0])[0]), query.get("date", [""])[0])
-                content, mime, status = json.dumps(data, ensure_ascii=False).encode(), "application/json", 200
+                content, mime, status = dumps(data, ensure_ascii=False).encode(), "application/json", 200
             elif path in ("/", "/api/state.json"):
                 data = dashboard.state()
                 if path == "/":
                     content, mime = render(data).encode(), "text/html"
                 else:
-                    content, mime = json.dumps(data, ensure_ascii=False).encode(), "application/json"
+                    content, mime = dumps(data, ensure_ascii=False).encode(), "application/json"
                 status = 200
             else:
                 content, mime, status = b"not found\n", "text/plain", 404

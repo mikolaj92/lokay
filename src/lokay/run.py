@@ -13,6 +13,8 @@ from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+from lokay import store
+
 
 PI_IDLE_SECONDS = 300
 
@@ -20,11 +22,7 @@ process_groups: dict[int, subprocess.Popen | None] = {}
 
 
 def save_process_groups() -> None:
-    path = Path.home() / ".lokay" / "procs.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(sorted(process_groups)))
-    temporary.replace(path)
+    store.save_process_groups(sorted(process_groups))
 
 
 def kill_process_groups(pgids: Sequence[int]) -> None:
@@ -68,18 +66,20 @@ def cleanup_process_groups() -> None:
 
 
 def cleanup_worktree_caches(worktree: Path) -> None:
+    from lokay.git import command
+
     token = tick_deadline.set(None)
     try:
         for name in (".cache", ".validation"):
             directory = worktree / name
             if directory.is_symlink() or not directory.is_dir():
                 continue
-            tracked = run_process(["git", "ls-files", "-z", "--", name], cwd=worktree, timeout=30)
+            tracked = command(worktree, ["ls-files", "-z", "--", name])
             if tracked.returncode != 0:
                 raise RuntimeError(tracked.stderr or "tracked cache lookup failed")
             if tracked.stdout:
                 continue
-            ignored = run_process(["git", "check-ignore", "-q", "--", name + "/"], cwd=worktree, timeout=30)
+            ignored = command(worktree, ["check-ignore", "-q", "--", name + "/"])
             if ignored.returncode == 0:
                 shutil.rmtree(directory)
             elif ignored.returncode != 1:
@@ -110,7 +110,9 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> 
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
     worktree = Path(worktree).resolve()
-    git = run_process(["git", "-C", str(worktree), "rev-parse", "--git-common-dir"], timeout=30)
+    from lokay.git import command
+
+    git = command(worktree, ["rev-parse", "--git-common-dir"])
     gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
     return [
         "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[2] / "sandbox/pi.sb"),
@@ -171,7 +173,7 @@ def run_process(
     timeout: float | None = None,
     input: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     command = next((index for index, arg in enumerate(argv)
                     if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
@@ -283,7 +285,7 @@ def _run_pi_process(
     timeout: float,
     input: str | None,
 ) -> subprocess.CompletedProcess[str]:
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     argv = list(argv)
     command = pi_command(argv)

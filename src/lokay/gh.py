@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import os
 import re
 import shutil
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -39,6 +42,10 @@ def gh_bin() -> str:
         if path.is_file() and os.access(path, os.X_OK):
             return str(path)
     return "gh"
+
+
+def auth_status(env: Mapping[str, str]):
+    return run_process([gh_bin(), "auth", "status"], env=env, timeout=15)
 
 
 def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str, str]:
@@ -183,7 +190,7 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
             f"| {cell(row['name'])} | {str(row['pass']).lower()} | {cell(row['reason'])} |"
             for row in verdict["checks"]
         ) + "\n\n"
-    body += "Uwagi i CI:\n```json\n" + json.dumps({
+    body += "Uwagi i CI:\n```json\n" + dumps({
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
                 "failed": ci.get("failed", []), "pending": ci.get("pending", []),
             }, ensure_ascii=False, indent=2) + "\n```"
@@ -225,3 +232,18 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     if not sha:
         raise RuntimeError("merge commit missing")
     return {"result": "merged", "merge_sha": sha}
+
+
+def dashboard_request(*args):
+    try:
+        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("gh timed out after 60s") from None
+    except OSError:
+        raise RuntimeError("gh could not start") from None
+    if result.returncode:
+        raise RuntimeError(f"gh {args[0]} failed (exit {result.returncode})")
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        raise RuntimeError("gh returned invalid JSON") from None

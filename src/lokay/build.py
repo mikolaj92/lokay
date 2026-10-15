@@ -6,7 +6,9 @@ import hashlib
 from contextlib import contextmanager
 from pathlib import Path
 
-from lokay.git import push, worktree_add
+from lokay import store
+
+from lokay.git import command, push, worktree_add
 from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
 from lokay.run import cleanup_worktree_caches, pi_env, run_process, sandboxed
@@ -23,7 +25,7 @@ def child_env(base: dict[str, str]) -> dict[str, str]:
 
 
 def _git(repo: Path, args: list[str]) -> str:
-    proc = run_process(["git", *args], cwd=repo, timeout=30)
+    proc = command(repo, args)
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout or "").strip())
     return (proc.stdout or "").strip()
@@ -34,10 +36,8 @@ def exclude_caches(worktree: Path) -> None:
     existing = exclude.read_text() if exclude.exists() else ""
     missing = [pattern for pattern in CACHE_PATTERNS if pattern not in existing.splitlines()]
     if missing:
-        exclude.parent.mkdir(parents=True, exist_ok=True)
-        with exclude.open("a") as file:
-            file.write(("\n" if existing and not existing.endswith("\n") else "")
-                       + "\n".join(missing) + "\n")
+        store.append_text(exclude, ("\n" if existing and not existing.endswith("\n") else "")
+                          + "\n".join(missing) + "\n")
 
 
 def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
@@ -267,7 +267,7 @@ def build_code(
 
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
-    from lokay.state import state_read
+    from lokay.store import state_read
 
     body = pr_body(worktree, plan_path, state_read(repo_name, issue).get("pi_response") or "")
     pushed = push(worktree, branch, expected)
