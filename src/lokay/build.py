@@ -198,7 +198,6 @@ def build_code(
                 cwd=worktree,
                 env=clean,
                 timeout=3600,
-                pi_idle_retry=False,
             )
     except Exception:
         if changes["changed"]:

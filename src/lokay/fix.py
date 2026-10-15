@@ -26,7 +26,6 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
                 cwd=worktree,
                 env=clean,
                 timeout=3600,
-                pi_idle_retry=False,
             )
     except Exception as exc:
         if changes["changed"]:
