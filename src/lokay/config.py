@@ -30,8 +30,10 @@ def load_repos(path: Path | None = None) -> list[dict]:
     repos = raw.get("repos") or []
     for repo in repos:
         keys = set(repo)
-        if keys - {"setup"} != {"name", "clone_path", "test", "merge"}:
-            raise ValueError(f"repo keys must be name, clone_path, test, merge, optional setup: {repo.get('name')}")
+        if keys - {"setup", "test_timeout"} != {"name", "clone_path", "test", "merge"}:
+            raise ValueError(f"repo keys must be name, clone_path, test, merge, optional setup, test_timeout: {repo.get('name')}")
+        if "test_timeout" in repo and (type(repo["test_timeout"]) is not int or repo["test_timeout"] <= 0):
+            raise ValueError("test_timeout must be positive integer seconds")
         if "setup" in repo and (not isinstance(repo["setup"], list) or
                                 any(not isinstance(arg, str) for arg in repo["setup"])):
             raise ValueError("setup must be a list of argv strings")

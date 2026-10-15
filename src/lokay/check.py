@@ -248,9 +248,11 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     def execute(argv):
         try:
             with generated_cleanup(Path(cwd)):
-                return run_process(argv, cwd=cwd, timeout=timeout)
-        except (TimeoutExpired, OSError) as exc:
-            return CompletedProcess(argv, 1, "", str(exc))
+                return run_process(argv, cwd=cwd, timeout=timeout), False
+        except TimeoutExpired:
+            return CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s"), True
+        except OSError as exc:
+            return CompletedProcess(argv, 1, "", str(exc)), False
 
     def did_run(proc):
         log = (proc.stdout or "") + (proc.stderr or "")
@@ -274,16 +276,17 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     if not tests:
         notes.append({"warstwa": "tests", "plik": "", "log": "no tests configured"})
     for argv in tests:
-        proc = execute(argv)
+        proc, timed_out = execute(argv)
         log = (proc.stdout or "") + (proc.stderr or "")
         ran = did_run(proc)
         if not ran:
-            retry = execute(argv)
+            retry, retry_timed_out = execute(argv)
             retry_log = (retry.stdout or "") + (retry.stderr or "")
             flaky = did_run(retry)
             ran = flaky
             item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
-                    "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log}
+                    "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log,
+                    "timeout": timeout if timed_out or retry_timed_out else None}
             (notes if flaky else failed).append(item)
             log = item["log"]
         if ran:
