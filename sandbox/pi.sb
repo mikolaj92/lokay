@@ -12,6 +12,7 @@
 (deny file-write*)
 (allow file-write*
     (subpath (param "WORKTREE"))
+    (subpath (param "ARTIFACT_DIR"))
     (subpath (param "GITDIR"))
     (subpath (param "TMPDIR"))
     (subpath "/private/tmp")
