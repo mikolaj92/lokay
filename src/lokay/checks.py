@@ -49,6 +49,9 @@ def local_tests(x: CheckInput) -> dict:
     green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
     passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
     reason = "local tests green" if passed else "local tests not green or not run"
+    timeout = next((item["timeout"] for item in failures if item.get("timeout") is not None), None)
+    if not passed and timeout is not None:
+        reason = f"tests timed out after {timeout} s"
     if passed and x.ci.get("baseline"):
         reason = f"no new local test failures against main at {x.ci['baseline']['sha']}"
     return evidence("local_tests", passed, reason, failures, 800,
