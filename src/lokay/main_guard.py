@@ -114,7 +114,3 @@ def local_baseline(repo: str, clone_path: Path, ci: dict) -> dict:
     return {**ci, "baseline": {"sha": main["sha"], "failures": sorted(inherited)},
             "result": "red" if novel else "green", "failed": failed,
             "tested": ci.get("tested", False) or not novel}
-
-
-def pre_deploy(repo: str, sha: str) -> dict:
-    return {"pass": True}

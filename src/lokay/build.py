@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.effects.git import command, commit_paths, push, worktree_add, guard, failure
+from lokay.effects.git import command, commit_paths, push, guard, failure
 from lokay.effects.gh import pr_create
 from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
@@ -17,10 +17,6 @@ from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
              "yarn.lock": "package.json"}
-
-
-def child_env(base: dict[str, str]) -> dict[str, str]:
-    return pi_env(base, Path.cwd())
 
 
 def _git(repo: Path, args: list[str]) -> str:
@@ -129,7 +125,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
             continue
         file = worktree / path
         if file.is_file() or file.is_symlink():
-            file.unlink()
+            store.remove_file(file)
         for parent in path.parents:
             if is_cache(parent.as_posix()):
                 directories.add(worktree / parent)
@@ -226,7 +222,7 @@ def build_code(
         _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
         file = worktree / path
         if file.exists() or file.is_symlink():
-            file.unlink()
+            store.remove_file(file)
     tidy_and_commit(worktree, "lokay build", before)
     if removed:
         remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
@@ -254,7 +250,7 @@ def build_code(
     if not log:
         upstream = (_git(worktree, ["for-each-ref", "--format=%(upstream:short)",
                                    f"refs/heads/{expected_branch}"]) if expected_branch else "")
-        if upstream == f"origin/{expected_branch}":
+        if expected_branch is not None and upstream == f"origin/{expected_branch}":
             _git(worktree, ["fetch", "origin", expected_branch])
             if int(_git(worktree, ["rev-list", "--count", f"{upstream}..HEAD"])) > 0:
                 return {"result": "done", "artifact": head, "pi_response": pi_tail}

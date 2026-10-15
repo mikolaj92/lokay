@@ -204,16 +204,8 @@ def rounds_append(repo: str, issue: int, line: str) -> Path:
     return path
 
 
-def run_path(owner: str, repo: str, issue: int) -> Path:
-    return run_dir(repo if "/" in repo else f"{owner}/{repo}", issue) / "state.json"
-
-
 def write_run(owner: str, repo: str, issue: int, fields: dict) -> Path:
     return state_update(repo if "/" in repo else f"{owner}/{repo}", issue, **fields)
-
-
-def read_run(owner: str, repo: str, issue: int) -> dict:
-    return state_read(repo if "/" in repo else f"{owner}/{repo}", issue)
 
 
 def write_artifact(path: Path, text: str) -> None:
@@ -264,16 +256,8 @@ def write_json(path: Path, value: object, *, indent: int | None = None,
     write_text_atomic(path, json.dumps(value, indent=indent, ensure_ascii=ensure_ascii, default=json_default) + "\n")
 
 
-def load_run(repo: str, issue: int) -> dict:
-    return state_read(repo, issue)
-
-
 def save_run(repo: str, issue: int, state: dict) -> None:
     write_json(run_dir(repo, issue) / "state.json", state, indent=2)
-
-
-def append_tick(kind: str, **fields) -> None:
-    log_event(kind, **fields)
 
 
 def save_process_groups(pgids: list[int]) -> None:

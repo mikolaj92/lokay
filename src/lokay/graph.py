@@ -85,16 +85,6 @@ def step(run: Run, event: Event) -> Run:
     return Run(current, current.get("diff_fingerprint"))
 
 
-def is_task(issue: dict) -> bool:
-    title = issue["title"].strip().lower()
-    return not (
-        title.startswith(("epic", "[tracker]", "tracker"))
-        or title == "lokay-stalled"
-        or any((label.get("name", "") if isinstance(label, dict) else label).lower()
-               in ("tracker", "epic") for label in issue.get("labels") or [])
-    )
-
-
 def pick(snapshot: Snapshot) -> Pick | None:
     for repo in sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name)):
         if repo.busy:
@@ -119,7 +109,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             return Pick(repo.name, 0, "issues")
         for issue in repo.issues:
             number = issue["number"]
-            if (is_task(issue) and (snapshot.only_issue is None or snapshot.only_issue == number)
+            if ((snapshot.only_issue is None or snapshot.only_issue == number)
                     and repo.states[number].get("retry_at", 0) <= snapshot.now
                     and number not in repo.open_prs):
                 return Pick(repo.name, number, "issue", issue)

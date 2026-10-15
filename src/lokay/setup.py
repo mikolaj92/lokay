@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 from lokay.effects.pi import TimeoutExpired
 
-from lokay.build import _git, child_env, generated_cleanup
-from lokay.effects.pi import run_process
+from lokay.build import _git, generated_cleanup
+from lokay.effects.pi import pi_env, run_process
 from lokay.store import rounds_append
 
 
@@ -57,7 +57,7 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             venv = cwd / ".venv"
             ok = False
             try:
-                env = child_env(dict(os.environ))
+                env = pi_env(dict(os.environ), Path.cwd())
                 env["UV_PROJECT_ENVIRONMENT"] = str(venv.absolute())
                 proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
                 log = f"exit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
