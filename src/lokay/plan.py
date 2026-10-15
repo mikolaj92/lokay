@@ -5,8 +5,8 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.decide import DecisionError, from_wire
-from lokay.pi_step import pi_step
+from lokay.effects.decide import DecisionError, from_wire
+from lokay.effects.pi import pi_step
 from lokay.safety import untrusted_issue_block
 
 SECTIONS = ("## Cel", "## Pliki", "## Testy", "## Poza zakresem")
@@ -59,7 +59,7 @@ def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dic
 
 
 def plan_one(perspective: str, prompt: str, art: Path, *, phase: str = "write", on_written=None) -> dict:
-    from lokay.decide import decide
+    from lokay.effects.decide import decide
 
     if perspective not in PERSPECTIVES:
         raise ValueError("unknown plan perspective")
@@ -72,7 +72,7 @@ def plan_one(perspective: str, prompt: str, art: Path, *, phase: str = "write", 
             return {"result": "failed", "reason": "invalid plan"}
         if on_written is not None:
             on_written()
-    from lokay.run import check_deadline
+    from lokay.effects.pi import check_deadline
 
     check_deadline()
     result = verdict(decide(plan_questions(art.read_text())))

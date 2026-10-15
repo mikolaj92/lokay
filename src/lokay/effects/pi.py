@@ -12,6 +12,9 @@ import time
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from subprocess import TimeoutExpired
+from json import dumps
+from typing import BinaryIO, cast
 
 from lokay import store
 
@@ -66,7 +69,7 @@ def cleanup_process_groups() -> None:
 
 
 def cleanup_worktree_caches(worktree: Path) -> None:
-    from lokay.git import command
+    from lokay.effects.git import command
 
     token = tick_deadline.set(None)
     try:
@@ -110,12 +113,12 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> 
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
     worktree = Path(worktree).resolve()
-    from lokay.git import command
+    from lokay.effects.git import command
 
     git = command(worktree, ["rev-parse", "--git-common-dir"])
     gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
     return [
-        "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[2] / "sandbox/pi.sb"),
+        "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[3] / "sandbox/pi.sb"),
         "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
         "-D", f"TMPDIR={os.path.realpath(env.get('TMPDIR') or '/tmp')}",
         "-D", f"HOME={os.path.realpath(env.get('HOME') or os.environ['HOME'])}",
@@ -124,7 +127,7 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> 
 
 
 class TickExpired(BaseException):
-    """Yield to the next tick without treating the saved node as failed."""
+    pass
 
 
 tick_deadline: ContextVar[float | None] = ContextVar("tick_deadline", default=None)
@@ -246,6 +249,7 @@ def _run_process(
                 kill_process_groups([process.pid])
                 process.wait(timeout=5)
             raise
+    assert process is not None
     try:
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
         tick_limited = remaining is not None and remaining <= timeout
@@ -342,6 +346,7 @@ def _run_pi_process(
                     kill_process_groups([process.pid])
                     process.wait(timeout=5)
                 raise
+        assert process is not None
         try:
             with selectors.DefaultSelector() as selector:
                 for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
@@ -389,7 +394,7 @@ def _run_pi_process(
                                 pending = memoryview(b"")
                             if not pending:
                                 selector.unregister(key.fileobj)
-                                key.fileobj.close()
+                                cast(BinaryIO, key.fileobj).close()
                         else:
                             chunk = os.read(key.fd, 65536)
                             if chunk:
@@ -406,3 +411,34 @@ def _run_pi_process(
                 for stream in (process.stdin, process.stdout, process.stderr):
                     if stream is not None:
                         stream.close()
+
+
+def pi_step(
+    prompt: str,
+    artifact: Path,
+    *,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout: float = 3600,
+) -> dict[str, str]:
+    worktree = cwd if cwd is not None else Path.cwd()
+    child = pi_env(os.environ if env is None else env, worktree)
+    provider = child.get("LOKAY2_PROVIDER", "")
+    model = child.get("LOKAY2_MODEL", "")
+    if not provider or not model:
+        return {"result": "failed", "artifact": ""}
+    proc = run_process(
+        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child),
+        cwd=cwd,
+        env=child,
+        timeout=timeout,
+    )
+    if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
+        return {"result": "failed", "artifact": ""}
+    return {"result": "done", "artifact": str(artifact)}
+
+
+def emit(payload: dict[str, str]) -> None:
+    if payload.get("result") not in ("done", "failed"):
+        raise SystemExit(1)
+    print(dumps(payload, separators=(",", ":")))

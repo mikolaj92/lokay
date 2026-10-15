@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path
-from subprocess import TimeoutExpired
+from lokay.effects.pi import TimeoutExpired
 
 from lokay.build import _git, child_env, generated_cleanup
-from lokay.run import run_process
+from lokay.effects.pi import run_process
 from lokay.store import rounds_append
 
 

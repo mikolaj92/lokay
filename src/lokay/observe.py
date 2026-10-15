@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import Event, Thread
 import sys
 
-from lokay.gh import _gh
+from lokay.effects.gh import _gh
 from lokay.store import RUNS, main_status
 
 CURRENT: dict = {}

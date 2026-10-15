@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         with ticking():
             return start_main(rest)
     if args.node == "decide":
-        from lokay.decide import main as decide_main
+        from lokay.effects.decide import main as decide_main
 
         if args.probe:
             sys.argv = ["lokay", "--probe"]

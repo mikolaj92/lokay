@@ -8,10 +8,9 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.git import command, push, worktree_add
-from lokay.host_guard import guard, failure
-from lokay.gh import pr_create
-from lokay.run import cleanup_worktree_caches, pi_env, run_process, sandboxed
+from lokay.effects.git import command, commit_paths, push, worktree_add, guard, failure
+from lokay.effects.gh import pr_create
+from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
@@ -42,11 +41,17 @@ def exclude_caches(worktree: Path) -> None:
 
 def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
     """Snapshot dirty paths, including edits with unchanged status codes."""
-    _git(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
+    status = command(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
+    if status.returncode:
+        raise RuntimeError((status.stderr or status.stdout or "").strip())
+    entries = iter(status.stdout.split("\0"))
     names = set()
-    for args in (["ls-files", "-m", "-d", "--others", "--exclude-standard", "-z"],
-                 ["diff", "--cached", "--name-only", "-z"]):
-        names.update(filter(None, _git(worktree, args).split("\0")))
+    for entry in entries:
+        if not entry:
+            continue
+        names.add(entry[3:])
+        if "R" in entry[:2] or "C" in entry[:2]:
+            names.add(next(entries))
     result = {}
     for name in names:
         file = worktree / name
@@ -146,11 +151,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     index_paths = names(["ls-files", "-z"])
     stage = [path for path in selected if path in index_paths or (worktree / path).exists()
              or (worktree / path).is_symlink()]
-    if stage:
-        _git(worktree, ["--literal-pathspecs", "add", "-A", "--", *stage])
-    committed = sorted(set(selected) & names(["diff", "--cached", "--name-only", "-z"]))
-    if committed:
-        _git(worktree, ["--literal-pathspecs", "commit", "--only", "-m", message, "--", *committed])
+    committed = commit_paths(worktree, stage, message)
     return committed, junk
 
 

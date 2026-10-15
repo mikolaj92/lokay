@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from json import dumps
 from lokay.store import write_json
-from lokay.gh import dashboard_request as gh
+from lokay.effects.gh import dashboard_request as gh
 
 import argparse
 import copy

@@ -8,8 +8,8 @@ import time
 from pathlib import Path
 
 from lokay.config import load_repos
-from lokay.gh import _gh, fit_body
-from lokay.git import _git
+from lokay.effects.gh import _gh, fit_body
+from lokay.effects.git import _git
 from lokay.store import main_status, save_main_status
 
 TITLE = "lokay: main czerwony"
@@ -17,7 +17,7 @@ MARKER = "lokay-main-red"
 
 
 def run_repo_tests(repo: dict, sha: str, worktree: Path) -> dict:
-    from lokay.check import local_ci
+    from lokay.effects.tests import local_ci
 
     tests = repo.get("test") or []
     return local_ci(sha, [tests] if tests else [], worktree, timeout=repo.get("test_timeout", 600))
