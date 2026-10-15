@@ -191,7 +191,6 @@ def pick(env: dict[str, str] | None = None) -> dict:
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
              if not only_repo or repo["name"] == only_repo]
     blocked = []
-    has_prs = False
 
     def idle():
         if blocked:
@@ -201,13 +200,14 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     "last_error": saved.get("reason") or saved.get("last_error")}
         return {"result": "idle", "reason": "no_work"}
 
-    def choose(turn):
-        nonlocal has_prs
-        for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
+    def choose(repo):
+        has_prs = False
+        for turn in ("pr", "issue"):
+            if turn == "issue" and has_prs:
+                break
             check_deadline()
             name = repo["name"]
             if turn == "pr":
-                # Discover PRs even when the repository lock is busy.
                 code, out, err = _gh([
                     "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
                     "--json", "number,headRefName,headRefOid",
@@ -289,16 +289,21 @@ def pick(env: dict[str, str] | None = None) -> dict:
     from lokay.state import main_status
 
     statuses = main_status()
-    for repo in repos:
+    for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
+        check_deadline()
         name = repo["name"]
         status = statuses.get(name, {})
         number = status.get("issue")
         if status.get("status") != "red" or not number or (only_issue is not None and only_issue != number):
+            chosen = choose(repo)
+            if chosen is not None:
+                return chosen
             continue
         held = acquire(name.split("/")[0], f"{name}/wt-{number}")
         if held["result"] != "held":
             continue
         try:
+            repo_attempt(name, time.time())
             branch = f"lokay/{number}"
             pr = open_pr_for(name, branch)
             saved = state_read(name, number)
@@ -310,12 +315,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         except BaseException:
             release(held)
             raise
-    chosen = choose("pr")
-    if chosen is not None:
-        return chosen
-    if has_prs:
-        return idle()
-    return choose("issue") or idle()
+    return idle()
 
 
 def refresh_body(repo: str, issue: int) -> dict:
