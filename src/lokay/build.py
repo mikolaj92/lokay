@@ -10,7 +10,7 @@ from lokay import store
 
 from lokay.effects.git import command, commit_paths, push, guard, failure
 from lokay.effects.gh import pr_create
-from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
+from lokay.effects.pi import cleanup_worktree_caches, durable_context, pi_argv, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
@@ -194,7 +194,7 @@ def build_code(
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
             proc = run_process(
-                sandboxed(["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt], worktree, clean),
+                sandboxed(pi_argv(prompt, clean, session_id=durable_context("build", worktree)), worktree, clean),
                 cwd=worktree,
                 env=clean,
                 timeout=3600,

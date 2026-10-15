@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import shutil
@@ -110,6 +111,50 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     return env
 
 
+def durable_context(node: str, worktree: Path, artifact: Path | None = None) -> str:
+    from lokay.effects.git import command
+
+    if artifact is not None:
+        relative = artifact.resolve().relative_to(store.RUNS.resolve())
+        repo, issue = relative.parts[:2]
+        repo = repo.replace("__", "/")
+        node += ":" + str(Path(*relative.parts[2:]))
+    else:
+        remote = command(worktree, ["remote", "get-url", "origin"])
+        branch = command(worktree, ["branch", "--show-current"])
+        if remote.returncode or branch.returncode:
+            raise ValueError("durable session requires repository and issue identity")
+        repo = remote.stdout.strip().removesuffix(".git").replace(":", "/").rstrip("/")
+        repo = "/".join(repo.split("/")[-2:])
+        prefix, separator, issue = branch.stdout.strip().partition("/")
+        if prefix != "lokay" or not separator or not issue.isdecimal():
+            raise ValueError("durable session requires a lokay/<issue> branch")
+    state_path = store.run_dir(repo, int(issue)) / "state.json"
+    state = json.loads(state_path.read_text()) if state_path.exists() else {}
+    generation = len(state.get("plan_history", []))
+    return f"lokay:{repo}#{issue}:{node}:plan:{generation}"
+
+
+def pi_argv(prompt: str, env: Mapping[str, str], *, json_mode: bool = False, session_id: str | None = None) -> list[str]:
+    backend = env.get("LOKAY2_PI_BACKEND", "durable") if session_id else "classic"
+    if backend not in ("classic", "durable"):
+        raise ValueError("LOKAY2_PI_BACKEND must be classic or durable")
+    if backend == "durable":
+        assert session_id is not None
+        key = hashlib.sha256(session_id.encode()).hexdigest()
+        database = Path(env.get("HOME") or Path.home()) / ".local/state/lokay/pi-durable" / (key + ".sqlite")
+        return [
+            "node", str(Path(__file__).resolve().parents[3] / "scripts/pi-durable-headless/run.mjs"),
+            str(database), session_id, hashlib.sha256(prompt.encode()).hexdigest(),
+            env.get("LOKAY2_PROVIDER", ""), env.get("LOKAY2_MODEL", ""), prompt,
+        ]
+    return [
+        "pi", "-p", *(["--mode", "json"] if json_mode else []),
+        "--provider", env.get("LOKAY2_PROVIDER", ""),
+        "--model", env.get("LOKAY2_MODEL", ""), prompt,
+    ]
+
+
 def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], extra_dir: str | Path | None = None) -> list[str]:
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
@@ -177,19 +222,27 @@ def run_process(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     input: str | None = None,
+    pi_idle_retry: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     from lokay.store import log_event
 
     command = next((index for index, arg in enumerate(argv)
-                    if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
+                    if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])
+                    or (Path(arg).name == "node" and index + 1 < len(argv)
+                        and argv[index + 1].endswith("/pi-durable-headless/run.mjs"))), None)
     if command is None:
-        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
-    call = Path(argv[command]).name
+        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
+    call = "pi-durable" if Path(argv[command]).name == "node" else Path(argv[command]).name
     started = time.monotonic()
     output = None
     ok = False
+    held = None
     try:
-        proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        if call == "pi-durable":
+            held = store.acquire_lock(Path(argv[command + 2]).with_suffix(".lock"))
+            if held["result"] != "held":
+                raise RuntimeError("durable session is already running")
+        proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
         if pi_command(argv) is not None:
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
@@ -199,7 +252,9 @@ def run_process(
         output = {"error": type(exc).__name__, "reason": str(exc)}
         raise
     finally:
-        log_event("call", call=call, name=" ".join(argv[command + 1:command + 3])[:200] if call == "gh" else "pi -p",
+        if held is not None:
+            store.release_lock(held)
+        log_event("call", call=call, name=" ".join(argv[command + 1:command + 3])[:200] if call == "gh" else call,
                   input={"argv": list(argv[command:]), "stdin": input},
                   output=output, started=started, ok=ok)
 
@@ -332,6 +387,7 @@ def _run_process(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     input: str | None = None,
+    pi_idle_retry: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
@@ -342,7 +398,7 @@ def _run_process(
     if remaining is not None and remaining <= 0:
         raise TickExpired()
     if pi_command(argv) is not None:
-        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
     with _process(argv, cwd, env, input, text=True) as process:
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
         tick_limited = remaining is not None and remaining <= timeout
@@ -372,6 +428,7 @@ def _run_pi_process(
     env: Mapping[str, str] | None,
     timeout: float,
     input: str | None,
+    pi_idle_retry: bool,
 ) -> subprocess.CompletedProcess[str]:
     from lokay.store import log_event
 
@@ -434,6 +491,9 @@ def _run_pi_process(
                                 output[key.data].extend(chunk)
                         if now >= expires:
                             expired()
+                        if not pi_idle_retry:
+                            raise subprocess.TimeoutExpired(
+                                argv, PI_IDLE_SECONDS, output=collected("stdout"), stderr=collected("stderr"))
                         log_event("call", call="pi", name="pi idle-retry",
                                   input={"argv": argv[command:], "stdin": input},
                                   output={"stdout": collected("stdout"), "stderr": collected("stderr"),
@@ -466,6 +526,8 @@ def pi_step(
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float = 3600,
+    pi_idle_retry: bool = True,
+    durable_node: str | None = None,
 ) -> dict[str, str]:
     worktree = cwd if cwd is not None else Path.cwd()
     child = pi_env(os.environ if env is None else env, worktree)
@@ -474,10 +536,13 @@ def pi_step(
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
     proc = run_process(
-        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child, artifact.parent.resolve()),
+        sandboxed(pi_argv(prompt, child, json_mode=True,
+                          session_id=durable_context(durable_node, worktree, artifact) if durable_node else None),
+                  worktree, child, artifact.parent.resolve()),
         cwd=cwd,
         env=child,
         timeout=timeout,
+        pi_idle_retry=pi_idle_retry,
     )
     if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
         return {"result": "failed", "artifact": ""}
