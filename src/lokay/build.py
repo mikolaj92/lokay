@@ -16,7 +16,9 @@ from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
 LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
-             "yarn.lock": "package.json"}
+             "yarn.lock": "package.json", "pixi.lock": "pixi.toml",
+             "Cargo.lock": "Cargo.toml", "Gemfile.lock": "Gemfile",
+             "composer.lock": "composer.json", "bun.lockb": "package.json"}
 
 
 def _git(repo: Path, args: list[str]) -> str:
