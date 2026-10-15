@@ -5,9 +5,35 @@ import shutil
 from pathlib import Path
 from subprocess import TimeoutExpired
 
-from lokay.build import child_env, generated_cleanup
+from lokay.build import _git, child_env, generated_cleanup
 from lokay.run import run_process
 from lokay.state import rounds_append
+
+
+def remove_venv(worktree: Path, venv: Path) -> None:
+    if venv.is_symlink() or not venv.is_dir():
+        return
+    if not _git(worktree, ["--literal-pathspecs", "ls-files", "--", venv.relative_to(worktree).as_posix()]):
+        shutil.rmtree(venv)
+
+
+def repair_venvs(worktree: Path) -> None:
+    for directory, dirs, files in os.walk(worktree):
+        path = Path(directory)
+        depth = len(path.relative_to(worktree).parts)
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules") if depth < 3 else []
+        if depth and "pyproject.toml" not in files:
+            continue
+        venv = path / ".venv"
+        if venv.is_symlink() or not venv.is_dir():
+            continue
+        try:
+            proc = run_process([str(venv.absolute() / "bin/python"), "-c", ""], cwd=path, timeout=10)
+            if proc.returncode == 0:
+                continue
+        except (OSError, TimeoutExpired):
+            pass
+        remove_venv(worktree, venv)
 
 
 def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
@@ -26,27 +52,18 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
     logs = []
     failed = []
     with generated_cleanup(worktree):
+        repair_venvs(worktree)
         for cwd, argv in commands:
             venv = cwd / ".venv"
-
-            def remove_venv():
-                if venv.is_symlink() or venv.is_file():
-                    venv.unlink()
-                elif venv.exists():
-                    shutil.rmtree(venv)
-
             ok = False
             try:
-                python = venv / "bin/python"
-                if (venv.exists() or venv.is_symlink()) and not (python.is_file() and os.access(python, os.X_OK)):
-                    remove_venv()
                 env = child_env(dict(os.environ))
                 env["UV_PROJECT_ENVIRONMENT"] = str(venv.absolute())
-                proc = run_process(argv, cwd=cwd, env=env, timeout=600)
+                proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
                 log = f"exit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
                 if proc.returncode != 0 and "not a valid Python environment" in log:
-                    remove_venv()
-                    proc = run_process(argv, cwd=cwd, env=env, timeout=600)
+                    repair_venvs(worktree)
+                    proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
                     log += f"\nRetry:\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
                 ok = proc.returncode == 0
             except (OSError, TimeoutExpired) as exc:
