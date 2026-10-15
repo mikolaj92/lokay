@@ -1,7 +1,8 @@
-import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
+
+from lokay.lint import diff_lines, lint_diff, unit_test_files
 
 
 @dataclass
@@ -78,34 +79,6 @@ def permissions(x: CheckInput) -> dict:
     return ok("permissions")
 
 
-def diff_lines(diff: str):
-    path = ""
-    line_number = 0
-    in_hunk = False
-    for line in diff.splitlines():
-        if line.startswith("diff --git "):
-            path = ""
-            in_hunk = False
-        elif not in_hunk and line.startswith("+++ "):
-            path = line[4:].split("\t", 1)[0]
-            if path.startswith('"'):
-                path = ast.literal_eval(path)
-            if path.startswith("b/"):
-                path = path[2:]
-            if Path(path).is_absolute() or ".." in Path(path).parts:
-                path = ""
-        elif line.startswith("@@ "):
-            match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
-            in_hunk = match is not None
-            if match:
-                line_number = int(match[1])
-        elif in_hunk and line[:1] in {"+", "-", " "}:
-            if path:
-                yield path, line_number, line[0], line[1:]
-            if line[0] != "-":
-                line_number += 1
-
-
 def no_new_comments(x: CheckInput) -> dict:
     ignored = {".md", ".rst", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock"}
     markers = {
@@ -120,7 +93,7 @@ def no_new_comments(x: CheckInput) -> dict:
     offenders = []
     for path, number, kind, text in diff_lines(x.diff):
         suffix = Path(path).suffix.lower()
-        if kind != "+" or suffix in ignored or "docs" in Path(path).parts[:-1]:
+        if kind != "+" or suffix == ".py" or suffix in ignored or "docs" in Path(path).parts[:-1]:
             continue
         stripped = text.strip()
         if stripped.startswith("#!"):
@@ -131,15 +104,24 @@ def no_new_comments(x: CheckInput) -> dict:
             continue
         comment = any(stripped.startswith(marker) and suffix in extensions
                       for marker, extensions in markers.items())
-        docstring = suffix == ".py" and re.match(r"(?i)r?(?:\"\"\"|''')", stripped)
-        if comment or docstring:
+        if comment:
             offenders.append((f"{path}:{number}", stripped))
-    if offenders:
+    errors = lint_diff(x.diff, x.sha, x.worktree, lokay_rules=x.repo.rsplit("/", 1)[-1] == "lokay")
+    errors.extend(f"{location}: added comment -> remove it" for location, _ in offenders)
+    if errors:
         return {"name": "no_new_comments", "pass": False,
-                "reason": f"{len(offenders)} added comments/docstrings: " + "; ".join(
-                    f"{location}: {text}" for location, text in offenders[:3]),
-                "location": offenders[0][0], "fix_hint": "remove the added comments/docstrings"}
-    return {**ok("no_new_comments"), "reason": "no new comments"}
+                "reason": "; ".join(errors), "location": errors[0].split(": ", 1)[0],
+                "fix_hint": "; ".join(errors)}
+    return {**ok("no_new_comments"), "reason": "no new comments or lint errors"}
+
+
+def no_unit_tests(x: CheckInput) -> dict:
+    paths = unit_test_files(x.diff)
+    if paths:
+        return {"name": "no_unit_tests", "pass": False,
+                "reason": "new unit tests: " + ", ".join(paths), "location": paths[0],
+                "fix_hint": "add a replay fixture under fixtures/replay"}
+    return {**ok("no_unit_tests"), "reason": "no new unit tests"}
 
 
 def issue_goal(x: CheckInput) -> dict:
@@ -211,7 +193,7 @@ def style(x: CheckInput) -> dict:
     return ok("style")
 
 
-CHECKS = [ci_green, local_tests, merge_clean, plan_files, lockfile, secrets, permissions, no_new_comments,
+CHECKS = [ci_green, local_tests, merge_clean, plan_files, lockfile, secrets, permissions, no_new_comments, no_unit_tests,
           issue_goal, scope, correctness, tests_cover, regression, architecture,
           security_review, docs, style]
 
