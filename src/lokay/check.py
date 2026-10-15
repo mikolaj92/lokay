@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from lokay.decide import DecisionError, from_wire
+from lokay.types import Finding, parse_finding
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
@@ -28,29 +29,37 @@ def hunks(diff: str) -> list[dict]:
         elif line.startswith("+++ "):
             name = line[6:] if line.startswith("+++ b/") else old_file
             if name is not None:
-                current = rows.setdefault(name, {"plik": name, "linia_od": None,
-                                                  "linia_do": 1, "added": 0, "deleted": 0, "body": ""})
+                current = rows.setdefault(name, {"path": name, "start": None,
+                                                  "end": 1, "added": 0, "deleted": 0, "body": ""})
         elif line.startswith("@@") and current is not None:
             current["body"] = (current["body"] + line + "\n")[:HUNK_LIMIT]
             plus = line.split("+", 1)[1].split(" ", 1)[0]
             start, _, count = plus.partition(",")
             start = int(start)
             end = start + max(int(count or "1") - 1, 0)
-            current["linia_od"] = min(current["linia_od"], start) if current["linia_od"] is not None else start
-            current["linia_do"] = max(current["linia_do"], end)
+            current["start"] = min(current["start"], start) if current["start"] is not None else start
+            current["end"] = max(current["end"], end)
         elif current is not None:
             current["body"] = (current["body"] + line + "\n")[:HUNK_LIMIT]
             if line.startswith("+"):
                 current["added"] += 1
             elif line.startswith("-"):
                 current["deleted"] += 1
-    return [{**row, "linia_od": row["linia_od"] if row["linia_od"] is not None else 1}
+    return [{"plik": row["path"], "linia_od": row["start"] if row["start"] is not None else 1,
+             "linia_do": row["end"], "added": row["added"], "deleted": row["deleted"], "body": row["body"]}
             for row in rows.values()]
 
 
 def lens(kind: str) -> str:
     path = QUESTIONS / f"check_{kind}.json"
     return json.loads(path.read_text())["question"]
+
+
+def hunk_finding(raw: dict) -> Finding:
+    item = parse_finding(raw)
+    if not isinstance(item, Finding):
+        raise ValueError("hunk has no file")
+    return item
 
 
 def questions(kind: str, rows: list[dict]) -> dict:
@@ -61,11 +70,12 @@ def questions(kind: str, rows: list[dict]) -> dict:
         "instructions": text,
         "options": {"ok": "no real bug", "issue": "real bug"},
     }]
-    for index, row in enumerate(rows, start=1):
+    for index, raw in enumerate(rows, start=1):
+        row = hunk_finding(raw)
         items.append({
             "id": f"h{index}",
             "type": "bool",
-            "instructions": f"{text} {row['plik']}:{row['linia_od']}-{row['linia_do']}",
+            "instructions": f"{text} {row.plik}:{row.linia_od}-{row.linia_do}",
             "options": {"true": "problem", "false": "fine"},
         })
     return {"state": {}, "questions": items}
@@ -76,9 +86,10 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
     answers = from_wire("tensorfold", model, wire, internal)
     uwagi = []
     nits = []
-    for index, row in enumerate(rows, start=1):
+    for index, raw in enumerate(rows, start=1):
+        row = hunk_finding(raw)
         p = answers[f"h{index}"]["probabilities"]["true"]
-        item = {"plik": row["plik"], "linia_od": row["linia_od"], "linia_do": row["linia_do"], "pytanie": kind, "p": p}
+        item = {"plik": row.plik, "linia_od": row.linia_od, "linia_do": row.linia_do, "pytanie": kind, "p": p}
         if p >= THRESHOLD:
             uwagi.append(item)
         elif p >= NIT:
@@ -116,8 +127,8 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                              "issue_title": (state.get("issue_title") or "")[:4000],
                              "issue_body": (state.get("issue_body") or "")[:4000],
                              "kind": kind, "hunks": {
-            f"{row['plik']}:{row['linia_od']}-{row['linia_do']}": row.get("body", "")
-            for row in batch}}
+            f"{row.plik}:{row.linia_od}-{row.linia_do}": raw.get("body", "")
+            for raw in batch for row in [hunk_finding(raw)]}}
         return internal
 
     results = []
@@ -127,12 +138,13 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
             "model": model, "usage": {"completion_tokens": 0}, "answers": answers,
         }, model)
         for index, row in enumerate(batch, start=1):
-            reasons[row["plik"]] = "\n".join(reason for reason in (
+            reasons[hunk_finding(row).plik] = "\n".join(reason for reason in (
                 answers["next"].get("reason"), answers[f"h{index}"].get("reason")
             ) if reason)
         for finding in result["uwagi"] + result["nits"]:
-            if reasons[finding["plik"]]:
-                finding["uzasadnienie"] = reasons[finding["plik"]]
+            parsed = parse_finding(finding)
+            if isinstance(parsed, Finding) and reasons[parsed.plik]:
+                finding["uzasadnienie"] = reasons[parsed.plik]
         results.append(result)
     result = {"next": "issue" if any(item["next"] == "issue" for item in results) else "ok",
               "confidence": min(item["confidence"] for item in results),
@@ -144,7 +156,8 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                  "security", "docs/plan only instead of code", "other")
 
         def followup(batch):
-            options = {f"{row['plik']}:{row['linia_od']}-{row['linia_do']}": row['plik'] for row in batch}
+            options = {f"{row.plik}:{row.linia_od}-{row.linia_do}": row.plik
+                       for row in map(hunk_finding, batch)}
             return {"state": request(batch)["state"], "questions": [
                 {"id": "where", "type": "choice",
                  "instructions": lens_text + " Where is the problem?",
@@ -176,19 +189,20 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                               f"change_p={answers['change']['probabilities'][change]}")
             if (chosen != "none" and p == max(probabilities.values())
                     and p >= 2 * none):
-                row = next(row for row in batch if f"{row['plik']}:{row['linia_od']}-{row['linia_do']}" == chosen)
-                result["uwagi"].append({key: row[key] for key in ("plik", "linia_od", "linia_do")})
+                row = next(row for row in map(hunk_finding, batch)
+                           if f"{row.plik}:{row.linia_od}-{row.linia_do}" == chosen)
+                result["uwagi"].append({"plik": row.plik, "linia_od": row.linia_od, "linia_do": row.linia_do})
                 result["uwagi"][-1].update(pytanie=kind, p=p, zmiana=answers["change"]["choice"])
                 reason = "\n".join(reason for reason in (
-                    reasons.get(row["plik"]), answers["where"].get("reason"),
+                    reasons.get(row.plik), answers["where"].get("reason"),
                     answers["change"].get("reason")
                 ) if reason)
                 if reason:
                     result["uwagi"][-1]["uzasadnienie"] = reason
         if not result["uwagi"]:
-            result["replan"] = [{"pytanie": kind, "pliki": [row["plik"] for row in rows],
+            result["replan"] = [{"pytanie": kind, "pliki": [hunk_finding(row).plik for row in rows],
                                  "prompt": f"lens {kind} widzi problem w "
-                                           + ", ".join(row["plik"] for row in rows)
+                                           + ", ".join(hunk_finding(row).plik for row in rows)
                                            + ", wskaż konkret"}]
     return result
 
@@ -314,5 +328,5 @@ def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
             "replan": replan,
             "notes": [*(ci.get("notes") or []),
                       *(note for item in decisions for note in item.get("notes") or []),
-                      *({**item, "pytanie": item.get("pytanie", ""), "note": item["prompt"]}
+                      *({**item, "pytanie": parse_finding(item).lens, "note": item["prompt"]}
                         for item in replan if fix)]}
