@@ -1,5 +1,156 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, TypeAlias
+
+
+@dataclass(frozen=True)
+class Run:
+    state: dict = field(default_factory=dict)
+    diff_hash: str | None = None
+    no_progress: bool = False
+
+    @classmethod
+    def from_state(cls, state: dict) -> Run:
+        return cls(dict(state), state.get("diff_fingerprint"))
+
+
+@dataclass(frozen=True)
+class Updated:
+    ts: float
+    fields: dict = field(default_factory=dict)
+    outcome: dict = field(default_factory=dict)
+    plan_branch: bool = False
+    raw: dict | None = field(default=None, kw_only=True, repr=False, compare=False)
+
+
+@dataclass(frozen=True)
+class Planned(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Synthesized(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Built(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Checked(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Merged(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Conflict(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Failed(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Retried(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class FixToBuild(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Published(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Fixed(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class RedMain(Updated):
+    pass
+
+
+@dataclass(frozen=True)
+class Progress(Updated):
+    pass
+
+
+Event: TypeAlias = Planned | Synthesized | Built | Checked | Merged | Conflict | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Updated
+
+
+def parse_event(raw: dict) -> Event:
+    variants: dict[str, type[Updated]] = {
+        "needs_help": Failed, "replan": Planned, "build_complete": Built,
+        "retry_succeeded": Retried, "fix_to_build": FixToBuild, "synthesis": Synthesized,
+        "published": Published, "verdict": Checked, "fix_complete": Fixed,
+        "merge_complete": Merged, "red_main": RedMain,
+    }
+    action = raw.get("action")
+    if action is not None and action not in variants:
+        raise ValueError(f"unknown transition action: {action}")
+    variant = variants[action] if action is not None else Updated
+    return variant(raw["ts"], dict(raw["fields"]), dict(raw.get("outcome") or {}),
+                   bool(raw.get("plan_branch")), raw=dict(raw))
+
+
+def event_record(event: Event) -> dict:
+    if event.raw is not None:
+        return event.raw
+    actions = {
+        Planned: "replan", Synthesized: "synthesis", Built: "build_complete",
+        Checked: "verdict", Conflict: "verdict", Merged: "merge_complete",
+        Failed: "needs_help", Retried: "retry_succeeded", FixToBuild: "fix_to_build",
+        Published: "published", Fixed: "fix_complete", RedMain: "red_main",
+    }
+    raw = {"ts": event.ts, "fields": event.fields}
+    if type(event) in actions:
+        raw.update(action=actions[type(event)], outcome=event.outcome)
+    elif type(event) is not Updated:
+        raise ValueError("event is not a persisted transition")
+    if event.plan_branch:
+        raw["plan_branch"] = True
+    return raw
+
+
+@dataclass(frozen=True)
+class RepoSnapshot:
+    name: str
+    last_attempt: float = 0
+    status: dict = field(default_factory=dict)
+    prs: tuple[dict, ...] | None = None
+    issues: tuple[dict, ...] | None = None
+    states: dict[int, dict] = field(default_factory=dict)
+    open_prs: frozenset[int] = frozenset()
+    busy: bool = False
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    repos: tuple[RepoSnapshot, ...]
+    now: float
+    only_issue: int | None = None
+
+
+@dataclass(frozen=True)
+class Pick:
+    repo: str
+    issue: int
+    kind: Literal["red_main", "prs", "issues", "pr", "issue"]
+    target: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

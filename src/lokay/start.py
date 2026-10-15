@@ -12,7 +12,9 @@ import time
 from functools import wraps
 from pathlib import Path
 
-from lokay import store
+from lokay import graph, store
+from dataclasses import replace
+from lokay.types import Run, Progress, Snapshot, RepoSnapshot
 from lokay.effects.git import command
 
 from lokay.types import Finding, Note, parse_finding
@@ -22,67 +24,6 @@ from lokay.lock import acquire, release
 from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
                        process_groups, retry_sleep, run_process, tick_deadline)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
-
-
-def step(state: dict, event: dict) -> dict:
-    current = dict(state)
-    fields = dict(event["fields"])
-    action = event.get("action")
-    outcome = event.get("outcome") or {}
-    if action == "needs_help":
-        reason = outcome["reason"]
-        failures = current.get("failures", 0) + 1
-        transient = bool(re.search(
-            r"timeout|timed out|connection|could not resolve host|network|HTTP 5\d\d|host probe",
-            reason, re.IGNORECASE))
-        to_plan = not event.get("plan_branch") and not transient and (
-            current.get("last_error") == reason or reason.startswith("fix_code"))
-        delay = min(3600, 60 * 2 ** min(failures - 1, 6)) if transient else 0
-        fields.update(node="plan" if to_plan else current.get("node") or "check",
-                      result="failed", reason=reason, last_error=None if to_plan else reason,
-                      failures=failures, retry_at=event["ts"] + delay if delay else 0)
-        if to_plan:
-            fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
-                          plan_evaluations=0, plan_accepted_sha=None)
-    elif action == "replan" or (action == "build_complete" and outcome.get("result") == "failed"):
-        fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                      plan_evaluations=0, plan_accepted_sha=None)
-        if action == "build_complete":
-            fields.update(result="failed", reason=outcome.get("reason") or "build failed",
-                          failures=current.get("failures", 0) + 1, retry_at=0)
-    elif action == "retry_succeeded":
-        fields.update(failures=0, retry_at=0, reason=None)
-    elif action == "build_complete" and outcome.get("result") == "done":
-        fields.update(failures=0, reason=None, retry_at=0, build_note=None, previous_head=None,
-                      pi_response=outcome.get("pi_response") or "")
-    elif action == "fix_to_build":
-        fields.update(node="build", result="running", reason=None, failures=0, retry_at=0)
-    elif action == "synthesis" and outcome.get("next") == "ok":
-        fields.update(node="build", plan_phase=None, plan_prompt=None)
-    elif action == "published" and outcome.get("result") == "pr_open":
-        fields.update(node="check", verdict=None)
-    elif action == "verdict":
-        fields["node"] = outcome["result"]
-        if outcome["result"] == "plan":
-            fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
-                          plan_evaluations=0, plan_accepted_sha=None)
-    elif action == "fix_complete":
-        fields.update(node="check", verdict=None)
-    elif action == "merge_complete":
-        fields["result"] = outcome["result"]
-    elif action == "red_main":
-        fields.update(node=current.get("node") or ("check" if outcome.get("pr") else "plan"),
-                      result="running", reason=None, retry_at=0)
-    if "node" in fields and (fields["node"] != current.get("node") or "node_since" not in current):
-        current["node_since"] = event["ts"]
-    if fields.get("last_attempt") and not current.get("issue_since"):
-        current["issue_since"] = event["ts"]
-    if fields.get("result") == "merged":
-        current["issue_since"] = None
-    current.update(fields)
-    if fields.get("failures") == 0 and "result" not in fields and current.get("result") == "failed":
-        current["result"] = "running"
-    return current
 
 
 class RetryLater(RuntimeError):
@@ -124,20 +65,6 @@ def guarded_step(step):
         reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
         return needs_help(picked, reason)
     return guarded
-
-
-def is_task(issue: dict) -> bool:
-    # Epics and trackers group tasks; lokay-stalled is an alarm, not a task.
-    title = issue["title"].strip().lower()
-    return not (
-        title.startswith(("epic", "[tracker]", "tracker"))
-        or title == "lokay-stalled"
-        or any(
-            (label.get("name", "") if isinstance(label, dict) else label).lower()
-            in ("tracker", "epic")
-            for label in issue.get("labels") or []
-        )
-    )
 
 
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -206,122 +133,100 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     "last_error": saved.get("reason") or saved.get("last_error")}
         return {"result": "idle", "reason": "no_work"}
 
-    def choose(repo):
-        has_prs = False
-        for turn in ("pr", "issue"):
-            if turn == "issue" and has_prs:
-                break
-            check_deadline()
-            name = repo["name"]
-            if turn == "pr":
-                code, out, err = _gh([
-                    "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                    "--json", "number,headRefName,headRefOid",
-                ])
-                if code != 0:
-                    raise RuntimeError(err.strip() or "pr list failed")
-                prs = [row for row in json.loads(out or "[]") if row["headRefName"].startswith("lokay/")]
-                has_prs = has_prs or bool(prs)
-                prs = [row for row in prs if row["headRefName"][6:].isdecimal()
-                       and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
-                ready = []
-                for row in prs:
-                    number = int(row["headRefName"][6:])
-                    saved = state_read(name, number)
-                    if saved.get("retry_at", 0) > time.time():
-                        blocked.append((name, number, saved))
-                    else:
-                        ready.append(row)
-                if not ready:
-                    continue
-            if turn == "pr":
-                target = min(ready, key=lambda row: (
-                    state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
-                number = int(target["headRefName"][6:])
-            else:
-                issues = [row for row in open_issues(name) if is_task(row)
-                          and (only_issue is None or int(row["number"]) == only_issue)]
-                target = next((row for row in issues
-                               if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
-                               and open_pr_for(name, f"lokay/{row['number']}") is None), None)
-                if target is None:
-                    for row in issues:
-                        saved = state_read(name, row["number"])
-                        if saved.get("failures", 0):
-                            blocked.append((name, row["number"], saved))
-                    continue
-                number = target["number"]
-            held = acquire(name.split("/")[0], f"{name}/wt-{number}")
-            if held["result"] != "held":
-                if turn == "pr":
-                    blocked.extend((name, int(row["headRefName"][6:]),
-                                    state_read(name, int(row["headRefName"][6:]))) for row in ready)
-                continue
-            chosen = None
-            try:
-                repo_attempt(name, time.time())
-                if turn == "pr":
-                    pr = target
-                    issue = int(pr["headRefName"][6:])
-                    saved_node = state_read(name, issue).get("node")
-                    node = saved_node if saved_node in ("plan", "build", "check", "fix", "merge") else "check"
-                    state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
-                                 result="running", reason=None, last_attempt=time.time())
-                    chosen = {"result": "picked", "repo": name, "issue": issue,
-                              "node": node, "pr": pr["number"], "held": held}
-                    return chosen
-                issue = target
-                saved = state_read(name, issue["number"])
-                branch = f"lokay/{issue['number']}"
-                chosen = {
-                    "result": "picked",
-                    "repo": name,
-                    "issue": issue["number"],
-                    "node": saved.get("node") or "plan",
-                    "pr": None,
-                    "held": held,
-                }
-                state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"],
-                             result="running", reason=None, last_attempt=time.time())
-            except BaseException:
-                chosen = None
-                raise
-            finally:
-                if chosen is None:
-                    release(held)
-            return chosen
-        return None
-
     from lokay.store import main_status
 
     statuses = main_status()
-    for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
+    snapshot = Snapshot(tuple(RepoSnapshot(repo["name"], repo_last_attempt(repo["name"]),
+                                           statuses.get(repo["name"], {})) for repo in repos),
+                        time.time(), only_issue)
+    while True:
         check_deadline()
-        name = repo["name"]
-        status = statuses.get(name, {})
-        number = status.get("issue")
-        if status.get("status") != "red" or not number or (only_issue is not None and only_issue != number):
-            chosen = choose(repo)
-            if chosen is not None:
-                return chosen
-            continue
-        held = acquire(name.split("/")[0], f"{name}/wt-{number}")
-        if held["result"] != "held":
-            continue
-        try:
-            repo_attempt(name, time.time())
-            branch = f"lokay/{number}"
-            pr = open_pr_for(name, branch)
-            saved = state_read(name, number)
-            node = saved.get("node") or ("check" if pr else "plan")
-            state_update(name, number, _event={"action": "red_main", "outcome": {"pr": pr, "status": status}},
-                         branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
-            return {"result": "picked", "repo": name, "issue": number, "node": node,
-                    "pr": pr["number"] if pr else None, "held": held}
-        except BaseException:
-            release(held)
-            raise
-    return idle()
+        snapshot = replace(snapshot, now=time.time())
+        selected = graph.pick(snapshot)
+        if selected is None:
+            return idle()
+        name, number = selected.repo, selected.issue
+        repo = next(row for row in snapshot.repos if row.name == name)
+        if selected.kind == "prs":
+            code, out, err = _gh([
+                "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
+                "--json", "number,headRefName,headRefOid",
+            ])
+            if code != 0:
+                raise RuntimeError(err.strip() or "pr list failed")
+            prs = tuple(json.loads(out or "[]"))
+            states = {}
+            for row in prs:
+                branch = row["headRefName"]
+                if not branch.startswith("lokay/") or not branch[6:].isdecimal():
+                    continue
+                issue = int(branch[6:])
+                if only_issue is not None and issue != only_issue:
+                    continue
+                saved = states[issue] = state_read(name, issue)
+                if saved.get("retry_at", 0) > time.time():
+                    blocked.append((name, issue, saved))
+            repo = replace(repo, prs=prs, states=states)
+        elif selected.kind == "issues":
+            issues = tuple(row for row in open_issues(name) if graph.is_task(row)
+                           and (only_issue is None or int(row["number"]) == only_issue))
+            states = {}
+            open_prs = set()
+            for row in issues:
+                issue = row["number"]
+                saved = states[issue] = state_read(name, issue)
+                if saved.get("retry_at", 0) > time.time():
+                    open_prs.add(issue)
+                    continue
+                if open_pr_for(name, f"lokay/{issue}") is None:
+                    break
+                open_prs.add(issue)
+            else:
+                for row in issues:
+                    saved = state_read(name, row["number"])
+                    if saved.get("failures", 0):
+                        blocked.append((name, row["number"], saved))
+            repo = replace(repo, issues=issues[:len(states)], states=states, open_prs=frozenset(open_prs))
+        else:
+            held = acquire(name.split("/")[0], f"{name}/wt-{number}")
+            if held["result"] != "held":
+                if selected.kind == "pr":
+                    blocked.extend((name, int(row["headRefName"][6:]),
+                                    state_read(name, int(row["headRefName"][6:])))
+                                   for row in repo.prs or ()
+                                   if row["headRefName"].startswith("lokay/")
+                                   and row["headRefName"][6:].isdecimal()
+                                   and (only_issue is None or int(row["headRefName"][6:]) == only_issue)
+                                   and repo.states[int(row["headRefName"][6:])].get("retry_at", 0) <= snapshot.now)
+                repo = replace(repo, busy=True)
+            else:
+                try:
+                    repo_attempt(name, time.time())
+                    branch = f"lokay/{number}"
+                    if selected.kind == "red_main":
+                        pr = open_pr_for(name, branch)
+                        saved = state_read(name, number)
+                        node = saved.get("node") or ("check" if pr else "plan")
+                        state_update(name, number,
+                                     _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
+                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
+                    else:
+                        pr = selected.target if selected.kind == "pr" else None
+                        saved = state_read(name, number)
+                        node = saved.get("node")
+                        if pr:
+                            branch = pr["headRefName"]
+                            node = node if node in ("plan", "build", "check", "fix", "merge") else "check"
+                        else:
+                            node = node or "plan"
+                        state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
+                                     result="running", reason=None, last_attempt=time.time())
+                    return {"result": "picked", "repo": name, "issue": number, "node": node,
+                            "pr": pr["number"] if pr else None, "held": held}
+                except BaseException:
+                    release(held)
+                    raise
+        snapshot = replace(snapshot, repos=tuple(repo if row.name == name else row for row in snapshot.repos))
 
 
 def refresh_body(repo: str, issue: int) -> dict:
@@ -1053,10 +958,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             rounds_append(picked["repo"], picked["issue"],
                           f"Fix progress: findings={fingerprint}, hunk={hunk_fingerprint}, "
                           f"diff={diff_fingerprint}, counts={counts}")
-            stalled = (saved.get("diff_fingerprint") == diff_fingerprint
-                       or (saved.get("fix_fingerprint") == fingerprint
-                           and saved.get("fix_hunk_fingerprint") == hunk_fingerprint)
-                       or (len(counts) == 3 and min(counts[1:]) >= counts[0]))
+            stalled = graph.step(Run.from_state(saved), Progress(0, outcome={
+                "diff_hash": diff_fingerprint, "fingerprint": fingerprint,
+                "hunk_fingerprint": hunk_fingerprint, "counts": counts,
+            })).no_progress
             test_log = (saved.get("test_log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
             ci = saved.get("local_ci") or {}
