@@ -38,7 +38,9 @@ def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: 
 
 
 def ci_green(x: CheckInput) -> CheckResult:
-    if x.ci.get("ci") in (None, "no_ci", "pending") and x.ci.get("sha") == x.sha:
+    if x.ci.get("ci") == "no_ci" and x.ci.get("sha") == x.sha:
+        return CheckResult("ci_green", "pass", "not applicable: no CI configured", ())
+    if x.ci.get("ci") in (None, "pending") and x.ci.get("sha") == x.sha:
         return CheckResult("ci_green", "unknown", f"GitHub CI {x.ci.get('ci')}: no completed check runs", ())
     passed = x.ci.get("sha") == x.sha and x.ci.get("ci") == "green"
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") == "GitHub CI"]
@@ -158,8 +160,7 @@ CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", "lockfile", "secre
 
 
 def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
-    failed = tuple(result for result in results if result.status != "pass" and not (
-        result.status == "unknown" and result.name == "ci_green" and ci is not None and ci.get("ci") == "no_ci"))
+    failed = tuple(result for result in results if result.status != "pass")
     return {"result": "fix" if failed else "merge", "checks": results, "failed": failed}
 
 
