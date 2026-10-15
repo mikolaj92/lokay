@@ -15,6 +15,7 @@ def pi_step(
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float = 3600,
+    pi_idle_retry: bool = True,
 ) -> dict[str, str]:
     worktree = cwd if cwd is not None else Path.cwd()
     child = pi_env(os.environ if env is None else env, worktree)
@@ -27,6 +28,7 @@ def pi_step(
         cwd=cwd,
         env=child,
         timeout=timeout,
+        pi_idle_retry=pi_idle_retry,
     )
     if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
         return {"result": "failed", "artifact": ""}

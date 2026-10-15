@@ -178,19 +178,20 @@ def run_process(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     input: str | None = None,
+    pi_idle_retry: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     from lokay.state import log_event
 
     command = next((index for index, arg in enumerate(argv)
                     if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
     if command is None:
-        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
     call = Path(argv[command]).name
     started = time.monotonic()
     output = None
     ok = False
     try:
-        proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
         if pi_command(argv) is not None:
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
@@ -212,6 +213,7 @@ def _run_process(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     input: str | None = None,
+    pi_idle_retry: bool = True,
 ) -> subprocess.CompletedProcess[str]:
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
@@ -222,7 +224,7 @@ def _run_process(
     if remaining is not None and remaining <= 0:
         raise TickExpired()
     if pi_command(argv) is not None:
-        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, pi_idle_retry=pi_idle_retry)
     blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
     process = None
     try:
@@ -290,6 +292,7 @@ def _run_pi_process(
     env: Mapping[str, str] | None,
     timeout: float,
     input: str | None,
+    pi_idle_retry: bool,
 ) -> subprocess.CompletedProcess[str]:
     from lokay.state import log_event
 
@@ -380,6 +383,9 @@ def _run_pi_process(
                                 output[key.data].extend(chunk)
                         if now >= expires:
                             expired()
+                        if not pi_idle_retry:
+                            raise subprocess.TimeoutExpired(
+                                argv, PI_IDLE_SECONDS, output=collected("stdout"), stderr=collected("stderr"))
                         log_event("call", call="pi", name="pi idle-retry",
                                   input={"argv": argv[command:], "stdin": input},
                                   output={"stdout": collected("stdout"), "stderr": collected("stderr"),

@@ -50,7 +50,8 @@ def valid_plan(path: Path) -> bool:
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
     artifact.unlink(missing_ok=True)
-    payload = pi_step(prompt + f"\nWrite the plan only to {artifact}.\n", artifact, cwd=cwd, env=env)
+    payload = pi_step(prompt + f"\nWrite the plan only to {artifact}.\n", artifact,
+                      cwd=cwd, env=env, pi_idle_retry=False)
     if payload["result"] == "done" and not valid_plan(artifact):
         return {"result": "failed", "artifact": ""}
     return payload
@@ -149,7 +150,7 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
         prompt += f"\n\nAccepted branch: {perspective}\n{path.read_text()}"
     prompt += f"\nWrite JSON only to {artifact}. Do not write plan.md.\n"
     artifact.unlink(missing_ok=True)
-    payload = pi_step(prompt, artifact)
+    payload = pi_step(prompt, artifact, pi_idle_retry=False)
     if payload["result"] != "done":
         return payload
     try:
