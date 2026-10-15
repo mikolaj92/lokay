@@ -57,13 +57,22 @@ def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dic
     return payload
 
 
-def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = None, phase: str = "write", on_written=None) -> dict:
+def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = None, phase: str = "write", on_written=None, single: bool = False) -> dict:
     from lokay.effects.decide import decide
 
     if perspective not in PERSPECTIVES:
         raise ValueError("unknown plan perspective")
     if phase == "write" or not valid_plan(art):
         prompt += "\n" + (PROMPTS / f"plan_perspective_{perspective}.md").read_text()
+        if single:
+            prompt += (
+                "\nWrite the final plan directly as Markdown in exactly this structure and order:\n"
+                "## Cel\nOutcome text\n\n### Kryteria\n- Criterion [źródła: minimal]\n\n"
+                "### Kroki\n- Step [źródła: minimal]\n\n## Pliki\n- path: change [źródła: minimal]\n\n"
+                "## Testy\n- Check [źródła: minimal]\n\n## Poza zakresem\n- Exclusion [źródła: minimal]\n\n"
+                "### Odrzucone\n- Rejected proposal [minimal]: reason\n"
+                "Replace placeholders with concrete content; leave Odrzucone empty if nothing was rejected.\n"
+            )
         prompt += "\nThe current directory is a read-only checkout of the repository at main, to be read but not modified.\n"
         written = plan_write(prompt, art, cwd=cwd)
         if written["result"] != "done":

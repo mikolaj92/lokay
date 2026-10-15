@@ -235,7 +235,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         node = saved.get("node") or ("check" if pr else "plan")
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
-                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
+                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time(),
+                                     **({"plan_mode": "single"} if not saved else {}))
                     else:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
@@ -246,7 +247,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         else:
                             node = node or "plan"
                         state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
-                                     result="running", reason=None, last_attempt=time.time())
+                                     result="running", reason=None, last_attempt=time.time(),
+                                     **({"plan_mode": "single"} if not saved else {}))
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -428,6 +430,30 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         branches = saved.get("plan_branches") or {}
         synthesis = saved.get("plan_synthesis") or {}
         rounds = saved.get("plan_rounds", 0)
+        if saved.get("plan_mode", "full") == "single":
+            phase = saved.get("plan_phase") or "write"
+            state_update(repo, issue, node="plan", plan_phase=phase, plan_prompt=context)
+
+            def single_written():
+                nonlocal rounds, phase
+                rounds += 1
+                phase = "check"
+                state_update(repo, issue, plan_phase=phase, plan_rounds=rounds)
+                rounds_append(repo, issue, f"Plan single {rounds}: write")
+
+            outcome = _retry(picked, "plan", lambda: plan.plan_one(
+                "minimal", context, art, cwd=cwd, phase=phase,
+                on_written=single_written, single=True), "done", plan_branch=True)
+            rounds_append(repo, issue, f"Plan single {rounds}: Decision {outcome['next']}")
+            if outcome["next"] == "ok":
+                state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
+                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                             plan_notes=outcome.get("notes", []))
+                return rounds
+            prompt = replan_prompt(picked, "Single plan rejected", outcome["uwagi"])
+            state_update(repo, issue, plan_mode="full", plan_phase="write", plan_prompt=prompt,
+                         plan_branches={}, plan_synthesis={}, plan_accepted_sha=None, plan_notes=[])
+            continue
         paths = {}
         for perspective in plan.PERSPECTIVES:
             branch_art = art.parent / "plans" / f"{perspective}.md"
