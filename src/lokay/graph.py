@@ -86,19 +86,20 @@ def step(run: Run, event: Event) -> Run:
 
 
 def pick(snapshot: Snapshot) -> Pick | None:
-    pending = [(state.get("last_attempt", 0), repo.name, issue, repo)
+    pending = [(state.get("result") != "pending", state.get("last_attempt", 0), repo.name, issue, repo)
                for repo in snapshot.repos if not repo.busy
                for issue, state in repo.states.items()
-               if state.get("result") == "pending"
-               and (state.get("node") == "check"
-                    or (state.get("node") == "build"
-                        and any(row.get("name") == "ci_green"
-                                and (row.get("pass") is False or row.get("status") == "fail")
-                                for row in (state.get("verdict") or {}).get("checks", []))))
-               and state.get("last_attempt", 0) <= snapshot.now - 300
+               if (state.get("result") == "failed"
+                   or (state.get("result") == "pending"
+                       and (state.get("node") == "check"
+                            or (state.get("node") == "build"
+                                and any(row.get("name") == "ci_green"
+                                        and (row.get("pass") is False or row.get("status") == "fail")
+                                        for row in (state.get("verdict") or {}).get("checks", []))))
+                       and state.get("last_attempt", 0) <= snapshot.now - 300))
                and (snapshot.only_issue is None or snapshot.only_issue == issue)
                and state.get("retry_at", 0) <= snapshot.now]
-    for _, _, issue, repo in sorted(pending, key=lambda row: row[:3]):
+    for _, _, _, issue, repo in sorted(pending, key=lambda row: row[:4]):
         if repo.prs is None:
             return Pick(repo.name, 0, "prs")
         target = next((row for row in repo.prs if row["headRefName"] == f"lokay/{issue}"), None)
