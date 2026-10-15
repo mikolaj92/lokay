@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -106,4 +109,22 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
 
 
 def emit(payload: dict) -> None:
-    print(json.dumps(payload, separators=(",", ":")))
+    print(dumps(payload, separators=(",", ":")))
+
+
+def command(repo: Path, args: list[str], *, timeout: float = 30):
+    return run_process(["git", *args], cwd=repo, timeout=timeout)
+
+
+def guarded_command(path: Path, *args: str, input: bytes | None = None) -> bytes:
+    return subprocess.run(
+        ["git", "--literal-pathspecs", "-C", str(path), *args], input=input,
+        capture_output=True, check=True, timeout=60,
+    ).stdout
+
+
+def path_at_head(path: Path, head: str, name: str) -> bool:
+    return subprocess.run(
+        ["git", "-C", str(path), "cat-file", "-e", f"{head}:{name}"],
+        capture_output=True, timeout=60,
+    ).returncode == 0

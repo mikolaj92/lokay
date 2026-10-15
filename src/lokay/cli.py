@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import argparse
 import sys
 
@@ -114,10 +116,10 @@ def main(argv: list[str] | None = None) -> int:
                         expected = {key: value for key, value in row["after"].items() if key != "updated_at"}
                         if got != expected:
                             print(f"replay: mismatch seq={row.get('seq')} node={row.get('node')} "
-                                  f"event={json.dumps(row['event'], ensure_ascii=False)}", file=sys.stderr)
+                                  f"event={dumps(row['event'], ensure_ascii=False)}", file=sys.stderr)
                             print("\n".join(difflib.unified_diff(
-                                json.dumps(expected, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
-                                json.dumps(got, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
+                                dumps(expected, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
+                                dumps(got, sort_keys=True, indent=2, ensure_ascii=False).splitlines(),
                                 fromfile="expected", tofile="got", lineterm="")), file=sys.stderr)
                             return 1
                         count += 1
@@ -136,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         import json
         from lokay.observe import monitor
 
-        print(json.dumps(monitor()))
+        print(dumps(monitor()))
         return 0
     if args.node == "start":
         from lokay.start import main as start_main

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from lokay import store
+
 from lokay.decide import DecisionError, from_wire
 from lokay.pi_step import pi_step
 from lokay.safety import untrusted_issue_block
@@ -49,7 +51,7 @@ def valid_plan(path: Path) -> bool:
 
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
-    artifact.unlink(missing_ok=True)
+    store.remove_file(artifact)
     payload = pi_step(prompt + f"\nWrite the plan only to {artifact}.\n", artifact, cwd=cwd, env=env)
     if payload["result"] == "done" and not valid_plan(artifact):
         return {"result": "failed", "artifact": ""}
@@ -148,7 +150,7 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
             raise ValueError("unknown synthesis input")
         prompt += f"\n\nAccepted branch: {perspective}\n{path.read_text()}"
     prompt += f"\nWrite JSON only to {artifact}. Do not write plan.md.\n"
-    artifact.unlink(missing_ok=True)
+    store.remove_file(artifact)
     payload = pi_step(prompt, artifact)
     if payload["result"] != "done":
         return payload
@@ -156,7 +158,7 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path) -> dict:
         data = validate_synthesis(json.loads(artifact.read_text()), set(paths))
     except (ValueError, OSError) as exc:
         return {"result": "failed", "reason": f"invalid synthesis: {exc}"}
-    art.write_text(render_synthesis(data))
+    store.write_artifact(art, render_synthesis(data))
     return {"result": "done", "artifact": str(art)}
 
 

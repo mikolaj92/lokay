@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from json import dumps
+
 import json
 import os
 import re
 from pathlib import Path
+
+from lokay import store
 
 from lokay.decide import DecisionError, from_wire
 from lokay.types import Finding, parse_finding
@@ -101,11 +105,11 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
 
 
 def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **state) -> dict:
-    directory.mkdir(parents=True, exist_ok=True)
+    store.ensure_directory(directory)
     patch = directory / f"check-{round}-diff.patch"
     log = directory / f"check-{round}-test.log"
-    patch.write_text(diff)
-    log.write_text(ci["log"])
+    store.write_artifact(patch, diff)
+    store.write_artifact(log, ci["log"])
     return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
             "test_log_path": str(log), "test_result": ci["result"],
             "tested": ci.get("tested", False), "ci": ci.get("ci"),
@@ -181,11 +185,11 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
             top = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)[:3]
             change = answers["change"]["choice"]
             if state.get("repo") and state.get("issue") is not None:
-                from lokay.state import rounds_append
+                from lokay.store import rounds_append
 
                 rounds_append(state["repo"], state["issue"],
                               f"Check follow-up {kind}: chosen={chosen}, p={p}, none={none}, "
-                              f"top-3={json.dumps(top)}, change={change}, "
+                              f"top-3={dumps(top)}, change={change}, "
                               f"change_p={answers['change']['probabilities'][change]}")
             if (chosen != "none" and p == max(probabilities.values())
                     and p >= 2 * none):
@@ -223,7 +227,7 @@ def _decision_batches(rows, request, decide_request, api, model):
         try:
             internal = request(candidate)
             wire = review_wire(internal)
-            fits = (len(json.dumps(wire)) < limit
+            fits = (len(dumps(wire)) < limit
                     and wire.get("state", wire.get("input")) == internal["state"])
         except DecisionError:
             fits = False

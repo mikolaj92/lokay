@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from json import dumps
+
 import hashlib
 import json
 import os
@@ -10,13 +12,16 @@ import time
 from functools import wraps
 from pathlib import Path
 
+from lokay import store
+from lokay.git import command
+
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, tick_budget
-from lokay.gh import _gh, gh_bin, open_issues, open_pr_for
+from lokay.gh import _gh, auth_status, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.run import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
                        process_groups, retry_sleep, run_process, tick_deadline)
-from lokay.state import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
+from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
 def step(state: dict, event: dict) -> dict:
@@ -169,7 +174,7 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     out["decision"] = "ok" if api == "mini" or child.get("LOKAY2_DECISION_MODEL") else "fail"
     out["pi"] = "ok" if shutil.which("pi", path=child.get("PATH")) else "fail"
     try:
-        gh = run_process([gh_bin(), "auth", "status"], env=child, timeout=15)
+        gh = auth_status(child)
         out["gh"] = "ok" if gh.returncode == 0 else "fail"
     except Exception:
         out["gh"] = "fail"
@@ -287,7 +292,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             return chosen
         return None
 
-    from lokay.state import main_status
+    from lokay.store import main_status
 
     statuses = main_status()
     for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
@@ -354,13 +359,13 @@ def main(argv: list[str] | None = None) -> int:
     if args and args[0] == "refresh-body":
         if len(args) != 3 or not args[2].isdigit() or int(args[2]) < 1:
             raise ValueError("usage: lokay refresh-body <repo> <issue>")
-        print(json.dumps(refresh_body(args[1], int(args[2])), separators=(",", ":")))
+        print(dumps(refresh_body(args[1], int(args[2])), separators=(",", ":")))
         return 0
     if "--check" in args:
         report = probes()
-        print(json.dumps(report, separators=(",", ":")))
+        print(dumps(report, separators=(",", ":")))
         return 0 if host_ready(report) else 1
-    from lokay.state import log_event
+    from lokay.store import log_event
 
     def shutdown(signum, frame):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
@@ -398,11 +403,11 @@ def _tick() -> int:
         print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return 0
     try:
-        print(json.dumps({k: v for k, v in outcome.items() if k != "held"}, separators=(",", ":")))
+        print(dumps({k: v for k, v in outcome.items() if k != "held"}, separators=(",", ":")))
         if outcome.get("node") in ("plan", "build"):
-            print(json.dumps(advance(outcome), separators=(",", ":")))
+            print(dumps(advance(outcome), separators=(",", ":")))
         elif outcome.get("node") in ("check", "fix", "merge"):
-            print(json.dumps(resume(outcome), separators=(",", ":")))
+            print(dumps(resume(outcome), separators=(",", ":")))
     finally:
         release(outcome["held"])
     return 0
@@ -459,10 +464,10 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     rounds = directory / "rounds.md"
     prompt = prompt_for(saved.get("issue_title") or "", saved.get("issue_body")) + (
         "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
-        + "\n\nUwagi:\n" + json.dumps(history, ensure_ascii=False)
-        + "\n\nLast state:\n" + json.dumps({key: value for key, value in saved.items()
+        + "\n\nUwagi:\n" + dumps(history, ensure_ascii=False)
+        + "\n\nLast state:\n" + dumps({key: value for key, value in saved.items()
                                      if key not in ("plan_prompt", "plan_branches", "plan_synthesis")}, ensure_ascii=False)
-        + "\n\nFix history:\n" + json.dumps(saved.get("fix_history", []), ensure_ascii=False)
+        + "\n\nFix history:\n" + dumps(saved.get("fix_history", []), ensure_ascii=False)
         + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
         + "\n\n" + reason + "\n"
     )
@@ -486,7 +491,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
     from lokay.decide import decide
 
     repo, issue = picked["repo"], picked["issue"]
-    art.parent.mkdir(parents=True, exist_ok=True)
+    store.ensure_directory(art.parent)
     while True:
         saved = state_read(repo, issue)
         context = saved.get("plan_prompt") or plan.prompt_for(title, body)
@@ -496,7 +501,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
         paths = {}
         for perspective in plan.PERSPECTIVES:
             branch_art = art.parent / "plans" / f"{perspective}.md"
-            branch_art.parent.mkdir(parents=True, exist_ok=True)
+            store.ensure_directory(branch_art.parent)
             branch = branches.setdefault(perspective, {
                 "phase": "write", "rounds": 0, "accepted_sha": None,
                 "prompt": context, "fingerprint": None,
@@ -535,10 +540,10 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
                     paths[perspective] = branch_art
                     state_update(repo, issue, plan_branches=branches)
                     break
-                fingerprint = hashlib.sha256(json.dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
+                fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
                 branch.update(phase="write", fingerprint=fingerprint,
                               prompt=context + "\n\nPrevious branch plan:\n" + branch_art.read_text()
-                              + "\n\nUwagi:\n" + json.dumps(outcome["uwagi"], ensure_ascii=False))
+                              + "\n\nUwagi:\n" + dumps(outcome["uwagi"], ensure_ascii=False))
                 state_update(repo, issue, plan_branches=branches)
                 retry_sleep(20)
         if not paths:
@@ -555,8 +560,8 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
             check_deadline()
             if synthesis["phase"] == "write" or not plan.valid_plan(art):
                 failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
-                prompt = context + "\n\nFailed branches:\n" + json.dumps(failed, ensure_ascii=False)
-                prompt += "\n\nUwagi:\n" + json.dumps(synthesis["uwagi"], ensure_ascii=False)
+                prompt = context + "\n\nFailed branches:\n" + dumps(failed, ensure_ascii=False)
+                prompt += "\n\nUwagi:\n" + dumps(synthesis["uwagi"], ensure_ascii=False)
                 _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art), "done")
                 rounds += 1
                 synthesis.update(phase="check", rounds=synthesis["rounds"] + 1)
@@ -574,7 +579,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None) -> int:
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []))
                 return rounds
-            fingerprint = hashlib.sha256(json.dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
+            fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
             if synthesis["fingerprint"] == fingerprint:
                 prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
                 state_update(repo, issue, plan_branches={}, plan_synthesis={}, plan_prompt=prompt,
@@ -634,7 +639,7 @@ def _prepare(picked: dict) -> tuple | dict:
     saved = state_read(picked["repo"], picked["issue"])
     build_note = saved.get("build_note")
     if saved.get("plan_notes"):
-        build_note = (build_note or "") + "\n\nNon-blocking plan notes:\n" + json.dumps(saved["plan_notes"])
+        build_note = (build_note or "") + "\n\nNon-blocking plan notes:\n" + dumps(saved["plan_notes"])
     check_deadline()
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
                        clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
@@ -1011,7 +1016,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
                 state_update(picked["repo"], picked["issue"], sha=sha, verdict=None)
         def read_diff():
-            diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
+            diff = command(worktree, ["diff", "origin/main...HEAD"])
             if diff.returncode != 0:
                 raise RuntimeError(diff.stderr or "diff failed")
             return diff
@@ -1032,11 +1037,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                              result="check")
                 return {"result": "check", "sha": sha}
             findings = {
-                json.dumps([row["name"], row.get("location")] if "name" in row else
+                dumps([row["name"], row.get("location")] if "name" in row else
                            finding_fingerprint(row))
                 for row in uwagi
             }
-            fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
+            fingerprint = hashlib.sha256(dumps(sorted(findings)).encode()).hexdigest()
             # Hunk content is evidence independent of shifted line numbers.
             hunk_text = "\n".join(line for line in (diff.stdout or "").splitlines()
                                   if not line.startswith(("@@", "index ")))
@@ -1098,7 +1103,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                    "changes needed for CI to pass are in scope and must not be reverted."
                    if saved.get("ci") == "red" or (saved.get("local_ci") or {}).get("result") == "red"
                    else "")
-                + "\n\nUwagi:\n" + json.dumps(uwagi)
+                + "\n\nUwagi:\n" + dumps(uwagi)
                 + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
                 + "\n\nTest log:\n" + test_log
                 + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
@@ -1143,7 +1148,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                             probabilities = answer["probabilities"]
                             rounds_append(picked["repo"], picked["issue"],
                                           f"Dispute: {kind} {'upheld' if valid else 'rejected'} "
-                                          f"(p={json.dumps(probabilities)})")
+                                          f"(p={dumps(probabilities)})")
                             current = state_read(picked["repo"], picked["issue"])
                             check_history = current.get("check_history", [])
                             if check_history and check_history[-1]["sha"] == sha:
@@ -1168,12 +1173,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         if not upheld:
                             return {"result": "done", "dispute_rejected": True}
                         remaining = [row for row in uwagi if category(row) in upheld]
-                        retry_prompt = prompt.replace("\n\nUwagi:\n" + json.dumps(uwagi),
-                                                      "\n\nUwagi:\n" + json.dumps(remaining))
+                        retry_prompt = prompt.replace("\n\nUwagi:\n" + dumps(uwagi),
+                                                      "\n\nUwagi:\n" + dumps(remaining))
                         retry_prompt += "\n\nThe finding was upheld after your dispute. Reason to treat it as valid: "
-                        retry_prompt += json.dumps(upheld) + "; your dispute was: " + justification
+                        retry_prompt += dumps(upheld) + "; your dispute was: " + justification
                         retry_prompt += ". Make a concrete change.\nRemaining findings:\n"
-                        retry_prompt += json.dumps(remaining)
+                        retry_prompt += dumps(remaining)
                         outcome = fix_code(worktree, sha, retry_prompt, dict(os.environ), clone_path=clone_path)
                         state_update(picked["repo"], picked["issue"],
                                      pi_response=outcome.get("pi_response") or outcome.get("explanation") or "")
@@ -1241,7 +1246,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         ci = {**ci, "argv": list(tests)}
         state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
         if ci["notes"]:
-            rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
+            rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + dumps(ci["notes"]))
         if tests and not ci.get("baseline"):
             tested_cwds = set(ci.get("tested_cwds") or [])
             for row in rows:
@@ -1258,9 +1263,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(picked["repo"], picked["issue"], tested=ci.get("tested", False))
         log = ci["log"]
         directory = run_dir(picked["repo"], picked["issue"])
-        directory.mkdir(parents=True, exist_ok=True)
-        (directory / f"check-{rounds + 1}-diff.patch").write_text(diff.stdout or "")
-        (directory / f"check-{rounds + 1}-test.log").write_text(log)
+        store.ensure_directory(directory)
+        store.write_artifact(directory / f"check-{rounds + 1}-diff.patch", diff.stdout or "")
+        store.write_artifact(directory / f"check-{rounds + 1}-test.log", log)
         pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
         if not pr:
             raise RuntimeError("PR missing during Check")
@@ -1285,7 +1290,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
         def read_stat():
-            stat = run_process(["git", "diff", "--stat", "origin/main...HEAD"], cwd=worktree, timeout=30)
+            stat = command(worktree, ["diff", "--stat", "origin/main...HEAD"])
             if stat.returncode != 0:
                 raise RuntimeError(stat.stderr or "diff stat failed")
             return stat.stdout or ""
@@ -1306,7 +1311,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             decisions.append(decision)
             rounds_append(picked["repo"], picked["issue"],
                           f"Check lens {kind}, round={rounds + 1}: next={decision['next']}, "
-                          f"p={json.dumps(decision.get('probabilities', []))}")
+                          f"p={dumps(decision.get('probabilities', []))}")
         groups = {}
         for decision in decisions:
             for finding in decision["uwagi"]:
@@ -1327,7 +1332,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                           f"plik={file}, range={first}-{last}, zmiana={change}")
             import sys
 
-            print(json.dumps({"event": "check_degenerate_answer", "categories": categories,
+            print(dumps({"event": "check_degenerate_answer", "categories": categories,
                               "plik": file, "linia_od": first, "linia_do": last, "zmiana": change}),
                   file=sys.stderr, flush=True)
         dismissed = state_read(picked["repo"], picked["issue"]).get("dispute_dismissed") or {}
@@ -1380,7 +1385,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rounds_append(
             picked["repo"], picked["issue"],
             f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}, "
-            + "checks=" + json.dumps(verdict["checks"]),
+            + "checks=" + dumps(verdict["checks"]),
         )
         lens_notes = [parse_finding(note).lens for note in verdict.get("notes", []) if parse_finding(note).lens]
         if lens_notes:

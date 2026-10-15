@@ -2,13 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-import subprocess
-
-
-def _git(path: Path, *args: str, input: bytes | None = None) -> bytes:
-    return subprocess.run(
-        ["git", "--literal-pathspecs", "-C", str(path), *args], input=input, capture_output=True, check=True, timeout=60,
-    ).stdout
+from lokay.git import guarded_command as _git, path_at_head
 
 
 def _snapshot(path: Path) -> dict:
@@ -54,10 +48,7 @@ def restore_changes(snapshots: dict[Path, dict]) -> dict:
         else:
             # Do not reset a dirty checkout's HEAD. Restore only affected files.
             for name in sorted(files):
-                exists = subprocess.run(
-                    ["git", "-C", str(path), "cat-file", "-e", f"{before['head']}:{name}"],
-                    capture_output=True, timeout=60,
-                ).returncode == 0
+                exists = path_at_head(path, before["head"], name)
                 if exists:
                     _git(path, "checkout", before["head"], "--", name)
                 elif name.encode() in before["untracked"]:
