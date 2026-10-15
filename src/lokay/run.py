@@ -4,6 +4,7 @@ import json
 import math
 import shutil
 import os
+import selectors
 import signal
 import subprocess
 import tempfile
@@ -12,6 +13,8 @@ from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+
+PI_IDLE_SECONDS = 300
 
 process_groups: dict[int, subprocess.Popen | None] = {}
 
@@ -138,6 +141,28 @@ def retry_sleep(seconds: float) -> None:
     check_deadline()
 
 
+def pi_command(argv: Sequence[str]) -> int | None:
+    return next((index for index, arg in enumerate(argv)
+                 if Path(arg).name == "pi" and "-p" in argv[index + 1:]), None)
+
+
+def pi_assistant_text(stdout: str) -> str:
+    text = None
+    try:
+        for line in stdout.split("\n"):
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if event.get("type") != "message_end":
+                continue
+            message = event["message"]
+            if message.get("role") == "assistant":
+                text = "".join(block["text"] for block in message["content"] if block["type"] == "text")
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return stdout
+    return stdout if text is None else text
+
+
 def run_process(
     argv: Sequence[str],
     *,
@@ -158,6 +183,8 @@ def run_process(
     ok = False
     try:
         proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        if pi_command(argv) is not None:
+            proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
         ok = proc.returncode == 0
         return proc
@@ -178,7 +205,6 @@ def _run_process(
     timeout: float | None = None,
     input: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    # Even callers without a timeout cannot hold a tick indefinitely.
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("process timeout must be finite and positive")
@@ -187,6 +213,8 @@ def _run_process(
     remaining = None if deadline is None else deadline - time.monotonic()
     if remaining is not None and remaining <= 0:
         raise TickExpired()
+    if pi_command(argv) is not None:
+        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
     blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
     process = None
     try:
@@ -217,7 +245,6 @@ def _run_process(
                 process.wait(timeout=5)
             raise
     try:
-        # Process creation consumes the same tick budget as communication.
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
         tick_limited = remaining is not None and remaining <= timeout
         effective_timeout = timeout if remaining is None else min(timeout, remaining)
@@ -246,3 +273,134 @@ def _run_process(
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None:
                     stream.close()
+
+
+def _run_pi_process(
+    argv: Sequence[str],
+    *,
+    cwd: str | Path | None,
+    env: Mapping[str, str] | None,
+    timeout: float,
+    input: str | None,
+) -> subprocess.CompletedProcess[str]:
+    from lokay.state import log_event
+
+    argv = list(argv)
+    command = pi_command(argv)
+    assert command is not None
+    if "--mode" in argv[command + 1:]:
+        mode = argv.index("--mode", command + 1)
+        argv[mode + 1:mode + 2] = ["json"]
+    else:
+        prompt = argv.index("-p", command + 1)
+        argv[prompt + 1:prompt + 1] = ["--mode", "json"]
+    started = time.monotonic()
+    deadline = tick_deadline.get()
+    tick_limited = deadline is not None and deadline - started <= timeout
+    expires = started + timeout if deadline is None else min(started + timeout, deadline)
+    output = {"stdout": bytearray(), "stderr": bytearray()}
+
+    def collected(name: str) -> str:
+        return output[name].decode(errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+
+    def expired() -> None:
+        if tick_limited:
+            raise TickExpired()
+        raise subprocess.TimeoutExpired(argv, timeout, output=collected("stdout"), stderr=collected("stderr"))
+
+    while True:
+        if time.monotonic() >= expires:
+            expired()
+        attempt = time.monotonic()
+        process = None
+        blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+        try:
+            process = subprocess.Popen(
+                argv,
+                cwd=cwd,
+                env=None if env is None else dict(env),
+                stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+                preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
+            )
+            process_groups[process.pid] = process
+            save_process_groups()
+        except BaseException:
+            if process is not None:
+                kill_process_groups([process.pid])
+                process.wait(timeout=5)
+            raise
+        finally:
+            try:
+                signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
+            except BaseException:
+                if process is not None:
+                    kill_process_groups([process.pid])
+                    process.wait(timeout=5)
+                raise
+        try:
+            with selectors.DefaultSelector() as selector:
+                for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
+                    assert stream is not None
+                    os.set_blocking(stream.fileno(), False)
+                    selector.register(stream, selectors.EVENT_READ, name)
+                pending = memoryview(input.encode() if input is not None else b"")
+                if process.stdin is not None:
+                    if pending:
+                        os.set_blocking(process.stdin.fileno(), False)
+                        selector.register(process.stdin, selectors.EVENT_WRITE, "stdin")
+                    else:
+                        process.stdin.close()
+                last_output = time.monotonic()
+                while True:
+                    now = time.monotonic()
+                    if now >= expires or now - last_output >= PI_IDLE_SECONDS:
+                        kill_process_groups([process.pid])
+                        process.wait(timeout=5)
+                        for key in list(selector.get_map().values()):
+                            if key.data == "stdin":
+                                continue
+                            while True:
+                                try:
+                                    chunk = os.read(key.fd, 65536)
+                                except BlockingIOError:
+                                    break
+                                if not chunk:
+                                    break
+                                output[key.data].extend(chunk)
+                        if now >= expires:
+                            expired()
+                        log_event("call", call="pi", name="pi idle-retry",
+                                  input={"argv": argv[command:], "stdin": input},
+                                  output={"stdout": collected("stdout"), "stderr": collected("stderr"),
+                                          "returncode": process.returncode}, started=attempt, ok=False)
+                        break
+                    if not selector.get_map() and process.poll() is not None:
+                        return subprocess.CompletedProcess(argv, process.returncode, collected("stdout"), collected("stderr"))
+                    for key, _ in selector.select(min(0.1, expires - now, PI_IDLE_SECONDS - (now - last_output))):
+                        if key.data == "stdin":
+                            try:
+                                pending = pending[os.write(key.fd, pending[:65536]):]
+                            except BrokenPipeError:
+                                pending = memoryview(b"")
+                            if not pending:
+                                selector.unregister(key.fileobj)
+                                key.fileobj.close()
+                        else:
+                            chunk = os.read(key.fd, 65536)
+                            if chunk:
+                                output[key.data].extend(chunk)
+                                last_output = time.monotonic()
+                            else:
+                                selector.unregister(key.fileobj)
+        finally:
+            try:
+                if process.pid in process_groups:
+                    kill_process_groups([process.pid])
+                process.wait(timeout=5)
+            finally:
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    if stream is not None:
+                        stream.close()
