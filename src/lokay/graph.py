@@ -106,6 +106,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             continue
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
+                and repo.states.get(number, {}).get("result") != "parked"
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             continue
         return Pick(repo.name, issue, "pr", target)
@@ -114,12 +115,15 @@ def pick(snapshot: Snapshot) -> Pick | None:
             continue
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
+                and repo.states.get(number, {}).get("result") != "parked"
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
         if repo.prs is None:
             return Pick(repo.name, 0, "prs")
         for issue, state in sorted(repo.states.items(), key=lambda row: (row[1].get("last_attempt", 0), row[0])):
             if (state.get("result") in ("failed", "check")
+                    and state.get("result") != "parked"
+                    and len(state.get("fix_history") or []) < 6
                     and state.get("retry_at", 0) <= snapshot.now
                     and (snapshot.only_issue is None or snapshot.only_issue == issue)):
                 target = next((row for row in repo.prs if row["headRefName"] == f"lokay/{issue}"), None)
@@ -129,6 +133,8 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if prs:
             ready = [row for row in prs if row["headRefName"][6:].isdecimal()
                      and (snapshot.only_issue is None or int(row["headRefName"][6:]) == snapshot.only_issue)
+                     and repo.states[int(row["headRefName"][6:])].get("result") != "parked"
+                     and len(repo.states[int(row["headRefName"][6:])].get("fix_history") or []) < 6
                      and repo.states[int(row["headRefName"][6:])].get("retry_at", 0) <= snapshot.now]
             if ready:
                 target = min(ready, key=lambda row: (
@@ -140,6 +146,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         for issue in repo.issues:
             number = issue["number"]
             if ((snapshot.only_issue is None or snapshot.only_issue == number)
+                    and repo.states[number].get("result") != "parked"
                     and repo.states[number].get("retry_at", 0) <= snapshot.now
                     and number not in repo.open_prs):
                 return Pick(repo.name, number, "issue", issue)

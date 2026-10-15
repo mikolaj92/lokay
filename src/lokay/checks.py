@@ -53,10 +53,10 @@ def local_tests(x: CheckInput) -> CheckResult:
     green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
     passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
     if not x.ci.get("tested") and not failures:
+        notes = [item for item in x.ci.get("notes", []) if item.get("warstwa") == "tests"]
         if (x.ci.get("sha") == x.sha and x.ci.get("result") == "green"
-                and x.ci.get("tested") is False and x.ci.get("notes")
-                and all(item.get("warstwa") == "tests" and item.get("log") == "no tests configured"
-                        for item in x.ci["notes"])):
+                and x.ci.get("tested") is False and notes
+                and all(item.get("log") == "no tests configured" for item in notes)):
             return CheckResult("local_tests", "pass", "not applicable: no tests configured", ())
         return CheckResult("local_tests", "unknown", "local tests not run", ())
     reason = "local tests green" if passed else "local tests not green or not run"

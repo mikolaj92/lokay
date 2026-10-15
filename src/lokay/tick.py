@@ -59,7 +59,7 @@ def act(run: Run) -> Event:
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "check"):
+        if outcome.get("result") in ("pending", "pr_open", "check", "parked"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
@@ -163,7 +163,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 continue
             issue = int(path.name)
             saved = state_read(name, issue)
-            if ((saved.get("node") in ("check", "build") and saved.get("result") == "pending")
+            if (saved.get("result") == "parked"
+                    or (saved.get("node") in ("check", "build") and saved.get("result") == "pending")
                     or (saved.get("node") in ("plan", "build", "check", "fix", "merge")
                         and saved.get("result") in ("failed", "check") and saved.get("retry_at", 0) <= time.time())):
                 states[issue] = saved
@@ -196,7 +197,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 saved = states[issue] = state_read(name, issue)
                 if saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
-            repo = replace(repo, prs=prs, states=states)
+            repo = replace(repo, prs=prs, states={
+                **{issue: saved for issue, saved in repo.states.items() if saved.get("result") == "parked"},
+                **states,
+            })
         elif selected.kind == "issues":
             issues = tuple(row for row in open_issues(name)
                            if only_issue is None or int(row["number"]) == only_issue)
@@ -205,6 +209,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
+                if saved.get("result") == "parked":
+                    continue
                 if saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
                     continue
@@ -216,7 +222,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     saved = state_read(name, row["number"])
                     if saved.get("failures", 0):
                         blocked.append((name, row["number"], saved))
-            repo = replace(repo, issues=issues[:len(states)], states=states, open_prs=frozenset(open_prs))
+            repo = replace(repo, issues=issues[:len(states)], states={
+                **{issue: saved for issue, saved in repo.states.items() if saved.get("result") == "parked"},
+                **states,
+            }, open_prs=frozenset(open_prs))
         else:
             held = acquire(name.split("/")[0], name)
             if held["result"] != "held":
@@ -342,6 +351,9 @@ def _tick() -> dict:
     try:
         print(dumps({k: v for k, v in outcome.items() if k != "held"}, separators=(",", ":")))
         result = {}
+        parked = park(outcome, (state_read(outcome["repo"], outcome["issue"]).get("verdict") or {}).get("uwagi"))
+        if parked:
+            return parked
         def execute(run: Run) -> Event:
             event = act(Run.from_state({**run.state, **{key: outcome[key] for key in ("repo", "issue", "held")}}))
             result.update(event.outcome)
@@ -664,6 +676,36 @@ def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch
     return {"result": "failed", "reason": reason}
 
 
+def park(picked: dict, uwagi: list | None = None) -> dict | None:
+    repo, issue = picked["repo"], picked["issue"]
+    saved = state_read(repo, issue)
+    history = saved.get("fix_history", [])
+    if len(history) < 6:
+        return None
+    reason = "fix_history reached 6"
+    if saved.get("result") == "parked":
+        return {"result": "parked", "reason": reason}
+    pr = saved.get("pr")
+    if not pr:
+        opened = open_pr_for(repo, saved.get("branch") or f"lokay/{issue}")
+        if not opened:
+            raise RuntimeError("park: open PR missing")
+        pr = opened["number"]
+    code, out, err = _gh(["label", "create", "lokay-parked", "--repo", repo])
+    if code != 0 and not re.search(r"\balready exists\b", err, re.IGNORECASE):
+        raise RuntimeError(f"park label create: {err.strip() or out.strip() or 'gh failed'}")
+    summary = dumps(uwagi or history[-1], ensure_ascii=False)[:3000]
+    for args in (["pr", "edit", str(pr), "--repo", repo, "--add-label", "lokay-parked"],
+                 ["pr", "comment", str(pr), "--repo", repo, "--body",
+                  f"Auto-fixing stopped: {reason}.\n\nUwagi: {summary}"]):
+        code, out, err = _gh(args)
+        if code != 0:
+            raise RuntimeError(f"park {args[1]}: {err.strip() or out.strip() or 'gh failed'}")
+    state_update(repo, issue, result="parked", reason=reason, retry_at=0)
+    rounds_append(repo, issue, f"Park: {reason}; auto-fixing stopped")
+    return {"result": "parked", "reason": reason}
+
+
 def fix_to_build(picked: dict, worktree: Path) -> dict | None:
     from lokay.effects.git import _git
     from lokay.scope import is_test
@@ -894,6 +936,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         return []
 
     while True:
+        parked = park(picked, ((verdict or {}).get("uwagi") if verdict else None))
+        if parked:
+            return parked
         if pending == "plan":
             prepared = _prepare({**picked, "node": "plan"})
             if isinstance(prepared, dict):
@@ -978,6 +1023,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         head = _retry(picked, active_node, read_head)
         diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
         if pending == "fix" and verdict:
+            parked = park(picked, verdict.get("uwagi"))
+            if parked:
+                return parked
             uwagi = verdict["uwagi"]
             if not uwagi:
                 state_update(picked["repo"], picked["issue"], node="check", verdict=None,
@@ -997,6 +1045,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             counts = (saved.get("fix_counts", []) + [len(uwagi)])[-3:]
             history = saved.get("fix_history", []) + [uwagi]
             state_update(picked["repo"], picked["issue"], fix_counts=counts, fix_history=history)
+            if len(history) >= 6:
+                parked = park(picked, uwagi)
+                if parked:
+                    return parked
             rounds_append(picked["repo"], picked["issue"],
                           f"Fix progress: findings={fingerprint}, hunk={hunk_fingerprint}, "
                           f"diff={diff_fingerprint}, counts={counts}")
