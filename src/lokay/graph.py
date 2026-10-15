@@ -89,7 +89,12 @@ def pick(snapshot: Snapshot) -> Pick | None:
     pending = [(state.get("last_attempt", 0), repo.name, issue, repo)
                for repo in snapshot.repos if not repo.busy
                for issue, state in repo.states.items()
-               if state.get("node") == "check" and state.get("result") == "pending"
+               if state.get("result") == "pending"
+               and (state.get("node") == "check"
+                    or (state.get("node") == "build"
+                        and any(row.get("name") == "ci_green"
+                                and (row.get("pass") is False or row.get("status") == "fail")
+                                for row in (state.get("verdict") or {}).get("checks", []))))
                and state.get("last_attempt", 0) <= snapshot.now - 300
                and (snapshot.only_issue is None or snapshot.only_issue == issue)
                and state.get("retry_at", 0) <= snapshot.now]
