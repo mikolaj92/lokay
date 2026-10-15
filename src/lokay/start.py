@@ -10,6 +10,7 @@ import time
 from functools import wraps
 from pathlib import Path
 
+from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, tick_budget
 from lokay.gh import _gh, gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
@@ -332,12 +333,16 @@ def refresh_body(repo: str, issue: int) -> dict:
                    state_read(repo, issue).get("pi_response") or "")
     saved = state_read(repo, issue)
     notes = (saved.get("verdict") or {}).get("notes") or []
-    lens_notes = [note for note in notes if note.get("pytanie")]
-    lens_notes += [{**note, "note": f"{note.get('plik', '')}:{note.get('linia_od', '')}-{note.get('linia_do', '')}: {note.get('zmiana', '')}"}
-                   for note in saved.get("check_notes", [])]
+    lens_notes = [parsed for note in notes
+                  if isinstance(parsed := parse_finding(note), Note) and parsed.pytanie]
+    for raw in saved.get("check_notes", []):
+        item = parse_finding(raw)
+        if isinstance(item, Finding):
+            lens_notes.append(Note(item.lens, item.lens,
+                                   f"{item.plik}:{item.linia_od}-{item.linia_do}: {item.zmiana}"))
     if lens_notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
-            f"- {note.get('pytanie', '')}: {note.get('note', '')}" for note in lens_notes)
+            f"- {note.pytanie}: {note.note}" for note in lens_notes)
     return pr_set_body(repo, pr["number"], body, issue)
 
 
@@ -865,10 +870,39 @@ def resume(picked: dict) -> dict:
     return _finish(picked, worktree, branch, sha, repo.get("test") or [])
 
 
+def finding_summary(raw: dict) -> dict:
+    item = parse_finding(raw)
+    return {"pytanie": item.lens if "pytanie" in raw else raw.get("warstwa", ""),
+            "plik": item.plik if isinstance(item, Finding) else "",
+            "linie": [item.linia_od if isinstance(item, Finding) and "linia_od" in raw else None,
+                      item.linia_do if isinstance(item, Finding) and "linia_do" in raw else None],
+            "zmiana": item.zmiana if isinstance(item, Finding) else "",
+            "uzasadnienie": (raw.get("uzasadnienie") or raw.get("log") or "")[:300]}
+
+
+def finding_fingerprint(raw: dict) -> list:
+    item = parse_finding(raw)
+    return [item.plik if isinstance(item, Finding) else None,
+            item.lens if "pytanie" in raw else raw.get("warstwa"),
+            item.zmiana if isinstance(item, Finding) and "zmiana" in raw else None]
+
+
+def finding_key(raw: dict) -> tuple:
+    item = parse_finding(raw)
+    if not isinstance(item, Finding):
+        return ("", "", "", "")
+    return (item.plik, item.linia_od if "linia_od" in raw else "",
+            item.linia_do if "linia_do" in raw else "", item.zmiana)
+
+
 def dismissed_key(row: dict) -> list:
-    if not row.get("plik") and not row.get("pytanie"):
+    item = parse_finding(row)
+    if not isinstance(item, Finding) and not item.pytanie:
         return [row.get("warstwa"), row.get("log")]
-    return [row.get(field) for field in ("plik", "linia_od", "linia_do", "pytanie")]
+    return [item.plik if isinstance(item, Finding) else None,
+            item.linia_od if isinstance(item, Finding) and "linia_od" in row else None,
+            item.linia_do if isinstance(item, Finding) and "linia_do" in row else None,
+            item.lens if "pytanie" in row else None]
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
@@ -999,7 +1033,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 return {"result": "check", "sha": sha}
             findings = {
                 json.dumps([row["name"], row.get("location")] if "name" in row else
-                           [row.get("plik"), row.get("pytanie", row.get("warstwa")), row.get("zmiana")])
+                           finding_fingerprint(row))
                 for row in uwagi
             }
             fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
@@ -1026,7 +1060,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                            and ci.get("result") == "green"
                            and ci.get("ci") in ("green", "no_ci")
                            and all(row.get("warstwa") == "scope"
-                                   or (row.get("pytanie") in lens_kinds and "warstwa" not in row)
+                                   or (parse_finding(row).lens in lens_kinds and "warstwa" not in row)
                                    for row in uwagi))
             if stalled and not can_dispute:
                 redirected = fix_to_build(picked, worktree)
@@ -1088,7 +1122,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         upheld = {}
                         rejected = []
                         def category(row):
-                            return row.get("pytanie") or ("scope" if row.get("warstwa") == "scope" else "")
+                            return parse_finding(row).lens or ("scope" if row.get("warstwa") == "scope" else "")
 
                         for kind in sorted({category(row) for row in uwagi}):
                             findings = [row for row in uwagi if category(row) == kind]
@@ -1118,8 +1152,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                             if valid:
                                 upheld[kind] = probabilities
                             else:
-                                rejected.extend({**row, "zmiana": (row.get("zmiana") or "") +
-                                                 "\nDispute: " + justification} for row in findings)
+                                for row in findings:
+                                    item = parse_finding(row)
+                                    change = item.zmiana if isinstance(item, Finding) else ""
+                                    rejected.append({**row, "zmiana": change + "\nDispute: " + justification})
                         if rejected:
                             current = state_read(picked["repo"], picked["issue"])
                             dismissed = current.get("dispute_dismissed") or {}
@@ -1274,14 +1310,14 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         groups = {}
         for decision in decisions:
             for finding in decision["uwagi"]:
-                key = tuple(finding.get(field, "") for field in ("plik", "linia_od", "linia_do", "zmiana"))
+                key = finding_key(finding)
                 groups.setdefault(key, []).append(finding)
         degenerate = {key for key, findings in groups.items()
-                      if len({finding.get("pytanie") or "" for finding in findings}) >= 5}
+                      if len({parse_finding(finding).lens or "" for finding in findings}) >= 5}
         check_notes = state_read(picked["repo"], picked["issue"]).get("check_notes", [])
         for key in sorted(degenerate, key=lambda row: tuple("" if value is None else str(value) for value in row)):
             findings = groups[key]
-            categories = sorted({finding.get("pytanie") or "" for finding in findings})
+            categories = sorted({parse_finding(finding).lens or "" for finding in findings})
             for finding in findings:
                 if finding not in check_notes:
                     check_notes.append(finding)
@@ -1299,7 +1335,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         for decision in decisions:
             original = decision["uwagi"]
             decision["uwagi"] = [finding for finding in original
-                                 if tuple(finding.get(field, "") for field in ("plik", "linia_od", "linia_do", "zmiana"))
+                                 if finding_key(finding)
                                  not in degenerate
                                  and dismissed_key(finding) not in dismissed_keys]
             if original and not decision["uwagi"] and not decision.get("replan"):
@@ -1329,12 +1365,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rounds += 1
         check_history = state_read(picked["repo"], picked["issue"]).get("check_history", []) + [{
             "round": rounds, "sha": sha,
-            "findings": [{"pytanie": row.get("pytanie", row.get("warstwa", "")),
-                          "plik": row.get("plik", ""),
-                          "linie": [row.get("linia_od"), row.get("linia_do")],
-                          "zmiana": row.get("zmiana", ""),
-                          "uzasadnienie": (row.get("uzasadnienie") or row.get("log") or "")[:300]}
-                         for row in verdict.get("uwagi", [])],
+            "findings": [finding_summary(row) for row in verdict.get("uwagi", [])],
             "fix_commit_subject": "", "dispute": {},
         }]
         state_update(
@@ -1351,7 +1382,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}, "
             + "checks=" + json.dumps(verdict["checks"]),
         )
-        lens_notes = [note.get("pytanie", "") for note in verdict.get("notes", []) if note.get("pytanie")]
+        lens_notes = [parse_finding(note).lens for note in verdict.get("notes", []) if parse_finding(note).lens]
         if lens_notes:
             rounds_append(picked["repo"], picked["issue"], f"Check {rounds}: notes=" + ", ".join(lens_notes))
         _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"], rounds, verdict, ci))

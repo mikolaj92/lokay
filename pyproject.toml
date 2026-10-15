@@ -16,3 +16,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lokay"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+]
