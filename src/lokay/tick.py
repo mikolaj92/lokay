@@ -163,10 +163,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 continue
             issue = int(path.name)
             saved = state_read(name, issue)
-            if (saved.get("result") == "parked"
-                    or (saved.get("node") in ("check", "build") and saved.get("result") == "pending")
-                    or (saved.get("node") in ("plan", "build", "check", "fix", "merge")
-                        and saved.get("result") in ("failed", "check") and saved.get("retry_at", 0) <= time.time())):
+            if saved and saved.get("result") != "merged":
                 states[issue] = saved
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}), states=states))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
@@ -195,12 +192,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if only_issue is not None and issue != only_issue:
                     continue
                 saved = states[issue] = state_read(name, issue)
-                if saved.get("retry_at", 0) > time.time():
+                if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
-            repo = replace(repo, prs=prs, states={
-                **{issue: saved for issue, saved in repo.states.items() if saved.get("result") == "parked"},
-                **states,
-            })
+            repo = replace(repo, prs=prs, states={**repo.states, **states})
         elif selected.kind == "issues":
             issues = tuple(row for row in open_issues(name)
                            if only_issue is None or int(row["number"]) == only_issue)
@@ -209,9 +203,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
-                if saved.get("result") == "parked":
+                if saved.get("result") == "parked" or saved.get("waiting_on") == "ci":
                     continue
-                if saved.get("retry_at", 0) > time.time():
+                if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
                     continue
                 if open_pr_for(name, f"lokay/{issue}") is None:
@@ -222,10 +216,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     saved = state_read(name, row["number"])
                     if saved.get("failures", 0):
                         blocked.append((name, row["number"], saved))
-            repo = replace(repo, issues=issues[:len(states)], states={
-                **{issue: saved for issue, saved in repo.states.items() if saved.get("result") == "parked"},
-                **states,
-            }, open_prs=frozenset(open_prs))
+            repo = replace(repo, issues=issues[:len(states)], states={**repo.states, **states},
+                           open_prs=frozenset(open_prs))
         else:
             held = acquire(name.split("/")[0], name)
             if held["result"] != "held":
