@@ -1268,10 +1268,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
             plan=plan_text, diff=diff.stdout or "", hunks=rows, ci=ci, worktree=worktree,
         )
-        checks_verdict = run_checks(check_input)
-        verdict.update(checks=checks_verdict["checks"], failed=checks_verdict["failed"])
-        if checks_verdict["failed"]:
-            verdict = {**verdict, "result": "fix", "uwagi": [*verdict["uwagi"], *checks_verdict["failed"]]}
+        from lokay.check import apply_checks
+
+        verdict = apply_checks(verdict, run_checks(check_input), ci)
         rounds += 1
         check_history = state_read(picked["repo"], picked["issue"]).get("check_history", []) + [{
             "round": rounds, "sha": sha,
@@ -1290,7 +1289,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rounds_append(
             picked["repo"], picked["issue"],
             f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}, "
-            + "checks=" + dumps(verdict["checks"]),
+            + "checks=" + dumps(verdict["checks"], default=store.json_default),
         )
         lens_notes = [parse_finding(note).lens for note in verdict.get("notes", []) if parse_finding(note).lens]
         if lens_notes:

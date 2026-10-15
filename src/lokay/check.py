@@ -10,7 +10,7 @@ from pathlib import Path
 from lokay import store
 
 from lokay.effects.decide import DecisionError, from_wire
-from lokay.types import Finding, parse_finding
+from lokay.types import CheckResult, Finding, parse_finding, to_dict
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
@@ -257,6 +257,19 @@ def test_failures(log: str) -> set[str]:
     return identifiers or {line.strip() for line in log.splitlines()
                            if re.search(r"\berror\b|\w+Error:|^E\s|\bFAILED\b", line, re.IGNORECASE)}
 
+
+
+def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
+    from lokay.checks import verdict
+
+    checked = verdict(results, ci)
+    outcome = {**outcome, "checks": results, "failed": checked["failed"]}
+    if checked["result"] == "fix":
+        findings = [to_dict(finding) for result in checked["failed"] for finding in result.findings]
+        unlocated = [{"warstwa": result.name, "log": result.reason}
+                     for result in checked["failed"] if not result.findings]
+        outcome.update(result="fix", uwagi=[*outcome["uwagi"], *findings, *unlocated])
+    return outcome
 
 
 def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
