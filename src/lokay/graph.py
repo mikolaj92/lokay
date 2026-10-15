@@ -122,8 +122,6 @@ def pick(snapshot: Snapshot) -> Pick | None:
             return Pick(repo.name, 0, "prs")
         for issue, state in sorted(repo.states.items(), key=lambda row: (row[1].get("last_attempt", 0), row[0])):
             if (state.get("result") in ("failed", "check")
-                    and state.get("result") != "parked"
-                    and len(state.get("fix_history") or []) < 6
                     and state.get("retry_at", 0) <= snapshot.now
                     and (snapshot.only_issue is None or snapshot.only_issue == issue)):
                 target = next((row for row in repo.prs if row["headRefName"] == f"lokay/{issue}"), None)
@@ -134,7 +132,6 @@ def pick(snapshot: Snapshot) -> Pick | None:
             ready = [row for row in prs if row["headRefName"][6:].isdecimal()
                      and (snapshot.only_issue is None or int(row["headRefName"][6:]) == snapshot.only_issue)
                      and repo.states[int(row["headRefName"][6:])].get("result") != "parked"
-                     and len(repo.states[int(row["headRefName"][6:])].get("fix_history") or []) < 6
                      and repo.states[int(row["headRefName"][6:])].get("retry_at", 0) <= snapshot.now]
             if ready:
                 target = min(ready, key=lambda row: (
