@@ -152,9 +152,19 @@ def pick(env: dict[str, str] | None = None) -> dict:
     from lokay.store import main_status
 
     statuses = main_status()
-    snapshot = Snapshot(tuple(RepoSnapshot(repo["name"], repo_last_attempt(repo["name"]),
-                                           statuses.get(repo["name"], {})) for repo in repos),
-                        time.time(), only_issue)
+    snapshots = []
+    for repo in repos:
+        name = repo["name"]
+        states = {}
+        for path in run_dir(name, 0).parent.glob("*"):
+            if not path.name.isdecimal() or not path.is_dir():
+                continue
+            issue = int(path.name)
+            saved = state_read(name, issue)
+            if saved.get("node") == "check" and saved.get("result") == "pending":
+                states[issue] = saved
+        snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}), states=states))
+    snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
     while True:
         check_deadline()
         snapshot = replace(snapshot, now=time.time())

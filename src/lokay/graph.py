@@ -86,6 +86,24 @@ def step(run: Run, event: Event) -> Run:
 
 
 def pick(snapshot: Snapshot) -> Pick | None:
+    pending = [(state.get("last_attempt", 0), repo.name, issue, repo)
+               for repo in snapshot.repos if not repo.busy
+               for issue, state in repo.states.items()
+               if state.get("node") == "check" and state.get("result") == "pending"
+               and state.get("last_attempt", 0) <= snapshot.now - 300
+               and (snapshot.only_issue is None or snapshot.only_issue == issue)
+               and state.get("retry_at", 0) <= snapshot.now]
+    for _, _, issue, repo in sorted(pending, key=lambda row: row[:3]):
+        if repo.prs is None:
+            return Pick(repo.name, 0, "prs")
+        target = next((row for row in repo.prs if row["headRefName"] == f"lokay/{issue}"), None)
+        if target is None:
+            continue
+        number = repo.status.get("issue")
+        if (repo.status.get("status") == "red" and number
+                and (snapshot.only_issue is None or snapshot.only_issue == number)):
+            return Pick(repo.name, number, "red_main")
+        return Pick(repo.name, issue, "pr", target)
     for repo in sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name)):
         if repo.busy:
             continue
