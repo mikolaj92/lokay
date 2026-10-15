@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from json import dumps
-
-import json
-import shutil
 import subprocess
-import time
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -37,25 +32,6 @@ def worktree_remove(repo: Path, path: Path) -> dict:
     if code != 0 and path.exists():
         return {"result": "failed", "error": err.strip() or out.strip()}
     return {"result": "removed", "path": str(path)}
-
-
-def reap_worktrees(repo: Path, root: Path, ttl_seconds: float, now: float | None = None) -> list[str]:
-    stamp = time.time() if now is None else now
-    removed: list[str] = []
-    if not root.exists():
-        return removed
-    for child in root.iterdir():
-        if not child.is_dir():
-            continue
-        age = stamp - child.stat().st_mtime
-        if age < ttl_seconds:
-            continue
-        outcome = worktree_remove(repo, child)
-        if outcome["result"] == "removed":
-            removed.append(str(child))
-            if child.exists():
-                shutil.rmtree(child)
-    return removed
 
 
 def remote_sha(repo: Path, branch: str) -> str | None:
@@ -96,8 +72,7 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
     for attempt in range(1, attempts + 1):
         code, out, err = _git(repo, ["push", "-u", "origin", branch], timeout=120)
         if code == 0:
-            head, _, _ = _git(repo, ["rev-parse", "HEAD"])
-            _, sha, _ = _git(repo, ["rev-parse", "HEAD"])
+            head, sha, _ = _git(repo, ["rev-parse", "HEAD"])
             return {"result": "pushed", "sha": sha.strip(), "attempts": attempt} if head == 0 else {"result": "failed"}
         last = (err or out).lower()
         locked = any(mark in last for mark in REF_LOCK)
@@ -124,10 +99,6 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     if committed:
         checked(["commit", "--only", "-m", message, "--", *committed])
     return committed
-
-
-def emit(payload: dict) -> None:
-    print(dumps(payload, separators=(",", ":")))
 
 
 def command(repo: Path, args: list[str], *, timeout: float = 30):

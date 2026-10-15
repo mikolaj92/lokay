@@ -20,10 +20,6 @@ class CheckInput:
     worktree: Path
 
 
-def ok(name: str) -> CheckResult:
-    return CheckResult(name, "pass", "stub", ())
-
-
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
              log: str, fix_hint: str) -> CheckResult:
     details = "; ".join(
@@ -66,26 +62,6 @@ def local_tests(x: CheckInput) -> CheckResult:
         reason = f"no new local test failures against main at {x.ci['baseline']['sha']}"
     return evidence("local_tests", passed, reason, failures, 800,
                     "" if passed else x.ci.get("log", ""), "run and fix the complete local test suite")
-
-
-def merge_clean(x: CheckInput) -> CheckResult:
-    return ok("merge_clean")
-
-
-def plan_files(x: CheckInput) -> CheckResult:
-    return ok("plan_files")
-
-
-def lockfile(x: CheckInput) -> CheckResult:
-    return ok("lockfile")
-
-
-def secrets(x: CheckInput) -> CheckResult:
-    return ok("secrets")
-
-
-def permissions(x: CheckInput) -> CheckResult:
-    return ok("permissions")
 
 
 def no_new_comments(x: CheckInput) -> CheckResult:
@@ -137,34 +113,6 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 
-def issue_goal(x: CheckInput) -> CheckResult:
-    return ok("issue_goal")
-
-
-def scope(x: CheckInput) -> CheckResult:
-    return ok("scope")
-
-
-def correctness(x: CheckInput) -> CheckResult:
-    return ok("correctness")
-
-
-def tests_cover(x: CheckInput) -> CheckResult:
-    return ok("tests_cover")
-
-
-def regression(x: CheckInput) -> CheckResult:
-    return ok("regression")
-
-
-def architecture(x: CheckInput) -> CheckResult:
-    return ok("architecture")
-
-
-def security_review(x: CheckInput) -> CheckResult:
-    return ok("security_review")
-
-
 def docs(x: CheckInput) -> CheckResult:
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
@@ -199,13 +147,9 @@ def docs(x: CheckInput) -> CheckResult:
     return CheckResult("docs", "pass", "no documentation expansion", ())
 
 
-def style(x: CheckInput) -> CheckResult:
-    return ok("style")
-
-
-CHECKS = [ci_green, local_tests, merge_clean, plan_files, lockfile, secrets, permissions, no_new_comments, no_unit_tests,
-          issue_goal, scope, correctness, tests_cover, regression, architecture,
-          security_review, docs, style]
+CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", "lockfile", "secrets", "permissions",
+          no_new_comments, no_unit_tests, "issue_goal", "scope", "correctness", "tests_cover", "regression",
+          "architecture", "security_review", docs, "style"]
 
 
 def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
@@ -217,6 +161,9 @@ def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
     results = []
     for check in CHECKS:
+        if isinstance(check, str):
+            results.append(CheckResult(check, "pass", "stub", ()))
+            continue
         try:
             results.append(check(x))
         except Exception as exc:

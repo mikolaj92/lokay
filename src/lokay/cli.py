@@ -10,6 +10,7 @@ from lokay.safety import SafetyError, validate_argv
 NODES = (
     "decide",
     "start",
+    "dashboard",
     "refresh-body",
     "status",
     "monitor",
@@ -34,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
     if args.node == "refresh-body":
-        from lokay.start import main as start_main
+        from lokay.tick import main as start_main
 
         return start_main(["refresh-body", *rest])
     if args.node == "lint":
@@ -141,8 +142,14 @@ def main(argv: list[str] | None = None) -> int:
 
         print(dumps(monitor()))
         return 0
+    if args.node == "dashboard":
+        from lokay.dashboard import main as dashboard_main
+
+        sys.argv = ["lokay dashboard", *rest]
+        dashboard_main()
+        return 0
     if args.node == "start":
-        from lokay.start import main as start_main
+        from lokay.tick import main as start_main
         from lokay.observe import ticking
 
         if args.check:
@@ -155,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.probe:
             sys.argv = ["lokay", "--probe"]
         return decide_main()
+    return 0
 
 
 if __name__ == "__main__":

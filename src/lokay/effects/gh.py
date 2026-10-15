@@ -64,17 +64,6 @@ def open_issues(repo: str) -> list[dict]:
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
 
 
-def issues_with_label(repo: str, label: str | None = None) -> list[dict]:
-    args = ["issue", "list", "--repo", repo, "--state", "open", "--json", "number,createdAt,title"]
-    if label:
-        args[4:4] = ["--label", label]
-    code, out, err = _gh(args)
-    if code != 0:
-        raise RuntimeError(err.strip() or "issue list failed")
-    rows = json.loads(out or "[]")
-    return sorted(rows, key=lambda row: row["createdAt"])
-
-
 def open_pr_for(repo: str, branch: str) -> dict | None:
     code, out, err = _gh(
         ["pr", "list", "--repo", repo, "--head", branch, "--state", "open", "--json", "number,headRefOid"]
@@ -156,25 +145,6 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
     if failed:
         return {"result": "red", "sha": sha, "failed": failed, "failed_logs": failed_logs}
     return {"result": "green", "sha": sha, "failed": []}
-
-
-def comment_upsert(repo: str, number: int, marker: str, body: str) -> dict:
-    code, out, err = _gh(["pr", "view", str(number), "--repo", repo, "--json", "comments"])
-    if code != 0:
-        raise RuntimeError(err.strip() or "comments failed")
-    comments = json.loads(out).get("comments") or []
-    text = fit_body(f"<!-- {marker} -->\n{body}")
-    for comment in comments:
-        if marker in (comment.get("body") or ""):
-            cid = comment["id"]
-            code, out, err = _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={text}"])
-            if code != 0:
-                raise RuntimeError(err.strip() or "comment patch failed")
-            return {"result": "updated", "id": cid}
-    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", text])
-    if code != 0:
-        raise RuntimeError(err.strip() or "comment failed")
-    return {"result": "created", "url": out.strip()}
 
 
 def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: dict) -> dict:

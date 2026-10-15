@@ -5,7 +5,6 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.effects.decide import DecisionError, from_wire
 from lokay.effects.pi import pi_step
 from lokay.safety import untrusted_issue_block
 
@@ -163,15 +162,6 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | Non
     return {"result": "done", "artifact": str(art)}
 
 
-def plan_check(wire: dict, model: str, api: str = "tensorfold") -> dict:
-    internal = plan_questions()
-    try:
-        answers = from_wire(api, model, wire, internal)
-    except DecisionError:
-        raise
-    return verdict(answers)
-
-
 def verdict(answers: dict) -> dict:
     confidence = answers["next"]["confidence"]
     uwagi = []
@@ -186,4 +176,4 @@ def verdict(answers: dict) -> dict:
 
 
 def prompt_for(title: str, body: str | None) -> str:
-    return Path(__file__).resolve().parents[2].joinpath("prompts/plan_write.md").read_text() + "\n" + untrusted_issue_block(title, body)
+    return (PROMPTS / "plan_write.md").read_text() + "\n" + untrusted_issue_block(title, body)

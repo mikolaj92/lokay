@@ -9,12 +9,12 @@ import signal
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from subprocess import TimeoutExpired
-from json import dumps
-from typing import BinaryIO, cast
+from typing import Any, BinaryIO, cast
 
 from lokay import store
 
@@ -203,6 +203,46 @@ def run_process(
                   output=output, started=started, ok=ok)
 
 
+@contextmanager
+def _process(argv, cwd, env, input, *, text=False):
+    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
+    process: subprocess.Popen[Any] | None = None
+    try:
+        try:
+            process = subprocess.Popen(
+                list(argv),
+                cwd=cwd,
+                env=None if env is None else dict(env),
+                stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=text,
+                start_new_session=True,
+                preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
+            )
+            process_groups[process.pid] = process
+            save_process_groups()
+        except BaseException:
+            if process is not None:
+                kill_process_groups([process.pid])
+                process.wait(timeout=5)
+            raise
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
+        assert process is not None
+        yield process
+    finally:
+        if process is not None:
+            try:
+                if process.pid in process_groups:
+                    kill_process_groups([process.pid])
+                process.wait(timeout=5)
+            finally:
+                for stream in (process.stdin, process.stdout, process.stderr):
+                    if stream is not None:
+                        stream.close()
+
+
 def _run_process(
     argv: Sequence[str],
     *,
@@ -221,37 +261,7 @@ def _run_process(
         raise TickExpired()
     if pi_command(argv) is not None:
         return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
-    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
-    process = None
-    try:
-        process = subprocess.Popen(
-            list(argv),
-            cwd=cwd,
-            env=None if env is None else dict(env),
-            stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-            preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
-        )
-        process_groups[process.pid] = process
-        save_process_groups()
-    except BaseException:
-        if process is not None:
-            kill_process_groups([process.pid])
-            process.wait(timeout=5)
-        raise
-    finally:
-        try:
-            signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
-        except BaseException:
-            if process is not None:
-                kill_process_groups([process.pid])
-                process.wait(timeout=5)
-            raise
-    assert process is not None
-    try:
+    with _process(argv, cwd, env, input, text=True) as process:
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
         tick_limited = remaining is not None and remaining <= timeout
         effective_timeout = timeout if remaining is None else min(timeout, remaining)
@@ -271,15 +281,6 @@ def _run_process(
                 raise TickExpired() from None
             raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr) from None
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)
-    finally:
-        try:
-            if process.pid in process_groups:
-                kill_process_groups([process.pid])
-            process.wait(timeout=5)
-        finally:
-            for stream in (process.stdin, process.stdout, process.stderr):
-                if stream is not None:
-                    stream.close()
 
 
 def _run_pi_process(
@@ -319,36 +320,7 @@ def _run_pi_process(
         if time.monotonic() >= expires:
             expired()
         attempt = time.monotonic()
-        process = None
-        blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
-        try:
-            process = subprocess.Popen(
-                argv,
-                cwd=cwd,
-                env=None if env is None else dict(env),
-                stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=True,
-                preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, blocked),
-            )
-            process_groups[process.pid] = process
-            save_process_groups()
-        except BaseException:
-            if process is not None:
-                kill_process_groups([process.pid])
-                process.wait(timeout=5)
-            raise
-        finally:
-            try:
-                signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
-            except BaseException:
-                if process is not None:
-                    kill_process_groups([process.pid])
-                    process.wait(timeout=5)
-                raise
-        assert process is not None
-        try:
+        with _process(argv, cwd, env, input) as process:
             with selectors.DefaultSelector() as selector:
                 for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
                     assert stream is not None
@@ -403,15 +375,6 @@ def _run_pi_process(
                                 last_output = time.monotonic()
                             else:
                                 selector.unregister(key.fileobj)
-        finally:
-            try:
-                if process.pid in process_groups:
-                    kill_process_groups([process.pid])
-                process.wait(timeout=5)
-            finally:
-                for stream in (process.stdin, process.stdout, process.stderr):
-                    if stream is not None:
-                        stream.close()
 
 
 def pi_step(
@@ -437,9 +400,3 @@ def pi_step(
     if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
         return {"result": "failed", "artifact": ""}
     return {"result": "done", "artifact": str(artifact)}
-
-
-def emit(payload: dict[str, str]) -> None:
-    if payload.get("result") not in ("done", "failed"):
-        raise SystemExit(1)
-    print(dumps(payload, separators=(",", ":")))
