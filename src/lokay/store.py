@@ -8,6 +8,7 @@ import re
 import shutil
 import time
 import uuid
+from contextlib import contextmanager
 from json import dumps as dumps
 from tempfile import NamedTemporaryFile
 from importlib.metadata import PackageNotFoundError, version
@@ -39,7 +40,7 @@ def prune_blobs(directory: Path) -> None:
 def log_event(kind: str, **fields) -> None:
     global TICK, SEQ, CONTEXT
     try:
-        with EVENT_LOCK:
+        with shared_file_lock(RUNS.parent / "events.lock"):
             directory = RUNS.parent / "ticks"
             now = datetime.now(timezone.utc)
             if kind == "start":
@@ -229,9 +230,15 @@ def append_text(path: Path, text: str) -> None:
 
 def write_text_atomic(path: Path, text: str, *, temporary: Path | None = None) -> None:
     ensure_directory(path.parent)
-    temporary = temporary if temporary is not None else path.with_suffix(".json.tmp")
-    temporary.write_text(text)
-    temporary.replace(path)
+    with NamedTemporaryFile(mode="w", dir=path.parent, prefix=path.name + ".",
+                            suffix=".tmp", delete=False) as file:
+        temporary = Path(file.name)
+        try:
+            file.write(text)
+            file.close()
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def check_record(result: CheckResult) -> dict:
@@ -260,14 +267,49 @@ def save_run(repo: str, issue: int, state: dict) -> None:
     write_json(run_dir(repo, issue) / "state.json", state, indent=2)
 
 
+def worker_index() -> str | None:
+    worker = os.environ.get("LOKAY2_WORKER")
+    if worker is not None and worker not in ("0", "1", "2"):
+        raise ValueError("LOKAY2_WORKER must be 0, 1 or 2")
+    return worker
+
+
+def process_groups_path() -> Path:
+    worker = worker_index()
+    return Path.home() / ".lokay" / ("procs.json" if worker is None else f"procs-{worker}.json")
+
+
 def save_process_groups(pgids: list[int]) -> None:
-    path = Path.home() / ".lokay" / "procs.json"
-    write_text_atomic(path, json.dumps(pgids), temporary=path.with_suffix(f".{os.getpid()}.tmp"))
+    write_text_atomic(process_groups_path(), json.dumps(pgids))
+
+
+@contextmanager
+def shared_file_lock(path: Path):
+    import fcntl
+
+    with EVENT_LOCK:
+        ensure_directory(path.parent)
+        with path.open("a+") as file:
+            fcntl.flock(file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(file.fileno(), fcntl.LOCK_UN)
 
 
 def write_heartbeat(result: str | None = None, **fields) -> dict:
     path = Path.home() / ".lokay" / "heartbeat.json"
+    with shared_file_lock(path.with_suffix(".lock")):
+        return _write_heartbeat(path, result, **fields)
+
+
+def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
     previous = json.loads(path.read_text()) if path.exists() else {}
+    worker = worker_index()
+    workers = previous.get("workers", {})
+    if worker is not None:
+        previous = dict(workers.get(worker, {}))
+        previous["worker"] = worker
     previous.setdefault("failures", 0)
     previous.setdefault("last_error", None)
     previous.setdefault("idle_reason", None)
@@ -291,16 +333,10 @@ def write_heartbeat(result: str | None = None, **fields) -> dict:
     previous["main_status"] = main_status()
     previous.update(time=datetime.now(timezone.utc).isoformat(),
                     version=os.environ.get("LOKAY_VERSION", installed))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(mode="w", dir=path.parent, prefix="heartbeat.",
-                            suffix=".tmp", delete=False) as file:
-        temporary = Path(file.name)
-        try:
-            file.write(json.dumps(previous) + "\n")
-            file.close()
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
+    if worker is not None:
+        workers[worker] = dict(previous)
+        previous["workers"] = workers
+    write_json(path, previous)
     return previous
 
 
@@ -311,10 +347,13 @@ def acquire_lock(path: Path) -> dict:
         import fcntl
 
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        os.write(fd, str(os.getpid()).encode())
     except BlockingIOError:
         os.close(fd)
         return {"result": "busy", "path": str(path)}
-    os.write(fd, str(os.getpid()).encode())
+    except BaseException:
+        os.close(fd)
+        raise
     return {"result": "held", "fd": fd, "path": str(path)}
 
 
@@ -324,5 +363,7 @@ def release_lock(held: dict) -> None:
         return
     import fcntl
 
-    fcntl.flock(fd, fcntl.LOCK_UN)
-    os.close(fd)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
