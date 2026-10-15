@@ -102,7 +102,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
-            return Pick(repo.name, number, "red_main")
+            continue
         return Pick(repo.name, issue, "pr", target)
     for repo in sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name)):
         if repo.busy:
