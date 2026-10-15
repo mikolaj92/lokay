@@ -9,7 +9,7 @@ from pathlib import Path
 from lokay.git import push, worktree_add
 from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
-from lokay.run import cleanup_worktree_caches, pi_env, run_process, sandboxed
+from lokay.run import cleanup_worktree_caches, pi_argv, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
@@ -195,7 +195,7 @@ def build_code(
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
             proc = run_process(
-                sandboxed(["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt], worktree, clean),
+                sandboxed(pi_argv(prompt, clean), worktree, clean),
                 cwd=worktree,
                 env=clean,
                 timeout=3600,

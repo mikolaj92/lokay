@@ -106,6 +106,14 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     return env
 
 
+def pi_argv(prompt: str, env: Mapping[str, str], *, json_mode: bool = False) -> list[str]:
+    return [
+        "pi", "-p", *(["--mode", "json"] if json_mode else []),
+        "--provider", env.get("LOKAY2_PROVIDER", ""),
+        "--model", env.get("LOKAY2_MODEL", ""), prompt,
+    ]
+
+
 def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> list[str]:
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv

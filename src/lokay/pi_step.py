@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from lokay.run import pi_env, run_process, sandboxed
+from lokay.run import pi_argv, pi_env, run_process, sandboxed
 
 
 def pi_step(
@@ -23,7 +23,7 @@ def pi_step(
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
     proc = run_process(
-        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child),
+        sandboxed(pi_argv(prompt, child, json_mode=True), worktree, child),
         cwd=cwd,
         env=child,
         timeout=timeout,
