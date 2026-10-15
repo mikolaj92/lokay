@@ -109,7 +109,7 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     return env
 
 
-def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> list[str]:
+def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], extra_dir: str | Path | None = None) -> list[str]:
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
     worktree = Path(worktree).resolve()
@@ -120,6 +120,7 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str]) -> 
     return [
         "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[3] / "sandbox/pi.sb"),
         "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
+        "-D", f"ARTIFACT_DIR={Path(extra_dir).resolve() if extra_dir is not None else worktree}",
         "-D", f"TMPDIR={os.path.realpath(env.get('TMPDIR') or '/tmp')}",
         "-D", f"HOME={os.path.realpath(env.get('HOME') or os.environ['HOME'])}",
         *argv,
@@ -428,7 +429,7 @@ def pi_step(
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
     proc = run_process(
-        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child),
+        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child, artifact.parent.resolve()),
         cwd=cwd,
         env=child,
         timeout=timeout,
