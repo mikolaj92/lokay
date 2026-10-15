@@ -59,7 +59,7 @@ def act(run: Run) -> Event:
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open"):
+        if outcome.get("result") in ("pending", "pr_open", "check"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
