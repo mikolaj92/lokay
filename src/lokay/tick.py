@@ -129,6 +129,8 @@ def host_ready(report: dict[str, str]) -> bool:
 
 
 def pick(env: dict[str, str] | None = None) -> dict:
+    if shutil.disk_usage(Path.home()).free < 5000000000:
+        return {"result": "idle", "reason": "disk"}
     report = probes(env)
     if not host_ready(report):
         failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
@@ -214,7 +216,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         blocked.append((name, row["number"], saved))
             repo = replace(repo, issues=issues[:len(states)], states=states, open_prs=frozenset(open_prs))
         else:
-            held = acquire(name.split("/")[0], f"{name}/wt-{number}")
+            held = acquire(name.split("/")[0], name)
             if held["result"] != "held":
                 if selected.kind == "pr":
                     blocked.extend((name, int(row["headRefName"][6:]),
@@ -331,6 +333,7 @@ def _tick() -> dict:
         current(result="idle", idle_reason=outcome["reason"],
                 **{key: value for key, value in outcome.items()
                    if key in ("repo", "issue", "issue_since", "failures", "last_error")})
+        store.log_event("idle", reason=outcome["reason"])
         extra = outcome.get("failed") or ""
         print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return outcome
