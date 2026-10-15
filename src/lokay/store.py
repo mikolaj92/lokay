@@ -15,6 +15,8 @@ from threading import RLock
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lokay.types import Event, Run, event_record, parse_event
+
 RUNS = Path.home() / ".lokay" / "runs"
 TICK = str(uuid.uuid4())
 SEQ = 0
@@ -160,14 +162,22 @@ def state_read(repo: str, issue: int) -> dict:
 
 
 def state_update(repo: str, issue: int, **fields) -> Path:
-    path = run_dir(repo, issue) / "state.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    current = json.loads(path.read_text()) if path.exists() else {}
-    before = {key: value for key, value in current.items() if key != "updated_at"}
-    from lokay.start import step
+    from lokay.tick import tick
 
     event = {"ts": time.time(), **fields.pop("_event", {}), "fields": fields}
-    current = step(before, event)
+    tick(repo, issue, lambda run: parse_event(event))
+    return run_dir(repo, issue) / "state.json"
+
+
+def load(repo: str, issue: int) -> Run:
+    return Run.from_state({key: value for key, value in state_read(repo, issue).items()
+                           if key != "updated_at"})
+
+
+def save(repo: str, issue: int, run: Run, event: Event) -> None:
+    before = load(repo, issue).state
+    current = dict(run.state)
+    raw = event_record(event)
     from lokay.observe import current as observe_current
 
     failures = current.get("failures", 0)
@@ -183,8 +193,7 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     log_event("context", repo=repo, issue=issue, node=current.get("node"))
     if before != after:
         log_event("transition", repo=repo, issue=issue, node=current.get("node"),
-                  event=event, before=before, after=after)
-    return path
+                  event=raw, before=before, after=after)
 
 
 def rounds_append(repo: str, issue: int, line: str) -> Path:

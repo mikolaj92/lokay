@@ -59,7 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         import difflib
         import hashlib
         from pathlib import Path
-        from lokay.start import step
+        from lokay import graph
+        from lokay.types import Run, parse_event
 
         replay = argparse.ArgumentParser(prog="lokay replay")
         replay.add_argument("path", type=Path)
@@ -111,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
                                 row[key] = json.loads(raw)
                         if any(not isinstance(row[key], dict) for key in ("before", "event", "after")):
                             raise ValueError("expected before/event/after objects")
-                        got = step(row["before"], row["event"])
+                        got = graph.step(Run.from_state(row["before"]), parse_event(row["event"])).state
                         got = {key: value for key, value in got.items() if key != "updated_at"}
                         expected = {key: value for key, value in row["after"].items() if key != "updated_at"}
                         if got != expected:
