@@ -48,9 +48,9 @@ def auth_status(env: Mapping[str, str]):
     return run_process([gh_bin(), "auth", "status"], env=env, timeout=15)
 
 
-def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str, str]:
+def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | None = None) -> tuple[int, str, str]:
     validate_argv(["gh", *args])
-    proc = run_process([gh_bin(), *args], env=env, timeout=60)
+    proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": cwd} if cwd is not None else {}))
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
@@ -66,12 +66,19 @@ def open_issues(repo: str) -> list[dict]:
 
 def open_pr_for(repo: str, branch: str) -> dict | None:
     code, out, err = _gh(
-        ["pr", "list", "--repo", repo, "--head", branch, "--state", "open", "--json", "number,headRefOid"]
+        ["pr", "list", "--repo", repo, "--head", branch, "--state", "open", "--json", "number,headRefOid,baseRefName"]
     )
     if code != 0:
         raise RuntimeError(err.strip() or "pr list failed")
     rows = json.loads(out or "[]")
     return rows[0] if rows else None
+
+
+def pr_files(repo: str, number: int) -> list[str]:
+    code, out, err = _gh(["api", "--paginate", f"repos/{repo}/pulls/{number}/files", "--jq", ".[].filename"])
+    if code:
+        raise RuntimeError(err.strip() or "PR files lookup failed")
+    return out.splitlines()
 
 
 def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict:
