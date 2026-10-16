@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from lokay import store
@@ -42,11 +43,15 @@ def plan_questions(plan: str = "") -> dict:
     }
 
 
+def valid_plan_text(text: str) -> bool:
+    return (all(section in text for section in SECTIONS)
+            and not re.search(r"git\s+(?:commit|push|reset|rebase)\b|\bgh[ \t]+", text, re.IGNORECASE))
+
+
 def valid_plan(path: Path) -> bool:
     if not path.is_file() or path.stat().st_size == 0:
         return False
-    text = path.read_text()
-    return all(section in text for section in SECTIONS)
+    return valid_plan_text(path.read_text())
 
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
@@ -168,7 +173,10 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | Non
         data = validate_synthesis(json.loads(artifact.read_text()), set(paths))
     except (ValueError, OSError) as exc:
         return {"result": "failed", "reason": f"invalid synthesis: {exc}"}
-    store.write_artifact(art, render_synthesis(data))
+    text = render_synthesis(data)
+    if not valid_plan_text(text):
+        return {"result": "failed", "reason": "invalid plan"}
+    store.write_artifact(art, text)
     return {"result": "done", "artifact": str(art)}
 
 

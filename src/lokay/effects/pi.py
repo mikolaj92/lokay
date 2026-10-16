@@ -10,7 +10,7 @@ import signal
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -100,6 +100,9 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     env.update({
         "GH_CONFIG_DIR": tempfile.mkdtemp(dir=os.path.realpath(env.get("TMPDIR") or "/tmp")),
         "UV_CACHE_DIR": str(Path(env.get("HOME") or Path.home()) / ".cache" / "uv"),
+        "PATH": str(Path(__file__).resolve().parents[3] / "sandbox/bin") + os.pathsep + env.get("PATH", os.defpath),
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_COUNT": "2",
         "GIT_CONFIG_KEY_0": "credential.helper",
@@ -189,7 +192,10 @@ def run_process(
     output = None
     ok = False
     try:
-        proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        from lokay.effects.git import pi_git_guard
+
+        with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()) if call == "pi" else nullcontext():
+            proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
         if pi_command(argv) is not None:
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
@@ -473,12 +479,17 @@ def pi_step(
     model = child.get("LOKAY2_MODEL", "")
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
-    proc = run_process(
-        sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child, artifact.parent.resolve()),
-        cwd=cwd,
-        env=child,
-        timeout=timeout,
-    )
+    from lokay.effects.git import PiGitViolation
+
+    try:
+        proc = run_process(
+            sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child, artifact.parent.resolve()),
+            cwd=cwd,
+            env=child,
+            timeout=timeout,
+        )
+    except PiGitViolation as exc:
+        return exc.failure()
     if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
         return {"result": "failed", "artifact": ""}
     return {"result": "done", "artifact": str(artifact)}

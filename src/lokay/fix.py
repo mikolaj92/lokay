@@ -28,6 +28,10 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
                 timeout=3600,
             )
     except Exception as exc:
+        from lokay.effects.git import PiGitViolation
+
+        if isinstance(exc, PiGitViolation):
+            return exc.failure()
         if changes["changed"]:
             return failure(changes, worktree)
         if isinstance(exc, FileNotFoundError):
