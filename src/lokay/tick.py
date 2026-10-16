@@ -455,7 +455,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
     store.ensure_directory(art.parent)
     while True:
         if park(picked):
-            raise RetryLater("run_rounds reached 6")
+            raise RetryLater("no_progress reached 6")
         saved = state_read(repo, issue)
         context = saved.get("plan_prompt") or plan.prompt_for(title, body)
         branches = saved.get("plan_branches") or {}
@@ -480,11 +480,13 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1)
+                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                             **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
-            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1)
+            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                         **store.round_fields(state_read(repo, issue)))
             if park(picked):
-                raise RetryLater("run_rounds reached 6")
+                raise RetryLater("no_progress reached 6")
             prompt = replan_prompt(picked, "Single plan rejected", outcome["uwagi"])
             state_update(repo, issue, plan_mode="full", plan_phase="write", plan_prompt=prompt,
                          plan_branches={}, plan_synthesis={}, plan_accepted_sha=None, plan_notes=[])
@@ -508,7 +510,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 branch.update(phase="write", accepted_sha=None)
             while True:
                 if park(picked):
-                    raise RetryLater("run_rounds reached 6")
+                    raise RetryLater("no_progress reached 6")
                 state_update(repo, issue, node="plan", plan_phase="write", plan_prompt=context,
                              plan_branches=branches, plan_synthesis=synthesis)
                 check_deadline()
@@ -525,20 +527,23 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 except RetryLater as exc:
                     branch.update(phase="failed", reason=str(exc), accepted_sha=None)
                     state_update(repo, issue, plan_branches=branches,
-                                 run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1)
+                                 run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                                 **store.round_fields(state_read(repo, issue)))
                     if park(picked):
-                        raise RetryLater("run_rounds reached 6")
+                        raise RetryLater("no_progress reached 6")
                     rounds_append(repo, issue, f"Plan {perspective}: failed: {exc}")
                     break
                 rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: Decision {outcome['next']}")
                 if outcome["next"] == "ok":
                     branch.update(phase="accepted", accepted_sha=hashlib.sha256(branch_art.read_bytes()).hexdigest())
                     paths[perspective] = branch_art
-                    state_update(repo, issue, plan_branches=branches, fix_history=[], fix_counts=[])
+                    state_update(repo, issue, plan_branches=branches, fix_history=[], fix_counts=[],
+                                 **store.round_fields(state_read(repo, issue), accepted_plan=True))
                     break
-                state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1)
+                state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                             **store.round_fields(state_read(repo, issue)))
                 if park(picked):
-                    raise RetryLater("run_rounds reached 6")
+                    raise RetryLater("no_progress reached 6")
                 fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
                 branch.update(phase="write", fingerprint=fingerprint,
                               prompt=context + "\n\nPrevious branch plan:\n" + branch_art.read_text()
@@ -556,7 +561,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         fresh = False
         while True:
             if park(picked):
-                raise RetryLater("run_rounds reached 6")
+                raise RetryLater("no_progress reached 6")
             state_update(repo, issue, node="plan", plan_phase="write", plan_synthesis=synthesis)
             check_deadline()
             if synthesis["phase"] == "write" or not plan.valid_plan(art):
@@ -579,11 +584,13 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                              plan_synthesis=synthesis,
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1)
+                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                             **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
-            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1)
+            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                         **store.round_fields(state_read(repo, issue)))
             if park(picked):
-                raise RetryLater("run_rounds reached 6")
+                raise RetryLater("no_progress reached 6")
             fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
             if synthesis["fingerprint"] == fingerprint:
                 prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
@@ -721,9 +728,9 @@ def park(picked: dict, uwagi: list | None = None, *, force: bool = False,
         if (saved.get("wait_escape") in ("retry", "plan")
                 and saved.get("node") != "fix" and saved.get("result") != "fix"):
             return None
-        if saved.get("run_rounds", len(history)) < 6:
+        if saved.get("no_progress", 0) < 6:
             return None
-    reason = reason or ("run_rounds reached 6" if "run_rounds" in saved else "fix_history reached 6")
+    reason = reason or "no_progress reached 6"
     if saved.get("result") == "parked":
         return {"result": "parked", "reason": reason}
     pr = saved.get("pr")
@@ -1117,10 +1124,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             counts = (saved.get("fix_counts", []) + [len(uwagi)])[-3:]
             history = saved.get("fix_history", []) + [uwagi]
             state_update(picked["repo"], picked["issue"], fix_counts=counts, fix_history=history,
-                         run_rounds=saved.get("run_rounds", len(history) - 1) + 1)
-            parked = park(picked, uwagi)
-            if parked:
-                return parked
+                         run_rounds=saved.get("run_rounds", 0) + 1,
+                         **store.round_fields(saved, diff_fingerprint=diff_fingerprint, completed=False))
             rounds_append(picked["repo"], picked["issue"],
                           f"Fix progress: findings={fingerprint}, hunk={hunk_fingerprint}, "
                           f"diff={diff_fingerprint}, counts={counts}")
@@ -1310,8 +1315,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 if not pushed_pr(picked["repo"], branch, sha):
                     return needs_help(picked, "sha mismatch after push", sha)
                 _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
+            fixed_diff = _retry(picked, "fix", read_diff)
             state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint,
-                         fix_hunk_fingerprint=hunk_fingerprint, diff_fingerprint=diff_fingerprint)
+                         fix_hunk_fingerprint=hunk_fingerprint, diff_fingerprint=diff_fingerprint,
+                         **store.round_fields(state_read(picked["repo"], picked["issue"]),
+                                              diff_fingerprint=hashlib.sha256((fixed_diff.stdout or "").encode()).hexdigest(),
+                                              completed=False))
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
             state_update(picked["repo"], picked["issue"], _event={"action": "fix_complete", "outcome": pushed})
@@ -1474,6 +1483,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             check_rounds=rounds, result=verdict["result"], verdict=verdict, test_log=log,
             run_rounds=state_read(picked["repo"], picked["issue"]).get("run_rounds", 0) + 1,
             check_notes=check_notes, check_history=check_history,
+            **store.round_fields(state_read(picked["repo"], picked["issue"]),
+                                 diff_fingerprint=diff_fingerprint, checks=verdict.get("checks"),
+                                 completed=verdict["result"] not in ("wait", "pending")),
         )
         counts = ", ".join(
             f"{kind}={len(decision['uwagi'])}"
@@ -1496,12 +1508,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             return parked
         if pending == "wait":
             saved = state_read(picked["repo"], picked["issue"])
-            if saved.get("wait_escape") == "plan":
-                parked = park(picked, verdict.get("uwagi"), force=True,
-                              reason="unlocated/unknown wait exhausted retry and one Plan")
+            if saved.get("wait_escape") == "plan" and saved.get("no_progress", 0) >= 6:
+                parked = park(picked, verdict.get("uwagi"), force=True)
                 if parked:
                     return parked
-            if saved.get("wait_escape") == "retry" and saved.get("run_rounds", 0) >= 6:
+            if saved.get("wait_escape") == "retry" and saved.get("no_progress", 0) >= 6:
                 findings = [*verdict.get("notes", []), *verdict.get("uwagi", []),
                             *verdict.get("unlocated_findings", []),
                             *verdict.get("unlocated_fail", []), *verdict.get("unknown", [])]
