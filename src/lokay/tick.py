@@ -633,6 +633,9 @@ def _prepare(picked: dict) -> tuple | dict:
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
+    base = base_branch(worktree)
+    build_git(worktree, ["fetch", "origin", base])
+    build_git(worktree, ["merge", "--no-edit", f"origin/{base}"])
     from lokay.setup import prepare_dependencies
 
     prepare_dependencies(worktree, repo, int(picked["issue"]))
@@ -837,7 +840,11 @@ def _resume(picked: dict) -> tuple | dict:
     except Exception as exc:
         return needs_help(picked, f"resume PR: {type(exc).__name__}: {exc}")
     if not pr or not pr.get("headRefOid"):
-        return needs_help(picked, "resume PR missing or missing SHA")
+        state_update(picked["repo"], picked["issue"], node="build", result="running",
+                     pr=None, sha=None, verdict=None, local_ci=None, fix_fingerprint=None,
+                     reason=None, last_error=None, failures=0, retry_at=0, awaiting=None)
+        rounds_append(picked["repo"], picked["issue"], "Resume without PR or SHA → Build")
+        return _prepare({**picked, "node": "build", "pr": None})
     sha = pr["headRefOid"]
     state_update(picked["repo"], picked["issue"], pr=pr["number"])
     if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):
