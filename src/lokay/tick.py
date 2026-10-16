@@ -145,6 +145,7 @@ def host_ready(report: dict[str, str]) -> bool:
 
 
 def pick(env: dict[str, str] | None = None) -> dict:
+    store.prune_caches()
     if shutil.disk_usage(Path.home()).free < 5000000000:
         return {"result": "idle", "reason": "disk"}
     report = probes(env)
@@ -376,7 +377,10 @@ def _tick() -> dict:
             print(dumps(result, separators=(",", ":")))
         return result
     finally:
-        release(outcome["held"])
+        try:
+            store.clear_cache(outcome["repo"], outcome["issue"])
+        finally:
+            release(outcome["held"])
 
 
 def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | None = None, *, plan_branch: bool = False) -> T:

@@ -141,6 +141,39 @@ def cache_dir(repo: str, issue: int) -> Path:
     return RUNS.parent / "cache" / name / str(issue)
 
 
+def clear_cache(repo: str, issue: int) -> None:
+    path = cache_dir(repo, issue)
+    root = RUNS.parent / "cache"
+    if root.is_symlink() or path.parent.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+        return
+    try:
+        shutil.rmtree(path)
+    except FileNotFoundError:
+        pass
+
+
+def prune_caches() -> None:
+    root = RUNS.parent / "cache"
+    if root.is_symlink():
+        return
+    cutoff = time.time() - 2 * 60 * 60
+    try:
+        with os.scandir(root) as repos:
+            for repo in repos:
+                if not repo.is_dir(follow_symlinks=False):
+                    continue
+                try:
+                    with os.scandir(repo.path) as issues:
+                        for issue in issues:
+                            if (issue.name.isdecimal() and issue.is_dir(follow_symlinks=False)
+                                    and issue.stat(follow_symlinks=False).st_mtime < cutoff):
+                                clear_cache(repo.name, int(issue.name))
+                except FileNotFoundError:
+                    continue
+    except FileNotFoundError:
+        pass
+
+
 def main_status(home: Path | None = None) -> dict:
     directory = home / "runs" if home is not None else RUNS
     return {path.parent.name.replace("__", "/"): json.loads(path.read_text())
