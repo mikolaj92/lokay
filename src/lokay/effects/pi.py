@@ -112,6 +112,19 @@ def cache_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
             "VALIDATION_DIR": str(directory / "validation")}
 
 
+def difficulty_env(level: str, base: Mapping[str, str] | None = None) -> dict[str, str]:
+    if level not in ("easy", "medium", "hard", "too_big"):
+        raise ValueError(f"unknown difficulty: {level}")
+    child = dict(os.environ if base is None else base)
+    for name in ("PROVIDER", "MODEL"):
+        key = f"LOKAY2_{name}_{level.upper()}"
+        value = child.get(key) or child.get(f"LOKAY2_{name}")
+        if not value or not value.strip():
+            raise ValueError(f"missing difficulty configuration: {key}")
+        child[f"LOKAY2_{name}"] = value
+    return child
+
+
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     env = cache_env(base, worktree)
     for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
