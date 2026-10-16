@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from json import dumps
+from functools import partial
 
 import hashlib
 import json
@@ -25,6 +25,9 @@ from lokay.lock import acquire, release
 from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
                        process_groups, retry_sleep, run_process, tick_deadline)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
+
+
+dumps = partial(json.dumps, default=store.json_default)
 
 
 def tick(repo: str, issue: int, act: Callable[[Run], Event]) -> Run:
@@ -1461,8 +1464,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if pending == "wait":
             saved = state_read(picked["repo"], picked["issue"])
             if saved.get("wait_escape") == "plan":
-                return park(picked, verdict.get("uwagi"), force=True,
-                            reason="unlocated/unknown wait exhausted retry and one Plan")
+                parked = park(picked, verdict.get("uwagi"), force=True,
+                              reason="unlocated/unknown wait exhausted retry and one Plan")
+                if parked:
+                    return parked
             if saved.get("wait_escape") == "retry" and saved.get("run_rounds", 0) >= 6:
                 findings = [*verdict.get("notes", []), *verdict.get("uwagi", []),
                             *verdict.get("unlocated_findings", []),

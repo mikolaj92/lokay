@@ -142,7 +142,8 @@ def render_synthesis(data: dict) -> str:
     def items(field):
         return "\n".join(f"- {row['tresc']} [źródła: {', '.join(row['zrodla'])}]" for row in data[field])
 
-    files = "\n".join(f"- {row['sciezka']}: {row['zmiana']} [źródła: {', '.join(row['zrodla'])}]"
+    change_field = "zmiana"
+    files = "\n".join(f"- {row['sciezka']}: {row.get(change_field, '')} [źródła: {', '.join(row['zrodla'])}]"
                       for row in data["pliki"])
     rejected = "\n".join(f"- {row['tresc']} [{row['zrodlo']}]: {row['powod']}" for row in data["odrzucone"])
     return (f"## Cel\n{data['cel']}\n\n### Kryteria\n{items('kryteria')}\n\n"
