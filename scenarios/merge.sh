@@ -53,9 +53,13 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
     advanced = []
     repairs = []
 
-    def github(args, env=None):
+    def github(args, env=None, cwd=None):
+        if args[:2] == ['api', '--paginate']:
+            return 0, 'value\n', ''
+        if args[:2] == ['repo', 'view']:
+            return 0, json.dumps({'nameWithOwner': repo['name'], 'defaultBranchRef': {'name': 'main'}}), ''
         if args[:2] == ['pr', 'list']:
-            sha = git.remote_sha(worktree, branch, strict=True)
+            sha = git.remote_sha(worktree, branch)
             return 0, json.dumps([{'number': 1, 'headRefName': branch, 'headRefOid': sha}]), ''
         if args[:2] == ['pr', 'merge']:
             sha = args[-1]
@@ -72,7 +76,7 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
                 advanced.append(command(clone, 'rev-parse', 'HEAD'))
             return 1, '', 'not mergeable: conflict'
         if args[:2] == ['pr', 'view']:
-            sha = git.remote_sha(worktree, branch, strict=True)
+            sha = git.remote_sha(worktree, branch)
             if args[-1] == 'headRefOid':
                 return 0, json.dumps({'headRefOid': sha}), ''
             assert args[-1] == 'statusCheckRollup,headRefOid', args
@@ -87,7 +91,7 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
 
     def decision(request):
         sha = request['state']['sha']
-        assert sha == git.remote_sha(worktree, branch, strict=True)
+        assert sha == git.remote_sha(worktree, branch)
         assert not advanced or sha != old
         reviewed.append(sha)
         answers = {}
@@ -99,12 +103,12 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
         return answers
 
     def resolve(path, previous, prompt, env, clone_path=None):
-        assert mode == 'conflict', mode
+        assert mode in ('conflict', 'unresolved'), mode
         assert 'value' in prompt
         assert not command(path, 'diff', '--name-only', '--diff-filter=U')
         assert not Path(command(path, 'rev-parse', '--git-path', 'MERGE_HEAD')).exists()
         assert not Path(command(path, 'rev-parse', '--git-path', 'rebase-merge')).exists()
-        (path / 'value').write_text('main\n')
+        (path / 'value').write_text('resolved\n' if mode == 'unresolved' else 'main\n')
         committed, junk = tidy_and_commit(path, 'Resolve main')
         assert 'value' in committed, (committed, junk, command(path, 'status', '--porcelain'))
         assert not Path(command(path, 'rev-parse', '--git-path', 'MERGE_HEAD')).exists()
@@ -131,17 +135,18 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
         outcome = tick._finish(picked, worktree, branch, old, [])
     head = command(worktree, 'rev-parse', 'HEAD')
     if mode == 'unresolved':
-        assert outcome['result'] == 'failed', outcome
-        assert outcome['reason'] == 'merge conflict persists after main synchronization'
-        assert head == old
+        assert outcome == {'result': 'pending', 'sha': head}, outcome
+        assert head != old
+        assert git.remote_sha(worktree, branch) == head
+        assert len(repairs) == 1
         assert merges == {old: 1}
         assert set(reviewed) == {old}
         assert store.state_read(repo['name'], 1)['verdict'] is None
-        print('unresolved: merge_old_sha=1 repeated_review=0 retry=1')
+        print('unresolved: merge_old_sha=1 repeated_review=0 fix=1 published_new_sha=1')
         continue
     assert outcome == {'result': 'pending', 'sha': head}, outcome
     assert head != old
-    assert git.remote_sha(worktree, branch, strict=True) == head
+    assert git.remote_sha(worktree, branch) == head
     assert merges == {old: 1}, merges
     assert reviewed and set(reviewed) == {old}, reviewed
     assert store.state_read(repo['name'], 1)['verdict'] is None

@@ -10,6 +10,45 @@ from lokay.effects.pi import run_process
 from lokay.safety import validate_argv
 
 REF_LOCK = ("cannot lock ref", "unable to resolve reference", ".lock")
+BASE_BRANCHES: dict[tuple[Path, str | None], str] = {}
+REPOSITORIES: dict[Path, dict] = {}
+
+
+def base_branch(path: Path, *, branch: str | None = None) -> str:
+    path = path.resolve()
+    key = (path, branch)
+    if key in BASE_BRANCHES:
+        return BASE_BRANCHES[key]
+    from lokay.effects.gh import _gh, open_pr_for
+    import json
+
+    def git(args):
+        code, out, err = _git(path, args)
+        if code:
+            raise RuntimeError(err or out)
+        return out.strip()
+
+    root = Path(git(["rev-parse", "--show-toplevel"]))
+    root_key = (root, branch)
+    if root_key not in BASE_BRANCHES:
+        common = (path / git(["rev-parse", "--git-common-dir"])).resolve()
+        if common not in REPOSITORIES:
+            code, out, err = _gh(["repo", "view", "--json", "nameWithOwner,defaultBranchRef"], cwd=root)
+            if code == 0:
+                REPOSITORIES[common] = json.loads(out)
+        repo = REPOSITORIES.get(common, {})
+        head = branch if branch is not None else git(["branch", "--show-current"])
+        pr = open_pr_for(repo["nameWithOwner"], head) if head and repo else None
+        base = (pr or {}).get("baseRefName") or (repo.get("defaultBranchRef") or {}).get("name")
+        if not base:
+            code, out, err = _git(path, ["symbolic-ref", "refs/remotes/origin/HEAD"])
+            base = out.strip().removeprefix("refs/remotes/origin/") if code == 0 else ""
+            base = base or "main"
+        if common not in REPOSITORIES:
+            return base
+        BASE_BRANCHES[root_key] = base
+    BASE_BRANCHES[key] = BASE_BRANCHES[root_key]
+    return BASE_BRANCHES[root_key]
 
 
 def _git(repo: Path, args: list[str], timeout: float = 60, *, env: dict[str, str] | None = None) -> tuple[int, str, str]:
@@ -46,10 +85,11 @@ def merge_files(repo: Path, sha: str) -> list[dict] | None:
 
 def worktree_add(repo: Path, branch: str, path: Path) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
-    code, out, err = _git(repo, ["fetch", "origin", "main"])
+    base = base_branch(repo, branch=branch)
+    code, out, err = _git(repo, ["fetch", "origin", base])
     if code != 0:
         return {"result": "failed", "error": err.strip() or out.strip()}
-    code, out, err = _git(repo, ["worktree", "add", "-b", branch, str(path), "origin/main"])
+    code, out, err = _git(repo, ["worktree", "add", "-b", branch, str(path), f"origin/{base}"])
     if code != 0 and "already exists" not in (err + out):
         return {"result": "failed", "error": err.strip() or out.strip()}
     return {"result": "added", "path": str(path), "branch": branch}
@@ -102,6 +142,9 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
         if code == 0:
             head, sha, _ = _git(repo, ["rev-parse", "HEAD"])
             return {"result": "pushed", "sha": sha.strip(), "attempts": attempt} if head == 0 else {"result": "failed"}
+        current = remote_sha(repo, branch)
+        if current != expected_remote_sha:
+            return {"result": "remote_moved", "sha": current or ""}
         last = (err or out).lower()
         locked = any(mark in last for mark in REF_LOCK)
         if not locked or attempt == attempts:

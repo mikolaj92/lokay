@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.effects.git import command, commit_paths, push, guard, failure
+from lokay.effects.git import base_branch, command, commit_paths, push, guard, failure
 from lokay.effects.gh import pr_create
 from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
 from lokay.safety import untrusted_issue_block
@@ -84,16 +84,17 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     def names(args: list[str]) -> set[str]:
         return set(filter(None, _git(worktree, args).split("\0")))
 
+    base = f"origin/{base_branch(worktree)}"
     modified = names(["diff", "--name-only", "-z", "HEAD"])
-    manifests = (modified | names(["diff", "--name-only", "-z", "origin/main..HEAD"])
+    manifests = (modified | names(["diff", "--name-only", "-z", f"{base}..HEAD"])
                  | names(["ls-files", "--others", "--exclude-standard", "-z"]))
     siblings = LOCKFILES
-    branch_changes = names(["diff", "--name-only", "-z", "origin/main...HEAD"])
+    branch_changes = names(["diff", "--name-only", "-z", f"{base}...HEAD"])
     stale_locks = sorted(path for path in branch_changes if Path(path).name in siblings
                          and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     for path in stale_locks:
-        if path in names(["ls-tree", "-r", "--name-only", "-z", "origin/main"]):
-            _git(worktree, ["checkout", "origin/main", "--", path])
+        if path in names(["ls-tree", "-r", "--name-only", "-z", base]):
+            _git(worktree, ["checkout", base, "--", path])
         else:
             _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
     junk = sorted(path for path in modified if path not in stale_locks and Path(path).name in siblings
@@ -153,10 +154,11 @@ def pr_body(worktree: Path, plan_path: Path, pi_response: str = "") -> str:
     except (OSError, UnicodeError) as exc:
         raise RuntimeError(f"cannot read plan {plan_path}: {exc}") from exc
     goal = re.search(r"^## Cel[^\n]*\n.*?(?=^## |\Z)", plan, re.MULTILINE | re.DOTALL)
-    stat = _git(worktree, ["diff", "--stat", "origin/main...HEAD"])
-    subjects = _git(worktree, ["log", "--format=%s", "origin/main..HEAD"])
+    base = f"origin/{base_branch(worktree)}"
+    stat = _git(worktree, ["diff", "--stat", f"{base}...HEAD"])
+    subjects = _git(worktree, ["log", "--format=%s", f"{base}..HEAD"])
     commits = "\n".join(f"- {subject}" for subject in subjects.splitlines())
-    files = _git(worktree, ["diff", "--name-only", "-z", "origin/main...HEAD"])
+    files = _git(worktree, ["diff", "--name-only", "-z", f"{base}...HEAD"])
     changed = "\n".join(f"- `{name}`" for name in files.split("\0") if name)
     done = f"## Co zrobiono\n\n{pi_response[-1500:].strip()}\n\n### Zmienione pliki\n\n{changed}\n\n"
     return done + f"## Zmiany\n\n```text\n{stat}\n```\n\n{commits}\n\n## Plan\n\n" + (goal.group().strip() if goal else "") + "\n"
@@ -207,8 +209,9 @@ def build_code(
         return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}
     from lokay.scope import is_test
 
+    base = f"origin/{base_branch(worktree)}"
     added = set()
-    for args in (["diff", "--name-status", "--diff-filter=A", "origin/main..HEAD"],
+    for args in (["diff", "--name-status", "--diff-filter=A", f"{base}..HEAD"],
                  ["diff", "--name-status", "--diff-filter=A", "HEAD"],
                  ["diff", "--cached", "--name-status", "--diff-filter=A"]):
         added.update(line.split("\t", 1)[1] for line in _git(worktree, args).splitlines() if "\t" in line)
@@ -221,7 +224,7 @@ def build_code(
             store.remove_file(file)
     tidy_and_commit(worktree, "lokay build", before)
     if removed:
-        remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
+        remaining = _git(worktree, ["diff", "--name-only", base, "HEAD"]).splitlines()
         deleted = set(_git(worktree, ["diff", "--name-only", "--diff-filter=D", previous_head, "HEAD"]).splitlines())
         if not any(not is_test(path) for path in remaining) and not (deleted & set(removed)):
             return {"result": "failed", "reason": "tests_only",
