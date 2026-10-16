@@ -15,7 +15,7 @@ from pathlib import Path
 from lokay import graph, store
 from dataclasses import replace
 from lokay.types import Event, Run, Progress, Snapshot, RepoSnapshot, Updated, parse_event
-from lokay.effects.git import base_branch, command
+from lokay.effects.git import base_branch, command, ensure_worktree
 from lokay.build import _git as build_git
 
 from lokay.types import Finding, Note, parse_finding
@@ -55,6 +55,7 @@ def act(run: Run) -> Event:
             node = "check"
         try:
             check_deadline()
+            ensure_worktree(run)
             prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
             outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
         except TickExpired:
@@ -595,10 +596,10 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
 
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
-    from lokay.effects.git import worktree_add
 
     from lokay import plan
 
+    ensure_worktree(picked, clean=False)
     saved = state_read(picked["repo"], picked["issue"])
     if "issue_title" not in saved or "issue_body" not in saved:
         code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
@@ -623,14 +624,12 @@ def _prepare(picked: dict) -> tuple | dict:
     accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
-        plan_rounds = _plan_graph(picked, art, title, body, cwd=root)
+        plan_rounds = _plan_graph(picked, art, title, body, cwd=worktree)
     parked = park(picked)
     if parked:
         return parked
     branch = f"lokay/{picked['issue']}"
     check_deadline()
-    if not worktree.exists():
-        _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
     from lokay.setup import prepare_dependencies
@@ -842,24 +841,6 @@ def _resume(picked: dict) -> tuple | dict:
     state_update(picked["repo"], picked["issue"], pr=pr["number"])
     if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):
         return needs_help(picked, "PR branch or number mismatch", sha)
-    code, out, err = _git(worktree, ["branch", "--show-current"]) if worktree.is_dir() else (1, "", "missing worktree")
-    if code != 0 or out.strip() != branch:
-        def restore():
-            commands = [["fetch", "origin", branch]]
-            if worktree.exists():
-                backup = worktree.with_name(f"{worktree.name}-recovery-{time.time_ns()}")
-                commands.append(["worktree", "move", str(worktree), str(backup)])
-            else:
-                commands.append(["worktree", "prune"])
-            for args in commands:
-                build_git(root, args)
-            exists, _, _ = _git(root, ["show-ref", "--verify", f"refs/heads/{branch}"])
-            args = (["worktree", "add", str(worktree), branch] if exists == 0 else
-                    ["worktree", "add", "-b", branch, str(worktree), f"origin/{branch}"])
-            build_git(root, args)
-            state_update(picked["repo"], picked["issue"], node="check", verdict=None, local_ci=None)
-            rounds_append(picked["repo"], picked["issue"], "Worktree restored → Check")
-        _retry(picked, "check", restore)
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
-    from lokay.effects.pi import run_process
+    from lokay.effects.pi import cache_env, run_process
     from lokay.build import generated_cleanup
 
     def execute(argv):
         try:
             with generated_cleanup(Path(cwd)):
-                return run_process(argv, cwd=cwd, timeout=timeout), False
+                return run_process(argv, cwd=cwd, env=cache_env(os.environ, cwd), timeout=timeout), False
         except TimeoutExpired:
             return CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s"), True
         except OSError as exc:

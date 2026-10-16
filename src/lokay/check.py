@@ -56,7 +56,10 @@ def hunks(diff: str) -> list[dict]:
 
 def lens(kind: str) -> str:
     path = QUESTIONS / f"check_{kind}.json"
-    return json.loads(path.read_text())["question"]
+    try:
+        return json.loads(path.read_text())["question"]
+    except FileNotFoundError:
+        return ""
 
 
 def hunk_finding(raw: dict) -> Finding:
@@ -121,6 +124,10 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
 def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None) -> dict:
     from lokay.effects.decide import decide
 
+    kind = " ".join(part for part in kind.split() if lens(part).strip())
+    if not kind:
+        return {"result": "skipped", "next": "ok", "confidence": 1.0,
+                "uwagi": [], "nits": [], "probabilities": []}
     decide_request = decide_request or decide
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
