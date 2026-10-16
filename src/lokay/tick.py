@@ -4,6 +4,7 @@ from json import dumps
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -39,6 +40,8 @@ def act(run: Run) -> Event:
     picked = run.state
 
     def dispatch() -> dict:
+        if state_read(picked["repo"], picked["issue"]).get("result") in ("merged", "closed"):
+            return {"result": state_read(picked["repo"], picked["issue"])["result"]}
         node = picked.get("node")
         if node not in ("plan", "build", "check", "fix", "merge"):
             return {}
@@ -73,8 +76,8 @@ def act(run: Run) -> Event:
         repo, issue = picked["repo"], picked["issue"]
         if outcome.get("result") in ("pending", "pr_open", "check", "wait", "parked"):
             return outcome
-        if outcome.get("result") == "merged":
-            state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
+        if outcome.get("result") in ("merged", "closed"):
+            state_update(repo, issue, result=outcome["result"], failures=0, retry_at=0, reason=None)
             return outcome
         state = state_read(repo, issue)
         if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
@@ -89,6 +92,200 @@ def act(run: Run) -> Event:
 def _repo_paths(repo: dict, issue: int) -> tuple[Path, Path]:
     root = Path(os.path.expanduser(repo["clone_path"]))
     return root, root.parent / f"{root.name}-wt-{issue}"
+
+
+def release_worktree(repo: dict, issue: int, *, path: Path | None = None) -> dict:
+    from lokay.effects import git
+
+    root, expected = _repo_paths(repo, issue)
+    path = expected if path is None else path
+    name = repo["name"]
+    branch = f"lokay/{issue}"
+    terminal = state_read(name, issue).get("result") in ("merged", "closed")
+    result = {"result": "retained", "reason": "unsafe", "bytes_freed": 0}
+    try:
+        if (name.casefold() == "mikolaj92/temida" or path.resolve() == root.resolve()
+                or path.resolve() in (Path.cwd().resolve(), *Path.cwd().resolve().parents)):
+            raise RuntimeError("protected worktree")
+        recovery = (path.parent.resolve() == expected.parent.resolve()
+                    and re.fullmatch(re.escape(expected.name) + r"-recovery-\d+", path.name) is not None)
+        if path.is_symlink() or (path.resolve() != expected.resolve() and not recovery):
+            raise RuntimeError("unexpected worktree path")
+        rows = git.worktree_list(root)
+        row = next((row for row in rows if Path(row["worktree"]).resolve() == path.resolve()), None)
+        if path.exists():
+            if not row or "locked" in row or (not recovery and row.get("branch") != f"refs/heads/{branch}"):
+                raise RuntimeError("unregistered, locked or mismatched worktree")
+            code, top, err = git._git(path, ["rev-parse", "--show-toplevel"])
+            if code or Path(top.strip()).resolve() != path.resolve():
+                raise RuntimeError("worktree identity mismatch")
+            for args in (["diff", "--quiet", "--ignore-submodules=none"],
+                         ["diff", "--cached", "--quiet", "--ignore-submodules=none"]):
+                code, out, err = git._git(path, args)
+                if code:
+                    raise RuntimeError("tracked changes or unreadable index")
+            code, out, err = git._git(path, ["ls-files", "--others", "-z"])
+            if code:
+                raise RuntimeError("unreadable untracked files")
+            caches = {".venv", "node_modules", "__pycache__", ".lokay", ".pytest_cache",
+                      ".mypy_cache", ".ruff_cache", ".hypothesis", ".tox", ".nox",
+                      ".build", ".swiftpm", ".gradle", ".next", ".nuxt", "build", "dist", "target"}
+            for raw in filter(None, out.split("\0")):
+                relative = Path(raw)
+                if relative.is_absolute() or ".." in relative.parts:
+                    raise RuntimeError("invalid untracked path")
+                if not any(part in caches and (path.joinpath(*relative.parts[:index + 1])).is_dir()
+                           and not path.joinpath(*relative.parts[:index + 1]).is_symlink()
+                           for index, part in enumerate(relative.parts[:-1])):
+                    raise RuntimeError(f"non-cache file: {raw}")
+            code, head, err = git._git(path, ["rev-parse", "HEAD"])
+            if code:
+                raise RuntimeError("unreadable HEAD")
+            head = head.strip()
+        else:
+            if not terminal or recovery:
+                raise RuntimeError("worktree missing")
+            code, out, err = git._git(root, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+            if code == 1:
+                git.worktree_prune(root)
+                state_update(name, issue, cleanup_pending=any(expected.parent.glob(f"{expected.name}-recovery-*")))
+                result = {"result": "released", "reason": "already absent", "bytes_freed": 0}
+                store.log_event("release", repo=name, issue=issue, path=str(path), **result)
+                return result
+            if code:
+                raise RuntimeError("branch lookup failed")
+            code, head, err = git._git(root, ["rev-parse", "--verify", f"refs/heads/{branch}"])
+            if code:
+                raise RuntimeError("unreadable branch HEAD")
+            head = head.strip()
+        remote = git.remote_sha(root, branch, strict=True)
+        if remote is not None:
+            if head != remote:
+                raise RuntimeError("HEAD not pushed")
+            proof = "pushed"
+        else:
+            if not terminal:
+                raise RuntimeError("HEAD not pushed")
+            code, out, err = git._git(root, ["fetch", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+            if code:
+                raise RuntimeError(f"main fetch failed: {err.strip()}")
+            code, out, err = git._git(root, ["merge-base", "--is-ancestor", head, "origin/main"])
+            if code:
+                raise RuntimeError("HEAD not on fetched origin/main")
+            proof = "on fetched main"
+        size = git.worktree_bytes(path) if path.exists() else 0
+        if path.exists():
+            if not recovery:
+                code, tip, err = git._git(root, ["rev-parse", "--verify", f"refs/heads/{branch}"])
+                if code or tip.strip() != head:
+                    raise RuntimeError("branch HEAD changed")
+            removed = git.worktree_remove(root, path)
+            if removed["result"] != "removed":
+                raise RuntimeError(removed.get("error") or "worktree removal failed")
+            result["bytes_freed"] = size
+        git.worktree_prune(root)
+        if terminal:
+            code, out, err = git._git(root, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+            if code not in (0, 1):
+                raise RuntimeError("branch lookup failed")
+            if code == 0:
+                code, tip, err = git._git(root, ["rev-parse", "--verify", f"refs/heads/{branch}"])
+                if code:
+                    raise RuntimeError("unreadable branch HEAD")
+                tip = tip.strip()
+                if remote is not None:
+                    if tip != remote:
+                        raise RuntimeError("branch HEAD not pushed")
+                else:
+                    code, out, err = git._git(root, ["fetch", "origin", "+refs/heads/main:refs/remotes/origin/main"])
+                    if code:
+                        raise RuntimeError("main fetch failed")
+                    code, out, err = git._git(root, ["merge-base", "--is-ancestor", tip, "origin/main"])
+                    if code:
+                        raise RuntimeError("branch HEAD not on fetched origin/main")
+                code, current, err = git._git(root, ["rev-parse", "--verify", f"refs/heads/{branch}"])
+                if code or current.strip() != tip:
+                    raise RuntimeError("branch HEAD changed")
+                git.branch_delete(root, branch)
+            state_update(name, issue, cleanup_pending=expected.exists() or any(expected.parent.glob(f"{expected.name}-recovery-*")))
+        result = {"result": "released", "reason": proof, "bytes_freed": size}
+    except Exception as exc:
+        result["reason"] = str(exc)
+        if terminal:
+            state_update(name, issue, cleanup_pending=True)
+    store.log_event("release", repo=name, issue=issue, path=str(path), **result)
+    return result
+
+
+def _worktree_prs(repo: str) -> list[dict]:
+    code, out, err = _gh(["pr", "list", "--repo", repo, "--state", "all",
+                         "--json", "number,headRefName,state", "--limit", "200"])
+    return [] if code else json.loads(out)
+
+
+def _terminal_pr(repo: str, issue: int, prs: list[dict] | None = None) -> bool:
+    saved = state_read(repo, issue)
+    if saved.get("result") in ("merged", "closed"):
+        return True
+    prs = _worktree_prs(repo) if prs is None else prs
+    pr = next((pr for pr in prs if pr.get("headRefName") == f"lokay/{issue}"
+               and (not saved.get("pr") or str(pr.get("number")) == str(saved["pr"]))), {})
+    if pr.get("state") in ("MERGED", "CLOSED"):
+        state_update(repo, issue, result=pr["state"].lower(), pr=pr["number"], cleanup_pending=True, retry_at=0)
+        return True
+    return False
+
+
+def sweep_worktrees(repos: list[dict]) -> None:
+    from lokay.effects import git
+
+    if not store.claim_worktree_sweep():
+        return
+    for repo in repos:
+        name = repo["name"]
+        if name.casefold() == "mikolaj92/temida":
+            continue
+        held = acquire(name.split("/")[0], name)
+        if held["result"] != "held":
+            continue
+        try:
+            root = Path(repo["clone_path"]).expanduser()
+            rows = git.worktree_list(root)
+            paths = {Path(row["worktree"]) for row in rows if Path(row["worktree"]).exists()}
+            paths.update(root.parent.glob(f"{root.name}-wt-*-recovery-*"))
+            candidates = {}
+            for path in paths:
+                match = re.fullmatch(re.escape(root.name) + r"-wt-(\d+)(?:-recovery-\d+)?", path.name)
+                if match and path.exists() and path.parent.resolve() == root.parent.resolve():
+                    candidates[path] = int(match[1])
+            for state_path in run_dir(name, 0).parent.glob("*"):
+                if state_path.name.isdecimal():
+                    issue = int(state_path.name)
+                    saved = state_read(name, issue)
+                    if saved.get("cleanup_pending"):
+                        candidates.setdefault(_repo_paths(repo, issue)[1], issue)
+            terminal = set()
+            failed = set()
+            prs = None
+            for path, issue in candidates.items():
+                if path.resolve() in (Path.cwd().resolve(), *Path.cwd().resolve().parents):
+                    continue
+                if issue not in terminal:
+                    if prs is None and state_read(name, issue).get("result") not in ("merged", "closed"):
+                        prs = _worktree_prs(name)
+                    _terminal_pr(name, issue, prs)
+                    terminal.add(issue)
+                released = release_worktree(repo, issue, path=path)
+                if released["result"] != "released":
+                    failed.add(issue)
+            for issue in failed:
+                if state_read(name, issue).get("result") in ("merged", "closed"):
+                    state_update(name, issue, cleanup_pending=True)
+            git.worktree_prune(root)
+        except Exception as exc:
+            store.log_event("worktree_sweep", repo=name, reason=str(exc))
+        finally:
+            release(held)
 
 
 class RetryLater(RuntimeError):
@@ -141,17 +338,19 @@ def host_ready(report: dict[str, str]) -> bool:
 
 
 def pick(env: dict[str, str] | None = None) -> dict:
+    child = os.environ if env is None else env
+    repos_file = child.get("LOKAY2_REPOS_FILE")
+    configured = load_repos(Path(repos_file) if repos_file else None)
+    sweep_worktrees(configured)
     if shutil.disk_usage(Path.home()).free < 5000000000:
         return {"result": "idle", "reason": "disk"}
     report = probes(env)
     if not host_ready(report):
         failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
         return {"result": "idle", "reason": "host_down", "failed": failed}
-    child = os.environ if env is None else env
-    repos_file = child.get("LOKAY2_REPOS_FILE")
     only_repo = child.get("LOKAY2_REPO")
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
-    repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
+    repos = [repo for repo in configured
              if not only_repo or repo["name"] == only_repo]
     blocked = []
 
@@ -175,7 +374,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 continue
             issue = int(path.name)
             saved = state_read(name, issue)
-            if saved and saved.get("result") != "merged":
+            if saved:
                 states[issue] = saved
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}), states=states))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
@@ -215,7 +414,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
-                if saved.get("result") == "parked" or saved.get("waiting_on") == "ci":
+                if saved.get("result") in ("parked", "merged", "closed") or saved.get("waiting_on") == "ci":
                     continue
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
@@ -246,6 +445,11 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 try:
                     repo_attempt(name, time.time())
                     branch = f"lokay/{number}"
+                    if state_read(name, number).get("result") in ("merged", "closed"):
+                        release(held)
+                        repo = replace(repo, busy=True)
+                        snapshot = replace(snapshot, repos=tuple(repo if row.name == name else row for row in snapshot.repos))
+                        continue
                     if selected.kind == "red_main":
                         pr = open_pr_for(name, branch)
                         saved = state_read(name, number)
@@ -372,7 +576,13 @@ def _tick() -> dict:
             print(dumps(result, separators=(",", ":")))
         return result
     finally:
-        release(outcome["held"])
+        try:
+            repo = next(row for row in load_repos() if row["name"] == outcome["repo"])
+            release_worktree(repo, outcome["issue"])
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Worktree cleanup failed: %s", exc)
+        finally:
+            release(outcome["held"])
 
 
 def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | None = None, *, plan_branch: bool = False) -> T:
@@ -833,6 +1043,8 @@ def _resume(picked: dict) -> tuple | dict:
     except Exception as exc:
         return needs_help(picked, f"resume PR: {type(exc).__name__}: {exc}")
     if not pr or not pr.get("headRefOid"):
+        if _terminal_pr(picked["repo"], picked["issue"]):
+            return {"result": state_read(picked["repo"], picked["issue"])["result"]}
         return needs_help(picked, "resume PR missing or missing SHA")
     sha = pr["headRefOid"]
     state_update(picked["repo"], picked["issue"], pr=pr["number"])
@@ -840,6 +1052,7 @@ def _resume(picked: dict) -> tuple | dict:
         return needs_help(picked, "PR branch or number mismatch", sha)
     code, out, err = _git(worktree, ["branch", "--show-current"]) if worktree.is_dir() else (1, "", "missing worktree")
     if code != 0 or out.strip() != branch:
+        restored_at = time.monotonic()
         def restore():
             commands = [["fetch", "origin", branch]]
             if worktree.exists():
@@ -855,7 +1068,26 @@ def _resume(picked: dict) -> tuple | dict:
             build_git(root, args)
             state_update(picked["repo"], picked["issue"], node="check", verdict=None, local_ci=None)
             rounds_append(picked["repo"], picked["issue"], "Worktree restored → Check")
-        _retry(picked, "check", restore)
+        restore_ms = setup_ms = 0
+        try:
+            try:
+                _retry(picked, "check", restore)
+            finally:
+                restore_ms = round((time.monotonic() - restored_at) * 1000)
+            from lokay.setup import prepare_dependencies
+
+            setup_at = time.monotonic()
+            try:
+                setup = prepare_dependencies(worktree, repo, int(picked["issue"]))
+            finally:
+                setup_ms = round((time.monotonic() - setup_at) * 1000)
+            setup = setup if isinstance(setup, dict) else {}
+            code, head, err = _git(worktree, ["rev-parse", "HEAD"])
+            if code == 0 and head.strip():
+                picked["_recreated_setup"] = {"head": head.strip(), "setup": setup}
+        finally:
+            store.log_event("recreate", repo=picked["repo"], issue=picked["issue"],
+                            restore_ms=restore_ms, setup_ms=setup_ms)
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 
@@ -1292,7 +1524,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         from lokay.setup import prepare_dependencies
 
         state_update(picked["repo"], picked["issue"], local_ci=None, test_log=None, tested=False)
-        setup = prepare_dependencies(worktree, repo, int(picked["issue"]))
+        recreated = picked.pop("_recreated_setup", None)
+        code, head, err = _git(worktree, ["rev-parse", "HEAD"]) if recreated else (1, "", "")
+        setup = (recreated["setup"] if recreated and code == 0 and head.strip()
+                 and head.strip() == recreated["head"] else
+                 prepare_dependencies(worktree, repo, int(picked["issue"])))
         setup = setup if isinstance(setup, dict) else {}
         if setup.get("failed"):
             ci = {"sha": sha, "result": "red", "tested": False, "tested_cwds": [],

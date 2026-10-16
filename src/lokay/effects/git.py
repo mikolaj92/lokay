@@ -18,11 +18,15 @@ def _git(repo: Path, args: list[str], timeout: float = 60) -> tuple[int, str, st
 
 def worktree_add(repo: Path, branch: str, path: Path) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
-    code, out, err = _git(repo, ["fetch", "origin", "main"])
+    code, out, err = _git(repo, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+    if code == 0:
+        code, out, err = _git(repo, ["worktree", "add", str(path), branch])
+    elif code == 1:
+        code, out, err = _git(repo, ["fetch", "origin", "main"])
+        if code != 0:
+            return {"result": "failed", "error": err.strip() or out.strip()}
+        code, out, err = _git(repo, ["worktree", "add", "-b", branch, str(path), "origin/main"])
     if code != 0:
-        return {"result": "failed", "error": err.strip() or out.strip()}
-    code, out, err = _git(repo, ["worktree", "add", "-b", branch, str(path), "origin/main"])
-    if code != 0 and "already exists" not in (err + out):
         return {"result": "failed", "error": err.strip() or out.strip()}
     return {"result": "added", "path": str(path), "branch": branch}
 
@@ -34,9 +38,45 @@ def worktree_remove(repo: Path, path: Path) -> dict:
     return {"result": "removed", "path": str(path)}
 
 
-def remote_sha(repo: Path, branch: str) -> str | None:
+def worktree_prune(repo: Path) -> None:
+    code, out, err = _git(repo, ["worktree", "prune"])
+    if code:
+        raise RuntimeError(err.strip() or out.strip())
+
+
+def worktree_list(repo: Path) -> list[dict]:
+    code, out, err = _git(repo, ["worktree", "list", "--porcelain", "-z"])
+    if code:
+        raise RuntimeError(err.strip() or out.strip())
+    rows = []
+    for block in out.split("\0\0"):
+        row = {}
+        for field in filter(None, block.split("\0")):
+            key, _, value = field.partition(" ")
+            row[key] = value
+        if row:
+            rows.append(row)
+    return rows
+
+
+def worktree_bytes(path: Path) -> int:
+    proc = run_process(["du", "-sk", str(path)], timeout=120)
+    if proc.returncode:
+        raise RuntimeError(proc.stderr or "du failed")
+    return int(proc.stdout.split()[0]) * 1024
+
+
+def branch_delete(repo: Path, branch: str) -> None:
+    code, out, err = _git(repo, ["branch", "-D", branch])
+    if code:
+        raise RuntimeError(err.strip() or out.strip())
+
+
+def remote_sha(repo: Path, branch: str, *, strict: bool = False) -> str | None:
     code, out, err = _git(repo, ["ls-remote", "origin", f"refs/heads/{branch}"])
     if code != 0:
+        if strict:
+            raise RuntimeError(err.strip() or out.strip() or "remote lookup failed")
         return None
     line = out.strip().splitlines()
     if not line or not line[0].strip():

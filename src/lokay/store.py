@@ -324,6 +324,17 @@ def shared_file_lock(path: Path):
                 fcntl.flock(file.fileno(), fcntl.LOCK_UN)
 
 
+def claim_worktree_sweep() -> bool:
+    path = RUNS.parent / "sweep.json"
+    with shared_file_lock(path.with_suffix(".lock")):
+        now = time.time()
+        previous = json.loads(path.read_text()) if path.exists() else {}
+        if now - previous.get("last_attempt", 0) < 900:
+            return False
+        write_json(path, {"last_attempt": now})
+        return True
+
+
 def write_heartbeat(result: str | None = None, **fields) -> dict:
     path = Path.home() / ".lokay" / "heartbeat.json"
     with shared_file_lock(path.with_suffix(".lock")):
