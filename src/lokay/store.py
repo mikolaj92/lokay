@@ -9,6 +9,7 @@ import shutil
 import time
 import uuid
 from contextlib import contextmanager
+from dataclasses import asdict, is_dataclass
 from json import dumps as dumps
 from tempfile import NamedTemporaryFile
 from importlib.metadata import PackageNotFoundError, version
@@ -84,7 +85,7 @@ def log_event(kind: str, **fields) -> None:
                    **CONTEXT, "kind": kind, **fields}
             if kind == "call":
                 value = row.pop("input")
-                raw = value.encode() if isinstance(value, str) else json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+                raw = value.encode() if isinstance(value, str) else json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=json_default).encode()
                 row["input"] = "sha256:" + hashlib.sha256(raw).hexdigest()
                 row["ms"] = round((time.monotonic() - row.pop("started")) * 1000)
             for key in ("output", "before", "event", "after"):
@@ -100,10 +101,10 @@ def log_event(kind: str, **fields) -> None:
                         if isinstance(value, dict):
                             value = {k: v[:500] if isinstance(v, str) else v
                                      for k, v in value.items() if k in ("result", "reason", "returncode", "next")}
-                            if len(json.dumps(value, ensure_ascii=False).encode()) <= 2048:
+                            if len(json.dumps(value, ensure_ascii=False, default=json_default).encode()) <= 2048:
                                 row[key] = value
                                 continue
-                        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+                        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=json_default)
                         text = text.encode()[:2048].decode("utf-8", errors="ignore")
                         while len(json.dumps(text, ensure_ascii=False).encode()) > 2048:
                             text = text[:-1]
@@ -275,10 +276,10 @@ def check_record(result: CheckResult) -> dict:
     return record
 
 
-def json_default(value: object) -> dict:
-    if isinstance(value, CheckResult):
-        return check_record(value)
-    raise TypeError(f"not JSON serializable: {type(value).__name__}")
+def json_default(value: object) -> dict | str:
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
+    return str(value)
 
 
 def write_json(path: Path, value: object, *, indent: int | None = None,

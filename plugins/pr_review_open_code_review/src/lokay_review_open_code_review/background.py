@@ -19,7 +19,9 @@ def _quoted(label: str, text: str) -> str:
 
 
 def render_background(request: Mapping[str, Any]) -> bytes:
-    task = request.get("task") if isinstance(request.get("task"), Mapping) else {}
+    task = request.get("task")
+    if not isinstance(task, Mapping):
+        task = {}
     identities = json.dumps(
         {
             "repo": request.get("repo"),
