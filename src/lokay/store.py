@@ -134,6 +134,13 @@ def run_dir(repo: str, issue: int) -> Path:
     return RUNS / repo.replace("/", "__") / str(issue)
 
 
+def cache_dir(repo: str, issue: int) -> Path:
+    name = repo.replace("/", "__")
+    if not name or name in (".", "..") or Path(name).name != name:
+        raise ValueError("invalid cache repository")
+    return RUNS.parent / "cache" / name / str(issue)
+
+
 def main_status(home: Path | None = None) -> dict:
     directory = home / "runs" if home is not None else RUNS
     return {path.parent.name.replace("__", "/"): json.loads(path.read_text())
@@ -179,7 +186,49 @@ def state_read(repo: str, issue: int) -> dict:
     if not path.exists():
         return {}
     state = json.loads(path.read_text())
-    if (state.get("waiting_on") != derive_waiting_on(state)
+    from lokay.check import QUESTIONS
+    from lokay.types import parse_finding
+
+    lenses = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
+    before = json.dumps(state, sort_keys=True)
+
+    def known(name):
+        return not name or all(part in lenses or part in {"scope", "conflict"} for part in name.split())
+
+    def prune(value):
+        if not isinstance(value, dict):
+            return
+        for key in ("uwagi", "nits", "notes", "findings", "replan", "unlocated_findings",
+                    "unlocated_fail", "unknown", "check_notes", "plan_notes"):
+            if isinstance(value.get(key), list):
+                value[key] = [row for row in value[key]
+                              if not isinstance(row, dict) or known(parse_finding(row).lens)]
+        if isinstance(value.get("fix_history"), list):
+            value["fix_history"] = [[row for row in findings if known(parse_finding(row).lens)]
+                                    for findings in value["fix_history"]]
+        decisions = value.get("decisions")
+        if isinstance(decisions, dict):
+            value["decisions"] = {name: decision for name, decision in decisions.items() if known(name)}
+        elif isinstance(decisions, list):
+            value["decisions"] = [row for row in decisions
+                                  if known(parse_finding(row).lens or row.get("kind", ""))]
+        if isinstance(value.get("dispute"), dict):
+            value["dispute"] = {name: decision for name, decision in value["dispute"].items() if known(name)}
+        for key, child in value.items():
+            if key == "checks":
+                continue
+            if isinstance(child, dict):
+                prune(child)
+            elif isinstance(child, list):
+                for row in child:
+                    prune(row)
+
+    verdict_before = json.dumps(state.get("verdict"), sort_keys=True)
+    prune(state)
+    if verdict_before != json.dumps(state.get("verdict"), sort_keys=True):
+        state.update(node="check", result="check", verdict=None, fix_fingerprint=None)
+    changed = before != json.dumps(state, sort_keys=True)
+    if (changed or state.get("waiting_on") != derive_waiting_on(state)
             or (state.get("result") == "wait" and state.get("awaiting") == "human"
                 and not state.get("wait_escape"))):
         save_run(repo, issue, state)

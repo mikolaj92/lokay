@@ -67,7 +67,7 @@ def generated_cleanup(worktree: Path):
         yield
         return
     before = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
-    locks = [name for name in _git(worktree, ["ls-files", "-z"]).split("\0")
+    locks = [name for name in _git(worktree, ["ls-tree", "-r", "--name-only", "-z", "HEAD"]).split("\0")
              if Path(name).name in LOCKFILES]
     try:
         yield

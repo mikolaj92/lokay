@@ -93,14 +93,32 @@ def cleanup_worktree_caches(worktree: Path) -> None:
         tick_deadline.reset(token)
 
 
+def cache_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
+    from lokay.config import load_repos
+
+    worktree = Path(worktree).resolve()
+    root = next((path for path in (worktree, *worktree.parents)
+                 if path.name.rpartition("-wt-")[2].isdecimal()), worktree)
+    repo, separator, issue = root.name.rpartition("-wt-")
+    clone = root.with_name(repo) if separator else root
+    name = next((row["name"] for row in load_repos()
+                 if Path(row["clone_path"]).expanduser().resolve() == clone), clone.name)
+    directory = store.cache_dir(name, int(issue) if separator and issue.isdecimal() else 0).resolve()
+    if directory.is_relative_to(worktree):
+        raise ValueError(f"cache directory must be outside worktree: {directory}")
+    store.ensure_directory(directory / "validation")
+    return {**base, "UV_CACHE_DIR": str(directory / "uv"),
+            "XDG_CACHE_HOME": str(directory / "xdg"),
+            "VALIDATION_DIR": str(directory / "validation")}
+
+
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
-    env = dict(base)
+    env = cache_env(base, worktree)
     for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
                 "GIT_ASKPASS", "SSH_AUTH_SOCK"):
         env.pop(key, None)
     env.update({
         "GH_CONFIG_DIR": tempfile.mkdtemp(dir=os.path.realpath(env.get("TMPDIR") or "/tmp")),
-        "UV_CACHE_DIR": str(Path(env.get("HOME") or Path.home()) / ".cache" / "uv"),
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_COUNT": "2",
         "GIT_CONFIG_KEY_0": "credential.helper",
@@ -123,6 +141,7 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], ext
         "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[3] / "sandbox/pi.sb"),
         "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
         "-D", f"ARTIFACT_DIR={Path(extra_dir).resolve() if extra_dir is not None else worktree}",
+        "-D", f"CACHE_DIR={Path(cache_env(env, worktree)['VALIDATION_DIR']).parent.resolve()}",
         "-D", f"TMPDIR={os.path.realpath(env.get('TMPDIR') or '/tmp')}",
         "-D", f"HOME={os.path.realpath(env.get('HOME') or os.environ['HOME'])}",
         *argv,
