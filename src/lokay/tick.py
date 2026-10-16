@@ -15,7 +15,7 @@ from pathlib import Path
 from lokay import graph, store
 from dataclasses import replace
 from lokay.types import Event, Run, Progress, Snapshot, RepoSnapshot, Updated, parse_event
-from lokay.effects.git import command
+from lokay.effects.git import base_branch, command
 from lokay.build import _git as build_git
 
 from lokay.types import Finding, Note, parse_finding
@@ -647,8 +647,9 @@ def _prepare(picked: dict) -> tuple | dict:
     if built.get("result") == "no_changes" or built.get("reason") == "no_changes":
         pr = open_pr_for(picked["repo"], branch)
         if pr:
-            build_git(worktree, ["fetch", "origin", "main"])
-            if int(build_git(worktree, ["rev-list", "--count", "origin/main..HEAD"])) > 0:
+            base = base_branch(worktree)
+            build_git(worktree, ["fetch", "origin", base])
+            if int(build_git(worktree, ["rev-list", "--count", f"origin/{base}..HEAD"])) > 0:
                 rounds_append(picked["repo"], picked["issue"],
                               "no_changes: fix already on branch, checking existing PR")
                 built = {**built, "result": "done", "reason": None,
@@ -762,7 +763,7 @@ def fix_to_build(picked: dict, worktree: Path) -> dict | None:
     failed = re.findall(r"^FAILED\s+([^\s:]+)::", log, re.MULTILINE)
     if not failed:
         return None
-    code, added, err = _git(worktree, ["diff", "--name-status", "--diff-filter=A", "origin/main...HEAD"])
+    code, added, err = _git(worktree, ["diff", "--name-status", "--diff-filter=A", f"origin/{base_branch(worktree)}...HEAD"])
     if code != 0:
         raise RuntimeError(err or "added test diff failed")
     added_tests = {line.split("\t", 1)[1] for line in added.splitlines()
@@ -946,8 +947,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.checks import CheckInput, run_checks
     from lokay.effects.decide import decide
     from lokay.fix import fix_code, fix_publish
-    from lokay.effects.git import _git
-    from lokay.effects.gh import pr_checks, check_comment
+    from lokay.effects.git import BASE_BRANCHES, _git
+    from lokay.effects.gh import pr_checks, check_comment, pr_files
     from lokay.merge import merge_sha
 
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
@@ -968,15 +969,31 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         for args in (["fetch", "origin", branch], ["merge", "--ff-only", f"origin/{branch}"]):
             build_git(worktree, args)
 
+    base = base_branch(worktree)
+
+    def conflict_fix(files, log):
+        finding = {"result": "fix", "sha": sha, "uwagi": [
+            {"pytanie": "conflict", "plik": file, "log": log} for file in files
+        ]}
+        if not finding["uwagi"]:
+            raise RuntimeError("merge conflict without PR files")
+        state_update(picked["repo"], picked["issue"],
+                     _event={"action": "verdict", "outcome": finding},
+                     verdict=finding, result="fix", sha=sha)
+        return finding
+
     def sync_main():
-        build_git(worktree, ["fetch", "origin", "main"])
+        build_git(worktree, ["fetch", "origin", base])
         out = build_git(worktree, ["diff", "--name-only", "--diff-filter=U"])
         if out:
-            return out.splitlines()
-        code, out, err = _git(worktree, ["merge", "--no-edit", "origin/main"])
+            files = out.splitlines()
+            build_git(worktree, ["merge", "--abort"])
+            return files
+        code, out, err = _git(worktree, ["merge", "--no-edit", f"origin/{base}"])
         if code != 0:
             conflict_code, files, conflict_err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
             if conflict_code == 0 and files.strip():
+                build_git(worktree, ["merge", "--abort"])
                 return files.splitlines()
             raise RuntimeError(conflict_err or err or out)
         return []
@@ -990,10 +1007,20 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if isinstance(prepared, dict):
                 return prepared
             worktree, branch, sha, tests, plan_rounds = prepared
+            base = base_branch(worktree)
             pending = "check"
         check_deadline()
+        saved = state_read(picked["repo"], picked["issue"])
+        if saved.get("merge_attempts", {}).get(sha, 0) >= 2:
+            pending = "fix"
+        elif pending == "merge" and saved.get("merge_conflict_sha") == sha:
+            pending = "check"
         if pending == "merge" and verdict and verdict.get("sha") == sha:
             pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
+            if pr and pr.get("baseRefName"):
+                base = pr["baseRefName"]
+                BASE_BRANCHES[(worktree.resolve(), None)] = base
+                BASE_BRANCHES[(worktree.resolve(), branch)] = base
             if pr and pr.get("headRefOid") == sha:
                 state_update(picked["repo"], picked["issue"], node="merge", pr=pr["number"])
                 try:
@@ -1014,24 +1041,30 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     rounds_append(picked["repo"], picked["issue"], f"Merge: sha={merged['merge_sha']}")
                     return merged
                 rounds_append(picked["repo"], picked["issue"], f"Merge: retry, result={merged['result']}")
-                if merged["result"] != "conflict":
+                if merged["result"] in ("conflict", "merge_limit"):
+                    pending = "check"
+                    verdict = None
+                else:
                     state_update(picked["repo"], picked["issue"], node="check", verdict=None)
             state_update(picked["repo"], picked["issue"], node="check", verdict=None)
             if pr and pr.get("headRefOid") and pr["headRefOid"] != sha:
                 _retry(picked, "check", sync_head)
                 sha = pr["headRefOid"]
             pending = "check"
+        saved = state_read(picked["repo"], picked["issue"])
+        blocked = saved.get("merge_conflict_sha") == sha or saved.get("merge_attempts", {}).get(sha, 0) >= 2
+        if blocked and pending == "fix":
+            pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
+            if not pr:
+                raise RuntimeError("PR missing after merge conflict")
+            verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr["number"])),
+                                   "Merge conflict on GitHub; change the PR before checking again.")
         state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
         if pending != "fix":
             conflicts = _retry(picked, "check", sync_main)
             if conflicts:
-                conflict_verdict = verdict = {"result": "fix", "sha": sha, "uwagi": [
-                    {"pytanie": "conflict", "plik": file, "log": "Resolve the merge with origin/main."}
-                    for file in conflicts
-                ]}
+                conflict_verdict = verdict = conflict_fix(conflicts, f"Resolve the merge with origin/{base}.")
                 pending = "fix"
-                state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
-                             verdict=verdict)
                 rounds_append(picked["repo"], picked["issue"], "Check: conflict, files=" + ", ".join(conflicts))
                 pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
                 if pr:
@@ -1048,14 +1081,22 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     pending = "check"
                     continue
                 if pushed["result"] != "pushed":
-                    raise RuntimeError(f"main synchronization publish failed: {pushed}")
+                    raise RuntimeError(f"base synchronization publish failed: {pushed}")
+                previous_sha = sha
                 sha = pushed["sha"]
                 if not pushed_pr(picked["repo"], branch, sha):
                     return needs_help(picked, "sha mismatch after push", sha)
                 _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
                 state_update(picked["repo"], picked["issue"], sha=sha, verdict=None)
+                if blocked and sha == previous_sha:
+                    pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
+                    if not pr:
+                        raise RuntimeError("PR missing after merge conflict")
+                    verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr["number"])),
+                                           "Merge conflict on GitHub; change the PR before checking again.")
+                    pending = "fix"
         def read_diff():
-            diff = command(worktree, ["diff", "origin/main...HEAD"])
+            diff = command(worktree, ["diff", f"origin/{base}...HEAD"])
             if diff.returncode != 0:
                 raise RuntimeError(diff.stderr or "diff failed")
             return diff
@@ -1270,7 +1311,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             sha = pushed["sha"]
             if sha != previous_sha and pushed["result"] == "pushed":
                 def read_fix_subject():
-                    code, subject, err = _git(worktree, ["log", "--format=%s", "origin/main..HEAD"])
+                    code, subject, err = _git(worktree, ["log", "--format=%s", f"origin/{base}..HEAD"])
                     if code != 0:
                         raise RuntimeError(err or "fix commit subject lookup failed")
                     return next(iter(subject.splitlines()), "")
@@ -1304,7 +1345,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             ci = _retry(picked, "check", lambda: run_repo_tests(repo, sha, worktree))
             ci = {**ci, "log": setup.get("log", "") + "\n" + ci["log"]}
         if ci["result"] == "red" and not setup.get("failed"):
-            ci = _retry(picked, "check", lambda: local_baseline(picked["repo"], clone_path, ci))
+            ci = _retry(picked, "check", lambda: local_baseline(picked["repo"], clone_path, ci, base=base))
         ci = {**ci, "argv": list(tests)}
         state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
         if ci["notes"]:
@@ -1354,7 +1395,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
         def read_stat():
-            stat = command(worktree, ["diff", "--stat", "origin/main...HEAD"])
+            stat = command(worktree, ["diff", "--stat", f"origin/{base}...HEAD"])
             if stat.returncode != 0:
                 raise RuntimeError(stat.stderr or "diff stat failed")
             return stat.stdout or ""
@@ -1412,7 +1453,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         verdict = aggregate(sha, ci, decisions)
         from lokay.scope import code_scope_issue
 
-        code, changed, err = _git(worktree, ["diff", "--name-only", "origin/main...HEAD"])
+        code, changed, err = _git(worktree, ["diff", "--name-only", f"origin/{base}...HEAD"])
         if code != 0:
             raise RuntimeError(err or "scope diff failed")
         files = changed.splitlines()
@@ -1430,6 +1471,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         from lokay.check import apply_checks
 
         verdict = apply_checks(verdict, run_checks(check_input), ci)
+        saved_merge = state_read(picked["repo"], picked["issue"])
+        if verdict["result"] == "merge" and (
+            saved_merge.get("merge_conflict_sha") == sha
+            or saved_merge.get("merge_attempts", {}).get(sha, 0) >= 2
+        ):
+            verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr_number)),
+                                   "Merge conflict on GitHub; change the PR before checking again.")
         rounds += 1
         check_history = state_read(picked["repo"], picked["issue"]).get("check_history", []) + [{
             "round": rounds, "sha": sha,

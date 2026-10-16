@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lokay.config import load_repos
 from lokay.effects.gh import _gh, fit_body
-from lokay.effects.git import _git
+from lokay.effects.git import _git, base_branch
 from lokay.store import main_status, save_main_status
 
 TITLE = "lokay: main czerwony"
@@ -49,7 +49,7 @@ def guard_issue(repo: str, body: str) -> int:
     return int(out.strip().rstrip("/").rsplit("/", 1)[1])
 
 
-def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None) -> dict:
+def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None, *, base: str | None = None) -> dict:
     config = next(row for row in load_repos() if row["name"] == repo)
 
     def git(path, args):
@@ -58,8 +58,9 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
             raise RuntimeError(err or out)
         return out.strip()
 
-    git(clone_path, ["fetch", "origin", "main"])
-    sha = git(clone_path, ["rev-parse", "origin/main"])
+    base = base or base_branch(clone_path)
+    git(clone_path, ["fetch", "origin", base])
+    sha = git(clone_path, ["rev-parse", f"origin/{base}"])
     previous = main_status().get(repo, {})
     baseline = previous.get("baseline", {})
     argv = config.get("test") or []
@@ -97,10 +98,10 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     return result
 
 
-def local_baseline(repo: str, clone_path: Path, ci: dict) -> dict:
+def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = None) -> dict:
     from lokay.check import test_failures
 
-    main = check_main(repo, clone_path)["baseline"]
+    main = check_main(repo, clone_path, base=base)["baseline"]
     if main["ci"]["result"] != "red" or any(
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):
