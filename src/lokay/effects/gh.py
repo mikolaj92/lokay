@@ -3,6 +3,7 @@ from __future__ import annotations
 from json import dumps
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -48,9 +49,44 @@ def auth_status(env: Mapping[str, str]):
     return run_process([gh_bin(), "auth", "status"], env=env, timeout=15)
 
 
+def _reconcile(args: list[str], env: Mapping[str, str] | None, cwd: Path | None):
+    repo = args[args.index("--repo") + 1]
+    operation = args[:2]
+    if operation == ["pr", "create"]:
+        branch = args[args.index("--head") + 1]
+        pr = open_pr_for(repo, branch)
+        if pr:
+            return subprocess.CompletedProcess(args, 0, f"https://github.com/{repo}/pull/{pr['number']}", "")
+        return None
+    number = args[2]
+    if operation == ["pr", "comment"]:
+        code, out, err = _gh(["api", "--paginate", "--slurp", f"repos/{repo}/issues/{number}/comments"], env, cwd=cwd)
+        if code:
+            raise RuntimeError(err or "comment reconciliation failed")
+        body = args[args.index("--body") + 1]
+        for page in json.loads(out):
+            for comment in page:
+                if comment.get("body") == body:
+                    return subprocess.CompletedProcess(args, 0, comment["html_url"], "")
+        return None
+    field = "body" if operation == ["pr", "edit"] else "mergeCommit"
+    code, out, err = _gh(["pr", "view", number, "--repo", repo, "--json", field], env, cwd=cwd)
+    if code:
+        raise RuntimeError(err or "PR reconciliation failed")
+    value = json.loads(out).get(field)
+    if (field == "body" and value == args[args.index("--body") + 1]) or (field == "mergeCommit" and value):
+        return subprocess.CompletedProcess(args, 0, "", "")
+    return None
+
+
 def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | None = None) -> tuple[int, str, str]:
     validate_argv(["gh", *args])
-    proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": cwd} if cwd is not None else {}))
+    read = args[:2] in (["issue", "list"], ["pr", "list"], ["pr", "view"], ["run", "view"], ["repo", "view"])
+    read = read or args[0] == "api" and not any(arg in args for arg in ("-X", "--method", "-f", "--raw-field", "-F", "--field", "--input"))
+    write = args[:2] in (["pr", "create"], ["pr", "edit"], ["pr", "comment"], ["pr", "merge"])
+    proc = run_process([gh_bin(), *args], env=env, timeout=60, cwd=cwd,
+                       retry="gh" if read or write else None,
+                       reconcile=(lambda: _reconcile(args, env, cwd)) if write else None)
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
@@ -82,9 +118,10 @@ def pr_files(repo: str, number: int) -> list[str]:
 
 
 def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict:
-    marked = body.rstrip() + f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
+    suffix = f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
+    marked = fit_body(body.rstrip(), 60000 - len(suffix)) + suffix
     code, out, err = _gh(
-        ["pr", "create", "--repo", repo, "--head", branch, "--title", title, "--body", fit_body(marked)]
+        ["pr", "create", "--repo", repo, "--head", branch, "--title", title[:256], "--body", marked]
     )
     if code != 0:
         if "already exists" in err:
@@ -96,8 +133,9 @@ def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict
 
 
 def pr_set_body(repo: str, number: int, body: str, issue: int) -> dict:
-    marked = body.rstrip() + f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
-    code, out, err = _gh(["pr", "edit", str(number), "--repo", repo, "--body", fit_body(marked)])
+    suffix = f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
+    marked = fit_body(body.rstrip(), 60000 - len(suffix)) + suffix
+    code, out, err = _gh(["pr", "edit", str(number), "--repo", repo, "--body", marked])
     if code != 0:
         raise RuntimeError(err.strip() or "pr edit failed")
     return {"result": "updated", "pr": number}
@@ -182,7 +220,9 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
     if notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
             f"- {note.pytanie}: {note.note}" for note in notes)
-    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", fit_body(body)])
+    marker = f"\n\n<!-- lokay-check:{number}:{round_number}:{hashlib.sha256(body.encode()).hexdigest()} -->"
+    body = fit_body(body, 60000 - len(marker)) + marker
+    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", body])
     if code != 0:
         raise RuntimeError(err.strip() or "Check comment failed")
     return {"result": "commented", "url": out.strip()}
@@ -219,7 +259,7 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
 
 def dashboard_request(*args):
     try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
+        result = run_process([gh_bin(), *args], timeout=60, retry="gh")
     except subprocess.TimeoutExpired:
         raise RuntimeError("gh timed out after 60s") from None
     except OSError:

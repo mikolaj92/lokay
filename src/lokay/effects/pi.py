@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shutil
 import os
 import selectors
@@ -12,7 +13,7 @@ import tempfile
 import time
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any, BinaryIO, cast
@@ -173,7 +174,82 @@ def pi_assistant_text(stdout: str) -> str:
     return stdout if text is None else text
 
 
+def transient_error(proc: subprocess.CompletedProcess[str], transport: str) -> bool:
+    statuses = []
+    messages = []
+    if transport == "curl":
+        status = proc.stdout.rpartition("\n")[2].strip()
+        if status.isdecimal() and len(status) == 3:
+            statuses.append(int(status))
+        if proc.returncode == 52:
+            messages.append("curl: (52) Empty reply")
+    else:
+        if proc.returncode == 0:
+            return False
+        messages.extend(proc.stderr.splitlines())
+        if transport == "pi":
+            for line in proc.stdout.splitlines():
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                message = event.get("message", event)
+                if isinstance(message, dict) and message.get("role", "assistant") == "assistant":
+                    error = message.get("errorMessage")
+                    if isinstance(error, str):
+                        messages.extend(error.splitlines())
+                    for key in ("status", "statusCode"):
+                        value = message.get(key)
+                        if type(value) is int:
+                            statuses.append(value)
+        for message in messages:
+            statuses.extend(int(match) for match in re.findall(
+                r"(?i)\b(?:HTTP(?:/\d(?:\.\d)?)?|status(?:\s+code)?)[\s:=]+([1-5]\d\d)\b", message))
+            if transport == "pi":
+                match = re.match(r"^(?:Error:\s*)?([1-5]\d\d)\b", message)
+                if match:
+                    statuses.append(int(match[1]))
+    if any(status in (401, 403) for status in statuses):
+        return False
+    return (any(status in (408, 429) or 500 <= status <= 599 for status in statuses)
+            or any(re.match(r"^curl: \(52\)", message) for message in messages)
+            or transport == "gh" and any(message.startswith("GraphQL: Something went wrong") for message in messages))
+
+
 def run_process(
+    argv: Sequence[str],
+    *,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout: float | None = None,
+    input: str | None = None,
+    retry: str | None = None,
+    reconcile: Callable[[], subprocess.CompletedProcess[str] | None] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    for attempt in range(4):
+        proc = _logged_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        if retry is None or not transient_error(proc, retry):
+            if pi_command(argv) is not None:
+                proc.stdout = pi_assistant_text(proc.stdout)
+            return proc
+        if reconcile is not None:
+            try:
+                resolved = reconcile()
+            except (RuntimeError, ValueError, TypeError, KeyError, OSError, subprocess.TimeoutExpired):
+                return proc
+            if resolved is not None:
+                return resolved
+        if attempt == 3:
+            if pi_command(argv) is not None:
+                proc.stdout = pi_assistant_text(proc.stdout)
+            return proc
+        retry_sleep(2 ** attempt)
+    return proc
+
+
+def _logged_process(
     argv: Sequence[str],
     *,
     cwd: str | Path | None = None,
@@ -196,8 +272,6 @@ def run_process(
 
         with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()) if call == "pi" else nullcontext():
             proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
-        if pi_command(argv) is not None:
-            proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
         ok = proc.returncode == 0
         return proc
@@ -487,6 +561,7 @@ def pi_step(
             cwd=cwd,
             env=child,
             timeout=timeout,
+            retry="pi",
         )
     except PiGitViolation as exc:
         return exc.failure()

@@ -274,7 +274,7 @@ def _decide(internal: Mapping) -> dict:
     size = len(body.encode("utf-8"))
     print(f"decide: request bytes={size} approx_tokens={size // 3}", file=sys.stderr)
     try:
-        proc = run_process(cmd, timeout=float(timeout) + 2,
+        proc = run_process(cmd, timeout=float(timeout) + 2, retry="curl",
                            input=f"authorization: Bearer {key}\n" if key else None)
     except (OSError, subprocess.TimeoutExpired):
         raise DecisionError("decision request failed or timed out") from None
