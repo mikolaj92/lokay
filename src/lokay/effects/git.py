@@ -91,6 +91,7 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
             raise RuntimeError((err or out).strip())
         return out
 
+    paths = [path for path in paths if path != ".lokay" and not path.startswith(".lokay/")]
     if not paths:
         return []
     checked(["add", "--", *paths])
