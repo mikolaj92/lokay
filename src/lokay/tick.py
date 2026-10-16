@@ -46,7 +46,7 @@ def act(run: Run) -> Event:
         before = saved.get("updated_at")
         if saved.get("result") == "wait":
             if store.derive_waiting_on(saved) != "ready":
-                return saved.get("verdict") or {"result": "wait"}
+                return park(picked) or saved.get("verdict") or {"result": "wait"}
             state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
                          retry_at=0, awaiting=None)
             node = "check"
@@ -190,7 +190,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if selected.kind == "prs":
             code, out, err = _gh([
                 "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                "--json", "number,headRefName,headRefOid,title,body",
+                "--json", "number,headRefName,headRefOid",
             ])
             if code != 0:
                 raise RuntimeError(err.strip() or "pr list failed")
@@ -220,11 +220,15 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
                     continue
-                if open_pr_for(name, f"lokay/{issue}") is not None:
-                    open_prs.add(issue)
-                if saved.get("failures", 0):
-                    blocked.append((name, issue, saved))
-            repo = replace(repo, issues=issues, states={**repo.states, **states},
+                if open_pr_for(name, f"lokay/{issue}") is None:
+                    break
+                open_prs.add(issue)
+            else:
+                for row in issues:
+                    saved = state_read(name, row["number"])
+                    if saved.get("failures", 0):
+                        blocked.append((name, row["number"], saved))
+            repo = replace(repo, issues=issues[:len(states)], states={**repo.states, **states},
                            open_prs=frozenset(open_prs))
         else:
             held = acquire(name.split("/")[0], name)
@@ -249,7 +253,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
                                      branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time(),
-                                     plan_mode=saved.get("plan_mode") or "single")
+                                     **({"plan_mode": "single"} if not saved else {}))
                     else:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
@@ -261,7 +265,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             node = node or "plan"
                         state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=time.time(),
-                                     plan_mode=saved.get("plan_mode") or "single")
+                                     **({"plan_mode": "single"} if not saved else {}))
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -449,7 +453,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         branches = saved.get("plan_branches") or {}
         synthesis = saved.get("plan_synthesis") or {}
         rounds = saved.get("plan_rounds", 0)
-        if (saved.get("plan_mode") or "single") == "single":
+        if saved.get("plan_mode", "full") == "single":
             phase = saved.get("plan_phase") or "write"
             state_update(repo, issue, node="plan", plan_phase=phase, plan_prompt=context)
 
@@ -699,21 +703,13 @@ def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch
     return {"result": "failed", "reason": reason}
 
 
-def park(picked: dict, uwagi: list | None = None, *, reason: str | None = None, force: bool = False) -> dict | None:
+def park(picked: dict, uwagi: list | None = None) -> dict | None:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
     history = saved.get("fix_history", [])
-    if (not force
-            and saved.get("node", picked.get("node")) != "fix"
-            and (saved.get("verdict") or {}).get("result") != "fix"
-            and saved.get("result") != "fix"
-            and (saved.get("result") == "wait"
-                 or (saved.get("verdict") or {}).get("result") == "wait"
-                 or saved.get("wait_escape") in ("retry", "plan"))):
+    if saved.get("run_rounds", len(history)) < 6:
         return None
-    if not force and saved.get("run_rounds", len(history)) < 6:
-        return None
-    reason = reason or ("run_rounds reached 6" if "run_rounds" in saved else "fix_history reached 6")
+    reason = "run_rounds reached 6" if "run_rounds" in saved else "fix_history reached 6"
     if saved.get("result") == "parked":
         return {"result": "parked", "reason": reason}
     pr = saved.get("pr")
@@ -952,7 +948,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     pending = "check" if saved.get("node") in ("merge", "wait") else saved.get("node")
     if saved.get("result") == "wait" or (verdict or {}).get("result") == "wait":
         if store.derive_waiting_on({**saved, "result": "wait"}) != "ready":
-            return verdict or {"result": "wait", "sha": sha}
+            return park(picked) or verdict or {"result": "wait", "sha": sha}
         state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
                      retry_at=0, awaiting=None)
         verdict = None
@@ -1354,23 +1350,14 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             return stat.stdout or ""
 
         directory = run_dir(picked["repo"], picked["issue"])
-        code, changed, err = _git(worktree, ["diff", "--name-only", "origin/main...HEAD"])
-        if code != 0:
-            raise RuntimeError(err or "scope diff failed")
-        files = changed.splitlines()
-        kinds = ()
-        if ci["result"] == "green" and remote["result"] in ("green", "no_ci"):
-            kinds = (("docs",) if files and all(
-                Path(file).suffix in (".md", ".rst", ".txt") or file.startswith("docs/")
-                for file in files) else tuple(
-                    p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))))
         decision_state = check_state(directory, rounds + 1, diff.stdout or "",
                                      _retry(picked, "check", read_stat), ci,
                                      sha=sha, repo=picked["repo"], issue=picked["issue"],
                                      issue_title=(saved.get("issue_title") or "")[:4000],
                                      issue_body=(saved.get("issue_body") or "")[:4000],
-                                     history=saved.get("check_history", [])[-5:]) if kinds else {}
+                                     history=saved.get("check_history", [])[-5:])
         decisions = []
+        kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
         for kind in kinds:
             decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
                                       lambda request: _retry(picked, "check", lambda: decide(request)))
@@ -1415,6 +1402,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         verdict = aggregate(sha, ci, decisions)
         from lokay.scope import code_scope_issue
 
+        code, changed, err = _git(worktree, ["diff", "--name-only", "origin/main...HEAD"])
+        if code != 0:
+            raise RuntimeError(err or "scope diff failed")
+        files = changed.splitlines()
         plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
         plan_text = plan_path.read_text() if plan_path.is_file() else ""
         scope = code_scope_issue(files, plan_text)
@@ -1461,22 +1452,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if parked:
             return parked
         if pending == "wait":
-            saved = state_read(picked["repo"], picked["issue"])
-            escape = saved.get("wait_escape")
-            if escape == "plan":
-                return park(picked, verdict.get("uwagi"), force=True,
-                            reason="unlocated/unknown wait exhausted retry and one Plan")
-            if escape == "retry" and saved.get("run_rounds", 0) >= 6:
-                reason = "Unlocated/unknown wait after retry: " + dumps(verdict, default=store.json_default)
-                findings = [*verdict.get("uwagi", []), *verdict.get("notes", []),
-                            *verdict.get("unlocated_findings", [])]
-                prompt = replan_prompt(picked, reason, findings, head)
-                state_update(picked["repo"], picked["issue"], _event={"action": "replan"},
-                             node="plan", result="failed", verdict=None, retry_at=0, awaiting=None,
-                             wait_escape="plan", plan_prompt=prompt)
-                return {"next": "plan"}
+            transient = (bool(verdict.get("unknown")) and not verdict.get("unlocated_fail")
+                         and not verdict.get("uwagi") and not verdict.get("unlocated_findings")
+                         and all(result.name in ("ci_green", "local_tests")
+                                 for result in verdict["unknown"]))
             state_update(picked["repo"], picked["issue"], node="check", result="wait", verdict=verdict,
-                         retry_at=time.time() + 300, awaiting=None, wait_escape="retry")
+                         retry_at=time.time() + 300 if transient else 0,
+                         awaiting=None if transient else "human")
             return verdict
         if pending == "plan":
             findings = verdict["replan"] + verdict["uwagi"]
