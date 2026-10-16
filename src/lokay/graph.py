@@ -91,7 +91,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             continue
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
-                and repo.states.get(number, {}).get("result") not in ("parked", "merged", "closed")
+                and repo.states.get(number, {}).get("result") != "parked"
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
         if repo.prs is None:
@@ -106,7 +106,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
                 continue
             state = repo.states[issue]
             if (state.get("waiting_on", "ready" if not state else None) == "ready"
-                    and state.get("result") not in ("parked", "merged", "closed")):
+                    and state.get("result") != "parked"):
                 ready.append((state.get("last_attempt", 0), pr["number"], issue, pr))
         if ready:
             _, _, issue, target = min(ready, key=lambda row: row[:3])
@@ -116,7 +116,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         for issue in repo.issues:
             number = issue["number"]
             if ((snapshot.only_issue is None or snapshot.only_issue == number)
-                    and repo.states[number].get("result") not in ("parked", "merged", "closed")
+                    and repo.states[number].get("result") != "parked"
                     and repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready"
                     and number not in repo.open_prs):
                 return Pick(repo.name, number, "issue", issue)
