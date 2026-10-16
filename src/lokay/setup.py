@@ -57,7 +57,7 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             venv = cwd / ".venv"
             ok = False
             try:
-                env = pi_env(dict(os.environ), worktree)
+                env = pi_env(dict(os.environ), Path.cwd())
                 env["UV_PROJECT_ENVIRONMENT"] = str(venv.absolute())
                 proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
                 log = f"exit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"

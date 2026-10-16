@@ -10,8 +10,7 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
-from lokay.effects.pi import retry_sleep, run_process
-from lokay.store import log_event
+from lokay.effects.pi import run_process
 from lokay.safety import validate_argv
 from lokay.types import CheckResult, Note, parse_finding
 
@@ -23,7 +22,7 @@ GH_CANDIDATES = (
 )
 
 
-def fit_body(text: str, limit: int = 65536) -> str:
+def fit_body(text: str, limit: int = 60000) -> str:
     if len(text) <= limit:
         return text
     notice = "\n... [{} znaków logu pominięto; pełny log w ~/.lokay/runs] ...\n"
@@ -50,38 +49,9 @@ def auth_status(env: Mapping[str, str]):
 
 
 def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | None = None) -> tuple[int, str, str]:
-    args = list(args)
-    index = 0
-    while index < len(args):
-        arg = args[index]
-        if arg in ("--body", "--title") and index + 1 < len(args):
-            index += 1
-            args[index] = fit_body(args[index]) if arg == "--body" else args[index][:256]
-        elif arg.startswith("--body="):
-            args[index] = "--body=" + fit_body(arg[len("--body="):])
-        elif arg.startswith("--title="):
-            args[index] = "--title=" + arg[len("--title="):][:256]
-        index += 1
     validate_argv(["gh", *args])
-    for attempt in range(4):
-        try:
-            proc = run_process([gh_bin(), *args], env=env, timeout=60, cwd=cwd)
-        except subprocess.TimeoutExpired:
-            if attempt == 3:
-                raise
-            reason = "gh timed out"
-        else:
-            match = re.search(
-                r"Something went wrong while executing your query|\bHTTP\s+(?:502|503|504)\b|"
-                r"\btimeout\b|\btimed out\b|\bconnection reset\b|\bECONNRESET\b",
-                (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
-            )
-            if proc.returncode == 0 or match is None or attempt == 3:
-                return proc.returncode, proc.stdout or "", proc.stderr or ""
-            reason = match[0]
-        log_event("retry", call="gh", attempt=attempt + 1, reason=reason)
-        retry_sleep(3 ** attempt)
-    raise AssertionError("unreachable")
+    proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": cwd} if cwd is not None else {}))
+    return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
 def open_issues(repo: str) -> list[dict]:
