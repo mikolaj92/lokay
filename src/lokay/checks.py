@@ -160,11 +160,8 @@ CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", "lockfile", "secre
 
 
 def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
-    located = tuple(result for result in results if result.status == "fail" and result.findings)
-    unknown = tuple(result for result in results if result.status == "unknown")
-    unlocated_fail = tuple(result for result in results if result.status == "fail" and not result.findings)
-    return {"result": "fix" if located else "wait" if unknown or unlocated_fail else "merge",
-            "checks": results, "failed": located, "unknown": unknown, "unlocated_fail": unlocated_fail}
+    failed = tuple(result for result in results if result.status != "pass")
+    return {"result": "fix" if failed else "merge", "checks": results, "failed": failed}
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:

@@ -159,13 +159,10 @@ def repo_attempt(repo: str, timestamp: float) -> None:
 
 def derive_waiting_on(state: dict, now: float | None = None) -> str:
     now = time.time() if now is None else now
-    if state.get("result") == "parked" or state.get("awaiting") == "human":
+    if state.get("result") == "parked":
         return "human"
     if state.get("retry_at", 0) > now:
         return "retry_at"
-    if state.get("result") == "wait" and not (
-            state.get("awaiting") is None and state.get("retry_at", 0) > 0):
-        return "human"
     if (state.get("result") == "pending" and state.get("node") in ("check", "build")
             and state.get("last_attempt", 0) > now - 300):
         return "ci"
