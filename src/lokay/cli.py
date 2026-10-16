@@ -16,6 +16,7 @@ NODES = (
     "monitor",
     "replay",
     "lint",
+    "measure",
 )
 
 
@@ -38,6 +39,10 @@ def main(argv: list[str] | None = None) -> int:
         from lokay.tick import main as start_main
 
         return start_main(["refresh-body", *rest])
+    if args.node == "measure":
+        from lokay.measure import main as measure_main
+
+        return measure_main(rest)
     if args.node == "lint":
         from pathlib import Path
         from lokay.lint import lint
