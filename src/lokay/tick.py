@@ -595,7 +595,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
 
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
-    from lokay.effects.git import worktree_add
+    from lokay.effects.git import _git, worktree_add
 
     from lokay import plan
 
@@ -629,10 +629,42 @@ def _prepare(picked: dict) -> tuple | dict:
         return parked
     branch = f"lokay/{picked['issue']}"
     check_deadline()
+    if saved.get("build_from_main"):
+        try:
+            base = base_branch(root)
+            build_git(root, ["fetch", "origin", base])
+            backup_branch = f"{branch}-recovery-{time.time_ns()}"
+            if worktree.exists():
+                backup = worktree.with_name(f"{worktree.name}-recovery-{time.time_ns()}")
+                build_git(root, ["worktree", "move", str(worktree), str(backup)])
+            code, out, err = _git(root, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+            if code == 0:
+                build_git(root, ["branch", "-m", branch, backup_branch])
+            elif code != 1:
+                raise RuntimeError(err.strip() or out.strip())
+            _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
+            state_update(picked["repo"], picked["issue"], build_from_main=False, previous_head=None)
+        except RuntimeError as exc:
+            return needs_help(picked, f"build from main: {exc}")
     if not worktree.exists():
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
+    base = base_branch(worktree)
+    try:
+        build_git(worktree, ["fetch", "origin", base])
+    except RuntimeError as exc:
+        return needs_help(picked, f"build fetch: {exc}")
+    try:
+        build_git(worktree, ["merge", "--no-edit", f"origin/{base}"])
+    except RuntimeError as exc:
+        try:
+            code, _, _ = _git(worktree, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"])
+            if code == 0:
+                build_git(worktree, ["merge", "--abort"])
+        except RuntimeError as recovery:
+            return needs_help(picked, f"build merge: {exc}; recovery: {recovery}")
+        return needs_help(picked, f"build merge: {exc}")
     from lokay.setup import prepare_dependencies
 
     prepare_dependencies(worktree, repo, int(picked["issue"]))
@@ -837,7 +869,12 @@ def _resume(picked: dict) -> tuple | dict:
     except Exception as exc:
         return needs_help(picked, f"resume PR: {type(exc).__name__}: {exc}")
     if not pr or not pr.get("headRefOid"):
-        return needs_help(picked, "resume PR missing or missing SHA")
+        state_update(picked["repo"], picked["issue"], node="build", result="running",
+                     pr=None, sha=None, verdict=None, local_ci=None, fix_fingerprint=None,
+                     reason=None, last_error=None, failures=0, retry_at=0, awaiting=None,
+                     build_from_main=True)
+        rounds_append(picked["repo"], picked["issue"], "Resume without PR or SHA → Build")
+        return _prepare({**picked, "node": "build", "pr": None})
     sha = pr["headRefOid"]
     state_update(picked["repo"], picked["issue"], pr=pr["number"])
     if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):

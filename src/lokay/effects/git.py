@@ -90,7 +90,9 @@ def worktree_add(repo: Path, branch: str, path: Path) -> dict:
     if code != 0:
         return {"result": "failed", "error": err.strip() or out.strip()}
     code, out, err = _git(repo, ["worktree", "add", "-b", branch, str(path), f"origin/{base}"])
-    if code != 0 and "already exists" not in (err + out):
+    if code != 0 and "already exists" in (err + out):
+        code, out, err = _git(repo, ["worktree", "add", str(path), branch])
+    if code != 0:
         return {"result": "failed", "error": err.strip() or out.strip()}
     return {"result": "added", "path": str(path), "branch": branch}
 
