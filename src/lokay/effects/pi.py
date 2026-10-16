@@ -118,7 +118,7 @@ def difficulty_env(level: str, base: Mapping[str, str] | None = None) -> dict[st
     child = dict(os.environ if base is None else base)
     for name in ("PROVIDER", "MODEL"):
         key = f"LOKAY2_{name}_{level.upper()}"
-        value = child.get(key) or (child.get(f"LOKAY2_{name}") if level == "easy" else None)
+        value = child.get(key) or child.get(f"LOKAY2_{name}")
         if not value or not value.strip():
             raise ValueError(f"missing difficulty configuration: {key}")
         child[f"LOKAY2_{name}"] = value
