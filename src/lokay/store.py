@@ -159,13 +159,14 @@ def repo_attempt(repo: str, timestamp: float) -> None:
 
 def derive_waiting_on(state: dict, now: float | None = None) -> str:
     now = time.time() if now is None else now
-    if state.get("result") == "parked" or state.get("awaiting") == "human":
+    if state.get("result") == "parked":
+        return "human"
+    if state.get("result") == "wait":
+        return "retry_at" if state.get("retry_at", 0) > now else "ready"
+    if state.get("awaiting") == "human":
         return "human"
     if state.get("retry_at", 0) > now:
         return "retry_at"
-    if state.get("result") == "wait" and not (
-            state.get("awaiting") is None and state.get("retry_at", 0) > 0):
-        return "human"
     if (state.get("result") == "pending" and state.get("node") in ("check", "build")
             and state.get("last_attempt", 0) > now - 300):
         return "ci"
@@ -177,7 +178,9 @@ def state_read(repo: str, issue: int) -> dict:
     if not path.exists():
         return {}
     state = json.loads(path.read_text())
-    if state.get("waiting_on") != derive_waiting_on(state):
+    if (state.get("waiting_on") != derive_waiting_on(state)
+            or (state.get("result") == "wait" and state.get("awaiting") == "human"
+                and not state.get("wait_escape"))):
         save_run(repo, issue, state)
     return state
 
@@ -284,6 +287,9 @@ def write_json(path: Path, value: object, *, indent: int | None = None,
 
 
 def save_run(repo: str, issue: int, state: dict) -> None:
+    if (state.get("result") == "wait" and state.get("awaiting") == "human"
+            and not state.get("wait_escape")):
+        state.update(awaiting=None, retry_at=time.time(), wait_escape="retry")
     state["waiting_on"] = derive_waiting_on(state)
     write_json(run_dir(repo, issue) / "state.json", state, indent=2)
 
