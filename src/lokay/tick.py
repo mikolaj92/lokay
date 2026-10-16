@@ -46,7 +46,7 @@ def act(run: Run) -> Event:
         before = saved.get("updated_at")
         if saved.get("result") == "wait":
             if store.derive_waiting_on(saved) != "ready":
-                return park(picked) or saved.get("verdict") or {"result": "wait"}
+                return saved.get("verdict") or {"result": "wait"}
             state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
                          retry_at=0, awaiting=None)
             node = "check"
@@ -703,13 +703,20 @@ def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch
     return {"result": "failed", "reason": reason}
 
 
-def park(picked: dict, uwagi: list | None = None) -> dict | None:
+def park(picked: dict, uwagi: list | None = None, *, force: bool = False,
+         reason: str | None = None) -> dict | None:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
     history = saved.get("fix_history", [])
-    if saved.get("run_rounds", len(history)) < 6:
-        return None
-    reason = "run_rounds reached 6" if "run_rounds" in saved else "fix_history reached 6"
+    if not force:
+        if saved.get("result") == "wait":
+            return None
+        if (saved.get("wait_escape") in ("retry", "plan")
+                and saved.get("node") != "fix" and saved.get("result") != "fix"):
+            return None
+        if saved.get("run_rounds", len(history)) < 6:
+            return None
+    reason = reason or ("run_rounds reached 6" if "run_rounds" in saved else "fix_history reached 6")
     if saved.get("result") == "parked":
         return {"result": "parked", "reason": reason}
     pr = saved.get("pr")
@@ -948,7 +955,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     pending = "check" if saved.get("node") in ("merge", "wait") else saved.get("node")
     if saved.get("result") == "wait" or (verdict or {}).get("result") == "wait":
         if store.derive_waiting_on({**saved, "result": "wait"}) != "ready":
-            return park(picked) or verdict or {"result": "wait", "sha": sha}
+            return verdict or {"result": "wait", "sha": sha}
         state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
                      retry_at=0, awaiting=None)
         verdict = None
@@ -1452,13 +1459,24 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if parked:
             return parked
         if pending == "wait":
-            transient = (bool(verdict.get("unknown")) and not verdict.get("unlocated_fail")
-                         and not verdict.get("uwagi") and not verdict.get("unlocated_findings")
-                         and all(result.name in ("ci_green", "local_tests")
-                                 for result in verdict["unknown"]))
+            saved = state_read(picked["repo"], picked["issue"])
+            if saved.get("wait_escape") == "plan":
+                return park(picked, verdict.get("uwagi"), force=True,
+                            reason="unlocated/unknown wait exhausted retry and one Plan")
+            if saved.get("wait_escape") == "retry" and saved.get("run_rounds", 0) >= 6:
+                findings = [*verdict.get("notes", []), *verdict.get("uwagi", []),
+                            *verdict.get("unlocated_findings", []),
+                            *verdict.get("unlocated_fail", []), *verdict.get("unknown", [])]
+                prompt = replan_prompt(picked, "Unlocated/unknown wait exhausted retry; revise the plan.",
+                                       json.loads(dumps(findings, default=store.json_default)), head)
+                state_update(picked["repo"], picked["issue"], _event={"action": "replan"},
+                             plan_prompt=prompt, wait_escape="plan", awaiting=None, retry_at=0,
+                             node="plan", result="failed", verdict=None, plan_phase="write",
+                             plan_branches={}, plan_synthesis={}, plan_evaluations=0,
+                             plan_accepted_sha=None)
+                return {"next": "plan"}
             state_update(picked["repo"], picked["issue"], node="check", result="wait", verdict=verdict,
-                         retry_at=time.time() + 300 if transient else 0,
-                         awaiting=None if transient else "human")
+                         retry_at=time.time() + 300, awaiting=None, wait_escape="retry")
             return verdict
         if pending == "plan":
             findings = verdict["replan"] + verdict["uwagi"]
