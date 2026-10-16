@@ -99,22 +99,23 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
         return answers
 
     def resolve(path, previous, prompt, env, clone_path=None):
-        assert mode == 'conflict'
+        assert mode == 'conflict', mode
         assert 'value' in prompt
-        assert command(path, 'diff', '--name-only', '--diff-filter=U') == 'value'
-        assert Path(command(path, 'rev-parse', '--git-path', 'MERGE_HEAD')).exists()
-        (path / 'value').write_text('branch and main\n')
+        assert not command(path, 'diff', '--name-only', '--diff-filter=U')
+        assert not Path(command(path, 'rev-parse', '--git-path', 'MERGE_HEAD')).exists()
+        assert not Path(command(path, 'rev-parse', '--git-path', 'rebase-merge')).exists()
+        (path / 'value').write_text('main\n')
         committed, junk = tidy_and_commit(path, 'Resolve main')
-        assert 'value' in committed
+        assert 'value' in committed, (committed, junk, command(path, 'status', '--porcelain'))
         assert not Path(command(path, 'rev-parse', '--git-path', 'MERGE_HEAD')).exists()
         repairs.append(command(path, 'rev-parse', 'HEAD'))
         return {'result': 'done', 'artifact': repairs[-1]}
 
-    original_push = git.push
+    original_git = git._git
     moved = []
 
-    def publish(path, name, expected, attempts=3):
-        if mode == 'remote_moved' and advanced and not moved:
+    def publish(path, args, timeout=60):
+        if mode == 'remote_moved' and args[0] == 'push' and advanced and not moved:
             peer = directory / 'peer'
             command(directory, 'clone', '--branch', branch, str(bare), str(peer))
             command(peer, 'config', 'user.name', 'mikolaj92')
@@ -124,12 +125,9 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
             command(peer, 'commit', '-m', 'Remote contributor')
             command(peer, 'push', 'origin', branch)
             moved.append(command(peer, 'rev-parse', 'HEAD'))
-            result = original_push(path, name, expected, attempts)
-            assert result['result'] == 'remote_moved'
-            return result
-        return original_push(path, name, expected, attempts)
+        return original_git(path, args, timeout)
 
-    with patch.object(tick, 'load_repos', return_value=[repo]), patch.object(gh, '_gh', side_effect=github), patch('lokay.effects.decide.decide', side_effect=decision), patch('lokay.fix.fix_code', side_effect=resolve), patch('lokay.fix.push', side_effect=publish):
+    with patch.object(tick, 'load_repos', return_value=[repo]), patch.object(gh, '_gh', side_effect=github), patch('lokay.effects.decide.decide', side_effect=decision), patch('lokay.fix.fix_code', side_effect=resolve), patch.object(git, '_git', side_effect=publish):
         outcome = tick._finish(picked, worktree, branch, old, [])
     head = command(worktree, 'rev-parse', 'HEAD')
     if mode == 'unresolved':
@@ -149,7 +147,7 @@ for mode in ('clean', 'conflict', 'remote_moved', 'unresolved'):
     assert store.state_read(repo['name'], 1)['verdict'] is None
     command(worktree, 'merge-base', '--is-ancestor', advanced[0], head)
     if moved:
-        command(worktree, 'merge-base', '--is-ancestor', moved[0], head)
+        assert command(worktree, 'show', moved[0] + ':peer') == 'preserved'
         assert (worktree / 'peer').read_text() == 'preserved\n'
     assert len(repairs) == int(mode == 'conflict')
     assert not command(worktree, 'status', '--porcelain', '--untracked-files=no')

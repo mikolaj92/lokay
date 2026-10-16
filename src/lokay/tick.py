@@ -1091,8 +1091,7 @@ def _resume(picked: dict) -> tuple | dict:
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 
-    if not build_git(worktree, ["diff", "--name-only", "--diff-filter=U"]):
-        tidy_and_commit(worktree, "lokay resume")
+    tidy_and_commit(worktree, "lokay resume")
     code, out, err = _git(worktree, ["fetch", "origin", branch])
     if code != 0:
         return needs_help(picked, f"resume fetch: {err.strip() or out.strip()}", sha)
@@ -1196,22 +1195,45 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
 
     def sync_head():
         build_git(worktree, ["fetch", "origin", branch])
-        code, out, err = _git(worktree, ["merge", "--no-edit", f"origin/{branch}"])
-        if code != 0 and not build_git(worktree, ["diff", "--name-only", "--diff-filter=U"]):
+        code, out, err = _git(worktree, ["rebase", f"origin/{branch}"])
+        if code != 0:
+            build_git(worktree, ["rebase", "--abort"])
             raise RuntimeError(err or out)
 
-    def sync_main():
+    def rebase_onto_main():
         build_git(worktree, ["fetch", "origin", "main"])
-        out = build_git(worktree, ["diff", "--name-only", "--diff-filter=U"])
-        if out:
-            return out.splitlines()
-        code, out, err = _git(worktree, ["merge", "--no-edit", "origin/main"])
+        if state_read(picked["repo"], picked["issue"]).get("rebase_conflict_fix"):
+            base = build_git(worktree, ["merge-base", "HEAD", "origin/main"])
+            build_git(worktree, ["reset", "--soft", base])
+            build_git(worktree, ["commit", "--allow-empty", "-m", "Reconcile branch with main"])
+            state_update(picked["repo"], picked["issue"], rebase_conflict_fix=False)
+        code, out, err = _git(worktree, ["rebase", "origin/main"])
         if code != 0:
             conflict_code, files, conflict_err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
+            build_git(worktree, ["rebase", "--abort"])
             if conflict_code == 0 and files.strip():
                 return files.splitlines()
             raise RuntimeError(conflict_err or err or out)
         return []
+
+    def publish_rebase():
+        from lokay.effects.git import remote_sha
+
+        if branch != f"lokay/{picked['issue']}" or build_git(worktree, ["branch", "--show-current"]) != branch:
+            raise RuntimeError("rebase publication requires the issue worktree branch")
+        current = remote_sha(worktree, branch, strict=True)
+        if current != sha:
+            return {"result": "remote_moved", "sha": current or ""}
+        head = build_git(worktree, ["rev-parse", "HEAD"])
+        if head != sha:
+            code, out, err = _git(worktree, ["push", f"--force-with-lease=refs/heads/{branch}:{sha}",
+                                             "origin", f"HEAD:refs/heads/{branch}"])
+            if code != 0:
+                current = remote_sha(worktree, branch, strict=True)
+                if current != sha:
+                    return {"result": "remote_moved", "sha": current or ""}
+                raise RuntimeError(err or out)
+        return {"result": "pushed", "sha": head}
 
     while True:
         parked = park(picked, ((verdict or {}).get("uwagi") if verdict else None))
@@ -1257,15 +1279,17 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pending = "check"
         state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
         if pending != "fix":
-            conflicts = _retry(picked, "check", sync_main)
+            conflicts = _retry(picked, "check", rebase_onto_main)
             if conflicts:
                 conflict_verdict = verdict = {"result": "fix", "sha": sha, "uwagi": [
-                    {"pytanie": "conflict", "plik": file, "log": "Resolve the merge with origin/main."}
+                    {"pytanie": "conflict", "plik": file,
+                     "log": "Rebase onto origin/main conflicted and was aborted. "
+                            "Reconcile this file with origin/main; Lokay will retry the rebase."}
                     for file in conflicts
                 ]}
                 pending = "fix"
                 state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
-                             verdict=verdict)
+                             verdict=verdict, rebase_conflict_fix=True)
                 rounds_append(picked["repo"], picked["issue"], "Check: conflict, files=" + ", ".join(conflicts))
                 pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
                 if pr:
@@ -1273,7 +1297,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     _retry(picked, "check", lambda: check_comment(picked["repo"], conflict_pr_number,
                            rounds + 1, conflict_verdict, {"result": "conflict"}))
             else:
-                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+                pushed = fix_step(picked, "fix_publish", publish_rebase, sha)
                 if pushed["result"] == "failed":
                     return pushed
                 if pushed["result"] == "remote_moved" and pushed.get("sha"):
