@@ -200,8 +200,9 @@ def repo_attempt(repo: str, timestamp: float) -> None:
 
 def derive_waiting_on(state: dict, now: float | None = None) -> str:
     now = time.time() if now is None else now
-    if state.get("result") == "parked":
-        return "human"
+    if (state.get("dependencies") and not state.get("dependencies_complete")
+            and len(state.get("children", {})) == len((state.get("decomposition") or {}).get("tasks", []))):
+        return "children"
     if state.get("result") == "wait":
         return "retry_at" if state.get("retry_at", 0) > now else "ready"
     if state.get("awaiting") == "human":
@@ -236,9 +237,6 @@ def state_read(repo: str, issue: int) -> dict:
             if isinstance(value.get(key), list):
                 value[key] = [row for row in value[key]
                               if not isinstance(row, dict) or known(parse_finding(row).lens)]
-        if isinstance(value.get("fix_history"), list):
-            value["fix_history"] = [[row for row in findings if known(parse_finding(row).lens)]
-                                    for findings in value["fix_history"]]
         decisions = value.get("decisions")
         if isinstance(decisions, dict):
             value["decisions"] = {name: decision for name, decision in decisions.items() if known(name)}
@@ -248,7 +246,7 @@ def state_read(repo: str, issue: int) -> dict:
         if isinstance(value.get("dispute"), dict):
             value["dispute"] = {name: decision for name, decision in value["dispute"].items() if known(name)}
         for key, child in value.items():
-            if key == "checks":
+            if key == "checks" or key.endswith("_history"):
                 continue
             if isinstance(child, dict):
                 prune(child)
@@ -256,8 +254,13 @@ def state_read(repo: str, issue: int) -> dict:
                 for row in child:
                     prune(row)
 
+    legacy = state.get("result") == "parked"
+    if legacy:
+        state.update(escalation_fields(state), legacy_label_cleanup=True,
+                     reason=state.get("reason"), last_error=state.get("last_error"))
     verdict_before = json.dumps(state.get("verdict"), sort_keys=True)
-    prune(state)
+    if not legacy:
+        prune(state)
     if verdict_before != json.dumps(state.get("verdict"), sort_keys=True):
         state.update(node="check", result="check", verdict=None, fix_fingerprint=None)
     changed = before != json.dumps(state, sort_keys=True)
@@ -295,9 +298,9 @@ def round_fields(state: dict, *, diff_fingerprint: str | None = None,
                   and diff_fingerprint != previous_diff) or any(
         status == "pass" and previous_checks.get(name) == "fail"
         for name, status in current_checks.items())
-    progressed = progressed or (completed and checks is not None and state.get("progress_pending", False))
-    fields = {"no_progress": 0 if accepted_plan or progressed else state.get("no_progress", 0) + int(completed)}
-    if (completed and checks is not None) or accepted_plan:
+    fields = {"no_progress": 0 if progressed else state.get("no_progress", 0) + int(completed and not accepted_plan)}
+    fields["run_rounds"] = 0 if progressed else state.get("run_rounds", 0) + int(completed)
+    if completed and checks is not None:
         fields["progress_pending"] = False
     elif progressed:
         fields["progress_pending"] = True
@@ -306,6 +309,20 @@ def round_fields(state: dict, *, diff_fingerprint: str | None = None,
     if current_checks:
         fields["progress_checks"] = {**previous_checks, **current_checks}
     return fields
+
+
+DIFFICULTIES = ("easy", "medium", "hard", "too_big")
+
+
+def escalation_fields(state: dict) -> dict:
+    level = state.get("difficulty", "easy")
+    index = DIFFICULTIES.index(level)
+    return {"difficulty": DIFFICULTIES[min(index + 1, len(DIFFICULTIES) - 1)],
+            "decomposition_plan_sha": state.get("plan_accepted_sha") or state.get("decomposition_plan_sha"),
+            "node": "plan", "result": "pending", "reason": None, "awaiting": None,
+            "retry_at": 0, "failures": 0, "last_error": None, "wait_escape": None,
+            "no_progress": 0, "run_rounds": 0, "plan_phase": "write",
+            "plan_branches": {}, "plan_synthesis": {}, "plan_accepted_sha": None}
 
 
 def load(repo: str, issue: int) -> Run:

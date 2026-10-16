@@ -104,6 +104,61 @@ def open_pr_for(repo: str, branch: str) -> dict | None:
     return rows[0] if rows else None
 
 
+def issue_details(repo: str, issue: int) -> dict:
+    code, out, err = _gh(["issue", "view", str(issue), "--repo", repo, "--json", "title,body"])
+    if code:
+        raise RuntimeError(err.strip() or "issue view failed")
+    loaded = json.loads(out)
+    if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
+        raise ValueError("issue title is missing or invalid")
+    if loaded.get("body") is not None and not isinstance(loaded["body"], str):
+        raise ValueError("issue body is invalid")
+    return loaded
+
+
+def cleanup_legacy_labels(repo: str, issue: int, pr: int | str | None) -> None:
+    if isinstance(pr, str):
+        pr = int(pr.rstrip("/").rsplit("/", 1)[-1])
+    if not pr:
+        opened = open_pr_for(repo, f"lokay/{issue}")
+        pr = opened["number"] if opened else None
+    for kind, number in (("issue", issue), ("pr", pr)):
+        if not number:
+            continue
+        code, out, err = _gh([kind, "view", str(number), "--repo", repo, "--json", "labels"])
+        if code:
+            raise RuntimeError(err or "legacy label lookup failed")
+        if any(row["name"] == "lokay-parked" for row in json.loads(out)["labels"]):
+            code, out, err = _gh([kind, "edit", str(number), "--repo", repo, "--remove-label", "lokay-parked"])
+            if code:
+                raise RuntimeError(err or "legacy label cleanup failed")
+
+
+def child_issue(repo: str, parent: int, task: dict, criteria: list[dict]) -> int:
+    marker = f"<!-- lokay-parent:{parent} task:{task['id']} -->"
+    code, out, err = _gh(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000",
+                          "--json", "number,body"])
+    if code:
+        raise RuntimeError(err or "child issue lookup failed")
+    found = [row["number"] for row in json.loads(out) if marker in (row.get("body") or "")]
+    if found:
+        return min(found)
+    acceptance = "\n".join(f"- [ ] {row['text']}" for row in criteria if row["id"] in task["criteria"])
+    body = task["body"] + f"\n\nParent: #{parent}\n\n## Acceptance criteria\n{acceptance}\n\n{marker}"
+    code, out, err = _gh(["issue", "create", "--repo", repo, "--title", task["title"], "--body", body])
+    if code:
+        raise RuntimeError(err or "child issue creation failed")
+    return int(out.strip().rstrip("/").rsplit("/", 1)[-1])
+
+
+def child_merged(repo: str, issue: int) -> bool:
+    code, out, err = _gh(["pr", "list", "--repo", repo, "--head", f"lokay/{issue}",
+                          "--state", "merged", "--json", "number,mergedAt"])
+    if code:
+        raise RuntimeError(err or "child merge lookup failed")
+    return any(row.get("mergedAt") for row in json.loads(out))
+
+
 def pr_files(repo: str, number: int) -> list[str]:
     code, out, err = _gh(["api", "--paginate", f"repos/{repo}/pulls/{number}/files", "--jq", ".[].filename"])
     if code:

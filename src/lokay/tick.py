@@ -23,7 +23,7 @@ from lokay.config import load_repos, tick_budget
 from lokay.effects.gh import _gh, auth_status, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
-                       process_groups, retry_sleep, run_process, tick_deadline)
+                       difficulty_env, process_groups, retry_sleep, run_process, tick_deadline)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
@@ -47,35 +47,48 @@ def act(run: Run) -> Event:
             return {}
         saved = state_read(picked["repo"], picked["issue"])
         before = saved.get("updated_at")
-        if saved.get("result") == "wait":
-            if store.derive_waiting_on(saved) != "ready":
-                return saved.get("verdict") or {"result": "wait"}
-            state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
-                         retry_at=0, awaiting=None)
-            node = "check"
         try:
             check_deadline()
+            if saved.get("legacy_label_cleanup"):
+                try:
+                    return escalate(picked) or {"result": "pending", "next": "plan"}
+                except Exception as exc:
+                    return {"result": "pending", "reason": f"legacy label cleanup: {exc}"}
+            initial_difficulty(picked)
+            escalated = escalate(picked)
+            if escalated:
+                return escalated
+            saved = state_read(picked["repo"], picked["issue"])
+            if saved.get("result") == "wait":
+                if store.derive_waiting_on(saved) != "ready":
+                    return saved.get("verdict") or {"result": "wait"}
+                state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
+                             retry_at=0, awaiting=None)
+                node = "check"
+            saved = state_read(picked["repo"], picked["issue"])
+            node = saved.get("node") or node
+            if saved["difficulty"] == "too_big" and not saved.get("dependencies_complete"):
+                state_update(picked["repo"], picked["issue"], node="plan")
+                node = "plan"
             ensure_worktree(run)
-            prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
+            current = {**picked, "node": node}
+            prepared = _prepare(current) if node in ("plan", "build") else _resume(current)
             outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
         except TickExpired:
             repo, issue = picked["repo"], picked["issue"]
             state_update(repo, issue, result="pending", reason="tick budget exhausted")
             rounds_append(repo, issue, "Tick: budget exhausted; resume saved node")
             return {"result": "pending", "reason": "tick budget exhausted"}
+        except Escalated:
+            return {"result": "pending", "next": "plan"}
         except RetryLater as exc:
-            if state_read(picked["repo"], picked["issue"]).get("result") == "parked":
-                return {"result": "parked", "reason": str(exc)}
             return {"result": "failed", "reason": str(exc)}
         except Exception as exc:
-            saved = state_read(picked["repo"], picked["issue"])
-            if saved.get("result") == "parked":
-                return {"result": "parked", "reason": saved.get("reason")}
             outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "parked"):
+        if outcome.get("result") in ("pending", "pr_open", "check", "wait"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
@@ -86,13 +99,20 @@ def act(run: Run) -> Event:
             return outcome
         reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
         return needs_help(picked, reason)
-    outcome = dispatch()
+    try:
+        outcome = dispatch()
+    except Escalated:
+        outcome = {"result": "pending", "next": "plan"}
     return Updated(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
 
 
 def _repo_paths(repo: dict, issue: int) -> tuple[Path, Path]:
     root = Path(os.path.expanduser(repo["clone_path"]))
     return root, root.parent / f"{root.name}-wt-{issue}"
+
+
+class Escalated(BaseException):
+    pass
 
 
 class RetryLater(RuntimeError):
@@ -181,6 +201,19 @@ def pick(env: dict[str, str] | None = None) -> dict:
             issue = int(path.name)
             saved = state_read(name, issue)
             if saved and saved.get("result") != "merged":
+                if saved.get("waiting_on") == "children":
+                    from lokay.effects.gh import child_merged
+
+                    try:
+                        complete = all(child_merged(name, child) for child in saved["dependencies"])
+                    except Exception:
+                        complete = False
+                    if complete:
+                        prompt = replan_prompt({"repo": name, "issue": issue},
+                                               "Child PRs merged; replan and recheck the original goal.", [], saved.get("sha") or "")
+                        state_update(name, issue, **{**store.escalation_fields(saved), "difficulty": "too_big",
+                                                     "plan_prompt": prompt}, dependencies_complete=True)
+                        saved = state_read(name, issue)
                 states[issue] = saved
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}), states=states))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
@@ -220,7 +253,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
-                if saved.get("result") == "parked" or saved.get("waiting_on") == "ci":
+                if saved.get("waiting_on") in ("children", "ci"):
                     continue
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
@@ -257,8 +290,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         node = saved.get("node") or ("check" if pr else "plan")
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
-                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time(),
-                                     **({"plan_mode": "single"} if not saved else {}))
+                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
                     else:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
@@ -269,8 +301,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         else:
                             node = node or "plan"
                         state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
-                                     result="running", reason=None, last_attempt=time.time(),
-                                     **({"plan_mode": "single"} if not saved else {}))
+                                     result="running", reason=None, last_attempt=time.time())
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -360,9 +391,6 @@ def _tick() -> dict:
     try:
         print(dumps({k: v for k, v in outcome.items() if k != "held"}, separators=(",", ":")))
         result = {}
-        parked = park(outcome, (state_read(outcome["repo"], outcome["issue"]).get("verdict") or {}).get("uwagi"))
-        if parked:
-            return parked
         def execute(run: Run) -> Event:
             event = act(Run.from_state({**run.state, **{key: outcome[key] for key in ("repo", "issue", "held")}}))
             result.update(event.outcome)
@@ -454,14 +482,15 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
     repo, issue = picked["repo"], picked["issue"]
     store.ensure_directory(art.parent)
     while True:
-        if park(picked):
-            raise RetryLater("no_progress reached 6")
+        if escalate(picked):
+            raise Escalated()
         saved = state_read(repo, issue)
+        env = difficulty_env(saved["difficulty"])
         context = saved.get("plan_prompt") or plan.prompt_for(title, body)
         branches = saved.get("plan_branches") or {}
         synthesis = saved.get("plan_synthesis") or {}
         rounds = saved.get("plan_rounds", 0)
-        if saved.get("plan_mode", "full") == "single":
+        if saved["difficulty"] == "easy":
             phase = saved.get("plan_phase") or "write"
             state_update(repo, issue, node="plan", plan_phase=phase, plan_prompt=context)
 
@@ -474,25 +503,24 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
 
             outcome = _retry(picked, "plan", lambda: plan.plan_one(
                 "minimal", context, art, cwd=cwd, phase=phase,
-                on_written=single_written, single=True), "done", plan_branch=True)
+                on_written=single_written, single=True, env=env), "done", plan_branch=True)
             rounds_append(repo, issue, f"Plan single {rounds}: Decision {outcome['next']}")
             if outcome["next"] == "ok":
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
+                             accepted_plan=art.read_text(),
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
-                             plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                             plan_notes=outcome.get("notes", []),
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
-            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                         **store.round_fields(state_read(repo, issue)))
-            if park(picked):
-                raise RetryLater("no_progress reached 6")
+            state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
+            if escalate(picked):
+                raise Escalated()
             prompt = replan_prompt(picked, "Single plan rejected", outcome["uwagi"])
-            state_update(repo, issue, plan_mode="full", plan_phase="write", plan_prompt=prompt,
+            state_update(repo, issue, plan_phase="write", plan_prompt=prompt,
                          plan_branches={}, plan_synthesis={}, plan_accepted_sha=None, plan_notes=[])
             continue
         paths = {}
-        for perspective in plan.PERSPECTIVES:
+        for perspective in plan.PERSPECTIVES[:2 if saved["difficulty"] == "medium" else 3]:
             branch_art = art.parent / "plans" / f"{perspective}.md"
             store.ensure_directory(branch_art.parent)
             branch = branches.setdefault(perspective, {
@@ -509,8 +537,8 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             if branch["phase"] == "accepted":
                 branch.update(phase="write", accepted_sha=None)
             while True:
-                if park(picked):
-                    raise RetryLater("no_progress reached 6")
+                if escalate(picked):
+                    raise Escalated()
                 state_update(repo, issue, node="plan", plan_phase="write", plan_prompt=context,
                              plan_branches=branches, plan_synthesis=synthesis)
                 check_deadline()
@@ -523,36 +551,33 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 try:
                     outcome = _retry(picked, "plan", lambda: plan.plan_one(
                         perspective, branch["prompt"], branch_art,
-                        cwd=cwd, phase=branch["phase"], on_written=written), "done", plan_branch=True)
+                        cwd=cwd, phase=branch["phase"], on_written=written, env=env), "done", plan_branch=True)
                 except RetryLater as exc:
                     branch.update(phase="failed", reason=str(exc), accepted_sha=None)
-                    state_update(repo, issue, plan_branches=branches,
-                                 run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                                 **store.round_fields(state_read(repo, issue)))
-                    if park(picked):
-                        raise RetryLater("no_progress reached 6")
+                    state_update(repo, issue, plan_branches=branches)
+                    if escalate(picked):
+                        raise Escalated()
                     rounds_append(repo, issue, f"Plan {perspective}: failed: {exc}")
                     break
                 rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: Decision {outcome['next']}")
                 if outcome["next"] == "ok":
                     branch.update(phase="accepted", accepted_sha=hashlib.sha256(branch_art.read_bytes()).hexdigest())
                     paths[perspective] = branch_art
-                    state_update(repo, issue, plan_branches=branches, fix_history=[], fix_counts=[],
+                    state_update(repo, issue, plan_branches=branches,
                                  **store.round_fields(state_read(repo, issue), accepted_plan=True))
                     break
-                state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                             **store.round_fields(state_read(repo, issue)))
-                if park(picked):
-                    raise RetryLater("no_progress reached 6")
+                state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
+                if escalate(picked):
+                    raise Escalated()
                 fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
                 branch.update(phase="write", fingerprint=fingerprint,
                               prompt=context + "\n\nPrevious branch plan:\n" + branch_art.read_text()
                               + "\n\nUwagi:\n" + dumps(outcome["uwagi"], ensure_ascii=False))
                 state_update(repo, issue, plan_branches=branches)
                 retry_sleep(20)
-        if not paths:
+        if len(paths) != (2 if saved["difficulty"] == "medium" else 3):
             reasons = [{"perspective": name, "reason": branch.get("reason")} for name, branch in branches.items()]
-            prompt = replan_prompt(picked, "Wszystkie 3 plany nieudane", reasons)
+            prompt = replan_prompt(picked, "Not all difficulty perspectives accepted", reasons)
             state_update(repo, issue, plan_branches={}, plan_synthesis={}, plan_prompt=prompt,
                          plan_phase="write", plan_accepted_sha=None)
             retry_sleep(20)
@@ -560,15 +585,15 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         synthesis = synthesis or {"phase": "write", "fingerprint": None, "uwagi": [], "rounds": 0}
         fresh = False
         while True:
-            if park(picked):
-                raise RetryLater("no_progress reached 6")
+            if escalate(picked):
+                raise Escalated()
             state_update(repo, issue, node="plan", plan_phase="write", plan_synthesis=synthesis)
             check_deadline()
             if synthesis["phase"] == "write" or not plan.valid_plan(art):
                 failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
                 prompt = context + "\n\nFailed branches:\n" + dumps(failed, ensure_ascii=False)
                 prompt += "\n\nUwagi:\n" + dumps(synthesis["uwagi"], ensure_ascii=False)
-                _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art, cwd=cwd), "done")
+                _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art, cwd=cwd, env=env), "done")
                 rounds += 1
                 synthesis.update(phase="check", rounds=synthesis["rounds"] + 1)
                 state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
@@ -581,16 +606,14 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             if outcome["next"] == "ok":
                 synthesis["phase"] = "accepted"
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
-                             plan_synthesis=synthesis,
+                             plan_synthesis=synthesis, accepted_plan=art.read_text(),
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
-                             plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
+                             plan_notes=outcome.get("notes", []),
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
-            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                         **store.round_fields(state_read(repo, issue)))
-            if park(picked):
-                raise RetryLater("no_progress reached 6")
+            state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
+            if escalate(picked):
+                raise Escalated()
             fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
             if synthesis["fingerprint"] == fingerprint:
                 prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
@@ -611,22 +634,14 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay import plan
 
     ensure_worktree(picked, clean=False)
+    initial_difficulty(picked)
     saved = state_read(picked["repo"], picked["issue"])
-    if "issue_title" not in saved or "issue_body" not in saved:
-        code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
-        if code != 0:
-            raise RuntimeError(err.strip() or "issue view failed")
-        loaded = json.loads(raw)
-        if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
-            raise RuntimeError("issue title is missing or invalid")
-        body = loaded.get("body")
-        if body is not None and not isinstance(body, str):
-            raise RuntimeError("issue body is invalid")
-        state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body)
-        saved = state_read(picked["repo"], picked["issue"])
+    difficulty_env(saved["difficulty"])
     title, body = saved["issue_title"], saved["issue_body"]
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
+    if saved["difficulty"] == "too_big" and not saved.get("dependencies_complete"):
+        return decomposition(picked, worktree)
 
     if saved.get("node", picked["node"]) == "plan" and worktree.exists() and not saved.get("previous_head"):
         state_update(picked["repo"], picked["issue"], previous_head=build_git(worktree, ["rev-parse", "HEAD"]))
@@ -636,9 +651,9 @@ def _prepare(picked: dict) -> tuple | dict:
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
         plan_rounds = _plan_graph(picked, art, title, body, cwd=worktree)
-    parked = park(picked)
-    if parked:
-        return parked
+    escalated = escalate(picked)
+    if escalated:
+        return escalated
     branch = f"lokay/{picked['issue']}"
     check_deadline()
     plan_text = art.read_text()
@@ -651,7 +666,7 @@ def _prepare(picked: dict) -> tuple | dict:
     if saved.get("plan_notes"):
         build_note = (build_note or "") + "\n\nNon-blocking plan notes:\n" + dumps(saved["plan_notes"])
     check_deadline()
-    built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
+    built = build_code(worktree, plan_text, title, body, difficulty_env(saved["difficulty"]), expected_branch=branch,
                        clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
                        **({"build_note": build_note} if build_note else {}))
     if built.get("result") == "no_changes" or built.get("reason") == "no_changes":
@@ -710,50 +725,90 @@ def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch
                                              (saved.get("verdict") or {}).get("uwagi", []),
                                              sha or saved.get("sha") or "")
     state_update(repo, issue, **fields, _event=event,
+                 **store.round_fields(saved),
                  pr=saved.get("pr", picked.get("pr")),
                  sha=sha if sha is not None else saved.get("sha"))
     if not to_plan:
         rounds_append(repo, issue, f"{reason} → retry later" if derived["retry_at"] else f"{reason} → retry")
+    if escalate(picked):
+        raise Escalated()
     return {"result": "failed", "reason": reason}
 
 
-def park(picked: dict, uwagi: list | None = None, *, force: bool = False,
-         reason: str | None = None) -> dict | None:
+def escalate(picked: dict) -> dict | None:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
-    history = saved.get("fix_history", [])
-    if not force:
-        if saved.get("result") == "wait":
-            return None
-        if (saved.get("wait_escape") in ("retry", "plan")
-                and saved.get("node") != "fix" and saved.get("result") != "fix"):
-            return None
-        if saved.get("no_progress", 0) < 6:
-            return None
-    reason = reason or "no_progress reached 6"
-    if saved.get("result") == "parked":
-        return {"result": "parked", "reason": reason}
-    pr = saved.get("pr")
-    state_update(repo, issue, result="parked", reason=reason, retry_at=0, awaiting="human")
-    if not pr and saved.get("branch"):
-        opened = open_pr_for(repo, saved["branch"])
-        pr = opened["number"] if opened else None
-    if not pr:
-        rounds_append(repo, issue, f"Park: {reason}; auto-fixing stopped")
-        return {"result": "parked", "reason": reason}
-    code, out, err = _gh(["label", "create", "lokay-parked", "--repo", repo])
-    if code != 0 and not re.search(r"\balready exists\b", err, re.IGNORECASE):
-        raise RuntimeError(f"park label create: {err.strip() or out.strip() or 'gh failed'}")
-    summary = dumps(uwagi or (history[-1] if history else []), ensure_ascii=False)[:3000]
-    for args in (["pr", "edit", str(pr), "--repo", repo, "--add-label", "lokay-parked"],
-                 ["pr", "comment", str(pr), "--repo", repo, "--body",
-                  f"Auto-fixing stopped: {reason}.\n\nUwagi: {summary}"]):
-        code, out, err = _gh(args)
-        if code != 0:
-            raise RuntimeError(f"park {args[1]}: {err.strip() or out.strip() or 'gh failed'}")
-    state_update(repo, issue, result="parked", reason=reason, retry_at=0)
-    rounds_append(repo, issue, f"Park: {reason}; auto-fixing stopped")
-    return {"result": "parked", "reason": reason}
+    if saved.get("legacy_label_cleanup"):
+        from lokay.effects.gh import cleanup_legacy_labels
+
+        cleanup_legacy_labels(repo, issue, saved.get("pr"))
+        prompt = replan_prompt(picked, "Resume legacy failure at higher difficulty.",
+                               (saved.get("verdict") or {}).get("uwagi", []), saved.get("sha") or "")
+        state_update(repo, issue, legacy_label_cleanup=False, plan_prompt=prompt)
+        return {"result": "pending", "next": "plan"}
+    if max(saved.get("no_progress", 0), saved.get("run_rounds", 0)) < 6:
+        return None
+    if saved.get("difficulty", "easy") == "too_big":
+        return None
+    fields = store.escalation_fields(saved)
+    fields["plan_prompt"] = replan_prompt(
+        picked, f"Escalate after repeated failure: {saved.get('reason') or saved.get('last_error') or 'no progress'}",
+        (saved.get("verdict") or {}).get("uwagi", []), saved.get("sha") or "")
+    state_update(repo, issue, **fields)
+    rounds_append(repo, issue, f"Escalate: {saved.get('difficulty', 'easy')} → {fields['difficulty']}")
+    return {"result": "pending", "next": "plan"}
+
+
+def initial_difficulty(picked: dict) -> str:
+    from lokay.effects.decide import decide
+
+    repo, issue = picked["repo"], picked["issue"]
+    saved = state_read(repo, issue)
+    if "issue_title" not in saved or "issue_body" not in saved:
+        from lokay.effects.gh import issue_details
+
+        loaded = issue_details(repo, issue)
+        state_update(repo, issue, issue_title=loaded["title"], issue_body=loaded.get("body"))
+        saved = state_read(repo, issue)
+    if not saved.get("difficulty"):
+        answer = decide({"state": {"title": saved.get("issue_title"), "body": saved.get("issue_body")},
+                         "questions": [{"id": "difficulty", "type": "choice",
+                                        "instructions": "Choose the minimum difficulty needed to implement this issue.",
+                                        "options": {"easy": "one direct plan", "medium": "two perspectives and synthesis",
+                                                    "hard": "three perspectives and synthesis",
+                                                    "too_big": "must decompose into smaller issues"}}]})["difficulty"]
+        state_update(repo, issue, difficulty_decision=answer, difficulty=answer["choice"])
+    return state_read(repo, issue)["difficulty"]
+
+
+def decomposition(picked: dict, cwd: Path) -> dict:
+    from lokay import plan
+    from lokay.effects.gh import child_issue
+
+    repo, issue = picked["repo"], picked["issue"]
+    saved = state_read(repo, issue)
+    env = difficulty_env(saved["difficulty"])
+    data = saved.get("decomposition")
+    if saved.get("dependencies_complete"):
+        return {"result": "pending", "next": "plan"}
+    if data:
+        data = plan.validate_decomposition(data, data["criteria"])
+    if not data:
+        artifact = run_dir(repo, issue) / "decomposition.json"
+        accepted = artifact.parent / "plan.md"
+        text = accepted.read_text() if accepted.is_file() and (saved.get("plan_accepted_sha") or saved.get("decomposition_plan_sha")) == hashlib.sha256(accepted.read_bytes()).hexdigest() else ""
+        criteria = plan.parent_criteria(saved.get("issue_body") or "", saved.get("accepted_plan") or text)
+        data = plan.decompose(saved.get("issue_title") or "", saved.get("issue_body") or "", criteria,
+                              artifact, cwd=cwd, env=env)
+        state_update(repo, issue, decomposition=data)
+    children = dict(saved.get("children") or {})
+    for task in data["tasks"]:
+        if task["id"] not in children:
+            children[task["id"]] = child_issue(repo, issue, task, data["criteria"])
+            state_update(repo, issue, children=children, dependencies=list(children.values()), dependencies_complete=False)
+    state_update(repo, issue, dependencies=list(children.values()), dependencies_complete=False,
+                 result="pending", node="plan", awaiting=None, retry_at=0)
+    return {"result": "pending", "reason": "waiting for child PR merges"}
 
 
 def fix_to_build(picked: dict, worktree: Path) -> dict | None:
@@ -991,9 +1046,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         return []
 
     while True:
-        parked = park(picked, ((verdict or {}).get("uwagi") if verdict else None))
-        if parked:
-            return parked
+        escalated = escalate(picked)
+        if escalated:
+            return escalated
         if pending == "plan":
             prepared = _prepare({**picked, "node": "plan"})
             if isinstance(prepared, dict):
@@ -1049,7 +1104,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
             if not pr:
                 raise RuntimeError("PR missing after merge conflict")
-            verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr["number"])),
+            blocked_pr_number = pr["number"]
+            verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], blocked_pr_number)),
                                    "Merge conflict on GitHub; change the PR before checking again.")
         state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
         if pending != "fix":
@@ -1084,7 +1140,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
                     if not pr:
                         raise RuntimeError("PR missing after merge conflict")
-                    verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr["number"])),
+                    unchanged_pr_number = pr["number"]
+                    verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], unchanged_pr_number)),
                                            "Merge conflict on GitHub; change the PR before checking again.")
                     pending = "fix"
         def read_diff():
@@ -1102,9 +1159,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         head = _retry(picked, active_node, read_head)
         diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
         if pending == "fix" and verdict:
-            parked = park(picked, verdict.get("uwagi"))
-            if parked:
-                return parked
+            escalated = escalate(picked)
+            if escalated:
+                return escalated
             uwagi = verdict["uwagi"]
             if not uwagi:
                 state_update(picked["repo"], picked["issue"], node="check", verdict=None,
@@ -1121,17 +1178,16 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                   if not line.startswith(("@@", "index ")))
             hunk_fingerprint = hashlib.sha256(hunk_text.encode()).hexdigest()
             saved = state_read(picked["repo"], picked["issue"])
-            counts = (saved.get("fix_counts", []) + [len(uwagi)])[-3:]
+            counts = saved.get("fix_counts", []) + [len(uwagi)]
             history = saved.get("fix_history", []) + [uwagi]
             state_update(picked["repo"], picked["issue"], fix_counts=counts, fix_history=history,
-                         run_rounds=saved.get("run_rounds", 0) + 1,
-                         **store.round_fields(saved, diff_fingerprint=diff_fingerprint, completed=False))
+                         **store.round_fields(saved, diff_fingerprint=diff_fingerprint))
             rounds_append(picked["repo"], picked["issue"],
                           f"Fix progress: findings={fingerprint}, hunk={hunk_fingerprint}, "
                           f"diff={diff_fingerprint}, counts={counts}")
             stalled = graph.step(Run.from_state(saved), Progress(0, outcome={
                 "diff_hash": diff_fingerprint, "fingerprint": fingerprint,
-                "hunk_fingerprint": hunk_fingerprint, "counts": counts,
+                "hunk_fingerprint": hunk_fingerprint, "counts": counts[-3:],
             })).no_progress
             test_log = (saved.get("test_log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
@@ -1159,7 +1215,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     issue = _retry(picked, "plan", read_issue)
                     title, body = issue["title"], issue.get("body")
                 state_update(picked["repo"], picked["issue"], issue_title=title, issue_body=body,
-                             fix_counts=[], diff_fingerprint=None)
+                             diff_fingerprint=None)
                 prompt = replan_prompt(picked, "Fix made no progress; revise the plan.", uwagi, head)
                 prompt += "\n\nTest log:\n" + test_log
                 rounds_append(picked["repo"], picked["issue"], "Re-Plan test log:\n" + test_log)
@@ -1189,7 +1245,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
 
             prepare_dependencies(worktree, repo, int(picked["issue"]))
             def fix_action():
-                outcome = fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path)
+                outcome = fix_code(worktree, sha, prompt, difficulty_env(state_read(picked["repo"], picked["issue"]).get("difficulty", "easy")), clone_path=clone_path)
                 if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
                     response = outcome.get("pi_response") or outcome.get("explanation") or ""
                     retry_response = ""
@@ -1252,7 +1308,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         retry_prompt += dumps(upheld) + "; your dispute was: " + justification
                         retry_prompt += ". Make a concrete change.\nRemaining findings:\n"
                         retry_prompt += dumps(remaining)
-                        outcome = fix_code(worktree, sha, retry_prompt, dict(os.environ), clone_path=clone_path)
+                        outcome = fix_code(worktree, sha, retry_prompt, difficulty_env(state_read(picked["repo"], picked["issue"]).get("difficulty", "easy")), clone_path=clone_path)
                         retry_response = outcome.get("pi_response") or outcome.get("explanation") or ""
                         state_update(picked["repo"], picked["issue"], pi_response=retry_response)
                     if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
@@ -1481,7 +1537,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
             check_rounds=rounds, result=verdict["result"], verdict=verdict, test_log=log,
-            run_rounds=state_read(picked["repo"], picked["issue"]).get("run_rounds", 0) + 1,
             check_notes=check_notes, check_history=check_history,
             **store.round_fields(state_read(picked["repo"], picked["issue"]),
                                  diff_fingerprint=diff_fingerprint, checks=verdict.get("checks"),
@@ -1503,15 +1558,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         _retry(picked, "check", lambda: check_comment(picked["repo"], pr_number, rounds, checked_verdict, ci))
         _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
         pending = verdict["result"]
-        parked = park(picked, verdict.get("uwagi"))
-        if parked:
-            return parked
+        escalated = escalate(picked)
+        if escalated:
+            return escalated
         if pending == "wait":
             saved = state_read(picked["repo"], picked["issue"])
-            if saved.get("wait_escape") == "plan" and saved.get("no_progress", 0) >= 6:
-                parked = park(picked, verdict.get("uwagi"), force=True)
-                if parked:
-                    return parked
             if saved.get("wait_escape") == "retry" and saved.get("no_progress", 0) >= 6:
                 findings = [*verdict.get("notes", []), *verdict.get("uwagi", []),
                             *verdict.get("unlocated_findings", []),
