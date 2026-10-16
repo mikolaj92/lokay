@@ -263,13 +263,19 @@ def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | Non
     from lokay.checks import verdict
 
     checked = verdict(results, ci)
-    outcome = {**outcome, "checks": results, "failed": checked["failed"]}
-    if checked["result"] == "fix":
-        findings = [to_dict(finding) for result in checked["failed"] for finding in result.findings]
-        unlocated = [{"warstwa": result.name, "log": result.reason}
-                     for result in checked["failed"] if not result.findings]
-        outcome.update(result="fix", uwagi=[*outcome["uwagi"], *findings, *unlocated])
-    return outcome
+    located = []
+    unlocated = []
+    for finding in outcome.get("uwagi") or []:
+        (located if isinstance(parse_finding(finding), Finding) else unlocated).append(finding)
+    findings = [to_dict(finding) for result in checked["failed"] for finding in result.findings]
+    notes = [*(outcome.get("notes") or []), *(outcome.get("replan") or []), *unlocated,
+             *({"warstwa": result.name, "log": result.reason, "status": result.status}
+               for result in (*checked["unknown"], *checked["unlocated_fail"]))]
+    result = checked["result"]
+    if result == "merge":
+        result = "fix" if located else "wait" if unlocated or outcome.get("result") in ("fix", "wait") else "merge"
+    return {**outcome, **checked, "result": result, "uwagi": [*located, *findings],
+            "notes": notes, "replan": [], "unlocated_findings": unlocated}
 
 
 def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
@@ -280,13 +286,15 @@ def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
     uwagi = list(ci.get("failed") or [])
     for item in decisions:
         uwagi.extend(item.get("uwagi") or [])
-    replan = [finding for item in decisions if item.get("next") == "issue" and not item.get("uwagi")
-              for finding in (item.get("replan") or [{"prompt": "Check sees a problem; identify a concrete location."}])]
+    notes = [finding for item in decisions if item.get("next") == "issue" and not item.get("uwagi")
+             for finding in (item.get("replan") or [{
+                 "pytanie": parse_finding(item).lens or item.get("kind") or "check",
+                 "prompt": "Check sees a problem; identify a concrete location."}])]
     fix = bool(uwagi) or ci.get("result") == "red"
-    ok = ci.get("result") == "green" and not uwagi
-    return {"result": "fix" if fix else "plan" if replan else "merge" if ok else "fix", "sha": sha, "uwagi": uwagi,
-            "replan": replan,
+    ok = ci.get("result") in ("green", "no_ci") and not uwagi
+    return {"result": "fix" if fix else "merge" if ok else "wait", "sha": sha, "uwagi": uwagi,
+            "replan": [],
             "notes": [*(ci.get("notes") or []),
                       *(note for item in decisions for note in item.get("notes") or []),
-                      *({**item, "pytanie": parse_finding(item).lens, "note": item["prompt"]}
-                        for item in replan if fix)]}
+                      *({**item, "pytanie": parse_finding(item).lens, "note": item.get("prompt", "")}
+                        for item in notes)]}
