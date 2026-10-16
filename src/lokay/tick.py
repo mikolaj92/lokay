@@ -217,16 +217,20 @@ def release_worktree(repo: dict, issue: int, *, path: Path | None = None) -> dic
     return result
 
 
-def _terminal_pr(repo: str, issue: int) -> bool:
+def _worktree_prs(repo: str) -> list[dict]:
+    code, out, err = _gh(["pr", "list", "--repo", repo, "--state", "all",
+                         "--json", "number,headRefName,state", "--limit", "200"])
+    return [] if code else json.loads(out)
+
+
+def _terminal_pr(repo: str, issue: int, prs: list[dict] | None = None) -> bool:
     saved = state_read(repo, issue)
     if saved.get("result") in ("merged", "closed"):
         return True
-    target = str(saved.get("pr") or f"lokay/{issue}")
-    code, out, err = _gh(["pr", "view", target, "--repo", repo, "--json", "state,headRefName,number"])
-    if code:
-        return False
-    pr = json.loads(out)
-    if pr.get("headRefName") == f"lokay/{issue}" and pr.get("state") in ("MERGED", "CLOSED"):
+    prs = _worktree_prs(repo) if prs is None else prs
+    pr = next((pr for pr in prs if pr.get("headRefName") == f"lokay/{issue}"
+               and (not saved.get("pr") or str(pr.get("number")) == str(saved["pr"]))), {})
+    if pr.get("state") in ("MERGED", "CLOSED"):
         state_update(repo, issue, result=pr["state"].lower(), pr=pr["number"], cleanup_pending=True, retry_at=0)
         return True
     return False
@@ -235,6 +239,8 @@ def _terminal_pr(repo: str, issue: int) -> bool:
 def sweep_worktrees(repos: list[dict]) -> None:
     from lokay.effects import git
 
+    if not store.claim_worktree_sweep():
+        return
     for repo in repos:
         name = repo["name"]
         if name.casefold() == "mikolaj92/temida":
@@ -245,26 +251,29 @@ def sweep_worktrees(repos: list[dict]) -> None:
         try:
             root = Path(repo["clone_path"]).expanduser()
             rows = git.worktree_list(root)
-            paths = {Path(row["worktree"]) for row in rows}
+            paths = {Path(row["worktree"]) for row in rows if Path(row["worktree"]).exists()}
             paths.update(root.parent.glob(f"{root.name}-wt-*-recovery-*"))
             candidates = {}
             for path in paths:
                 match = re.fullmatch(re.escape(root.name) + r"-wt-(\d+)(?:-recovery-\d+)?", path.name)
-                if match and path.parent.resolve() == root.parent.resolve():
+                if match and path.exists() and path.parent.resolve() == root.parent.resolve():
                     candidates[path] = int(match[1])
             for state_path in run_dir(name, 0).parent.glob("*"):
                 if state_path.name.isdecimal():
                     issue = int(state_path.name)
                     saved = state_read(name, issue)
-                    if saved.get("cleanup_pending") or (saved.get("pr") and saved.get("result") not in ("merged", "closed")):
+                    if saved.get("cleanup_pending"):
                         candidates.setdefault(_repo_paths(repo, issue)[1], issue)
             terminal = set()
             failed = set()
+            prs = None
             for path, issue in candidates.items():
                 if path.resolve() in (Path.cwd().resolve(), *Path.cwd().resolve().parents):
                     continue
                 if issue not in terminal:
-                    _terminal_pr(name, issue)
+                    if prs is None and state_read(name, issue).get("result") not in ("merged", "closed"):
+                        prs = _worktree_prs(name)
+                    _terminal_pr(name, issue, prs)
                     terminal.add(issue)
                 released = release_worktree(repo, issue, path=path)
                 if released["result"] != "released":
