@@ -158,8 +158,8 @@ class Finding:
     plik: str
     linia_od: int
     linia_do: int
-    zmiana: str
-    lens: str
+    zmiana: str = ""
+    lens: str = ""
     _raw: dict | None = field(default=None, repr=False, compare=False, kw_only=True)
 
 

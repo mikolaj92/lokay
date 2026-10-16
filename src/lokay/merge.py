@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from lokay.effects.gh import merge as gh_merge
+from lokay.effects.git import worktree_remove
 from lokay.store import write_run
 from lokay.main_guard import check_main
 
@@ -25,12 +26,11 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
     write_run(owner, repo_name, issue, {**rounds, "result": "merged", "sha": sha,
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     if worktree is not None:
-        from lokay.tick import release_worktree
-        from lokay.store import state_update
-
-        state_update(repo_name, issue, cleanup_pending=True)
-        removed = release_worktree({"name": repo_name, "clone_path": str(clone_path)}, issue, path=worktree)
-        if removed["result"] != "released":
+        try:
+            removed = worktree_remove(clone_path, worktree)
+            if removed["result"] != "removed":
+                raise RuntimeError(removed.get("error") or "worktree removal failed")
+        except Exception as exc:
             logging.getLogger(__name__).warning("Merged %s#%s; worktree cleanup failed for %s: %s",
-                                               repo_name, issue, worktree, removed["reason"])
+                                               repo_name, issue, worktree, exc)
     return {"result": "merged", "merge_sha": sha}
