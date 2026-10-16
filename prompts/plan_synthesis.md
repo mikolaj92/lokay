@@ -7,6 +7,6 @@ Write a JSON object with required fields:
 - odrzucone: array of {"tresc": string, "zrodlo": "minimal" | "risk" | "gates", "powod": string}
 Each zrodla array must be nonempty and name only accepted input branches (minimal, risk, gates).
 Record failed branches and discarded proposals in odrzucone. Never attribute selected content to a failed branch.
-Local checks in the worktree must pass. lokay verifies the PR and pushes, not you. Changes needed to make local checks pass are in scope.
+Required CI checks must pass. Changes needed for CI are in scope.
 Hard rule: write no code comments at all (no comment lines, no docstrings), keep documentation to a minimum, and add no unit tests.
 Do not write Markdown. lokay will render the JSON deterministically.
