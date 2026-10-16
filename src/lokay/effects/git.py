@@ -176,6 +176,37 @@ def command(repo: Path, args: list[str], *, timeout: float = 30):
     return run_process(["git", *args], cwd=repo, timeout=timeout)
 
 
+class PiGitViolation(RuntimeError):
+    def failure(self) -> dict:
+        return {"result": "failed", "reason": "pi_git_changed", "explanation": str(self), "artifact": ""}
+
+
+@contextmanager
+def pi_git_guard(path: Path):
+    def checked(args):
+        proc = command(path, args)
+        if proc.returncode != 0:
+            raise PiGitViolation(f"pi git checks failed: {proc.stderr.strip()}")
+        return proc.stdout
+
+    head = checked(["rev-parse", "HEAD"]).strip()
+    refs = checked(["for-each-ref"])
+    try:
+        yield
+    finally:
+        from lokay.effects.pi import tick_deadline
+
+        token = tick_deadline.set(None)
+        try:
+            after = checked(["rev-parse", "HEAD"]).strip()
+            after_refs = checked(["for-each-ref"])
+            commits = checked(["rev-list", "HEAD", f"^{head}", "--"])
+            if after != head or after_refs != refs or commits.strip():
+                raise PiGitViolation("pi changed git HEAD or refs, or created commits beyond its pre-run HEAD")
+        finally:
+            tick_deadline.reset(token)
+
+
 def guarded_command(path: Path, *args: str, input: bytes | None = None) -> bytes:
     return subprocess.run(
         ["git", "--literal-pathspecs", "-C", str(path), *args], input=input,
