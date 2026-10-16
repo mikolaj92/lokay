@@ -1091,7 +1091,8 @@ def _resume(picked: dict) -> tuple | dict:
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 
-    tidy_and_commit(worktree, "lokay resume")
+    if not build_git(worktree, ["diff", "--name-only", "--diff-filter=U"]):
+        tidy_and_commit(worktree, "lokay resume")
     code, out, err = _git(worktree, ["fetch", "origin", branch])
     if code != 0:
         return needs_help(picked, f"resume fetch: {err.strip() or out.strip()}", sha)
@@ -1194,8 +1195,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         pending = "check"
 
     def sync_head():
-        for args in (["fetch", "origin", branch], ["merge", "--ff-only", f"origin/{branch}"]):
-            build_git(worktree, args)
+        build_git(worktree, ["fetch", "origin", branch])
+        code, out, err = _git(worktree, ["merge", "--no-edit", f"origin/{branch}"])
+        if code != 0 and not build_git(worktree, ["diff", "--name-only", "--diff-filter=U"]):
+            raise RuntimeError(err or out)
 
     def sync_main():
         build_git(worktree, ["fetch", "origin", "main"])
@@ -1243,8 +1246,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     rounds_append(picked["repo"], picked["issue"], f"Merge: sha={merged['merge_sha']}")
                     return merged
                 rounds_append(picked["repo"], picked["issue"], f"Merge: retry, result={merged['result']}")
-                if merged["result"] != "conflict":
-                    state_update(picked["repo"], picked["issue"], node="check", verdict=None)
+                if merged["result"] == "conflict":
+                    state_update(picked["repo"], picked["issue"], node="check", verdict=None,
+                                 merge_conflict_sha=sha)
+            verdict = None
             state_update(picked["repo"], picked["issue"], node="check", verdict=None)
             if pr and pr.get("headRefOid") and pr["headRefOid"] != sha:
                 _retry(picked, "check", sync_head)
@@ -1282,7 +1287,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 if not pushed_pr(picked["repo"], branch, sha):
                     return needs_help(picked, "sha mismatch after push", sha)
                 _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
+                verdict = None
                 state_update(picked["repo"], picked["issue"], sha=sha, verdict=None)
+                if state_read(picked["repo"], picked["issue"]).get("merge_conflict_sha") == sha:
+                    return needs_help(picked, "merge conflict persists after main synchronization", sha)
         def read_diff():
             diff = command(worktree, ["diff", "origin/main...HEAD"])
             if diff.returncode != 0:

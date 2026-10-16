@@ -132,12 +132,22 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
         return out
 
     paths = [path for path in paths if path != ".lokay" and not path.startswith(".lokay/")]
-    if not paths:
+    merge_head = repo / checked(["rev-parse", "--git-path", "MERGE_HEAD"]).strip()
+    merging = merge_head.exists()
+    if not paths and not merging:
         return []
-    checked(["add", "--", *paths])
+    if paths:
+        checked(["add", "--", *paths])
     staged = set(filter(None, checked(["diff", "--cached", "--name-only", "-z"]).split("\0")))
     committed = sorted(set(paths) & staged)
-    if committed:
+    if merging:
+        unresolved = checked(["diff", "--name-only", "--diff-filter=U"])
+        if unresolved:
+            raise RuntimeError("Unresolved merge conflicts: " + unresolved.strip())
+        checked(["diff", "--cached", "--check"])
+        checked(["commit", "-m", message])
+        committed = sorted(staged)
+    elif committed:
         checked(["commit", "--only", "-m", message, "--", *committed])
     return committed
 
