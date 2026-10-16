@@ -64,7 +64,8 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     previous = main_status().get(repo, {})
     baseline = previous.get("baseline", {})
     argv = config.get("test") or []
-    if baseline.get("sha") != sha or baseline.get("argv") != argv:
+    if (baseline.get("sha") != sha or baseline.get("argv") != argv
+            or baseline.get("ci", {}).get("tested") is not True):
         with tempfile.TemporaryDirectory(prefix="lokay-main-") as temporary:
             worktree = Path(temporary) / "checkout"
             git(clone_path, ["worktree", "add", "--detach", str(worktree), sha])
@@ -81,13 +82,14 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
             finally:
                 git(clone_path, ["worktree", "remove", "--force", str(worktree)])
     ci = baseline["ci"]
-    green = ci.get("tested") is True and ci["result"] == "green"
-    status = "green" if green else "red"
-    culprit = {"sha": merge_sha or sha, "pr": pr}
+    tested = ci.get("tested") is True
+    green = tested and ci["result"] == "green"
+    status = ("green" if green else "red") if tested else "unknown"
+    culprit = {"sha": merge_sha or sha, "pr": pr} if tested else None
     result = {"status": status,
               "since": previous.get("since", time.time()) if previous.get("status") == status else time.time(),
               "culprit": culprit, "issue": previous.get("issue"), "baseline": baseline}
-    if not green:
+    if status == "red":
         diff = git(clone_path, ["show", "--format=fuller", "--first-parent", merge_sha]) if merge_sha else ""
         body = (f"Main czerwony. Napraw przez Plan → Build → Check → Fix → Merge.\n"
                 f"Culprit: {dumps(culprit)} · tested SHA: `{sha}`\n\n"
@@ -102,7 +104,7 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
     from lokay.check import test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
-    if main["ci"]["result"] != "red" or any(
+    if ci.get("tested") is not True or main["ci"].get("tested") is not True or main["ci"]["result"] != "red" or any(
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):
         return ci
