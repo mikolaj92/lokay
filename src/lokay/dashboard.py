@@ -100,6 +100,8 @@ def kind(files) -> str:
         path = item.get("path") if isinstance(item, dict) else None
         if not isinstance(path, str) or not path:
             return "?"
+        if path.startswith(".lokay/"):
+            continue
         name = path.rsplit("/", 1)[-1]
         if path.startswith("docs/") or name.endswith((".md", ".rst", ".txt")) or name.startswith("LICENSE"):
             kinds.add("docs")
@@ -107,7 +109,7 @@ def kind(files) -> str:
             kinds.add("tests")
         else:
             kinds.add("code")
-    return "code" if "code" in kinds else "docs+tests" if len(kinds) == 2 else kinds.pop()
+    return "code" if "code" in kinds else "docs+tests" if len(kinds) == 2 else kinds.pop() if kinds else "lokay"
 
 
 def models() -> dict:
@@ -153,7 +155,7 @@ def prs(data, merged: bool) -> list[dict]:
         pr = select(item, fields)
         if merged:
             pr["kind"] = kind(item.get("files"))
-        elif item.get("kind") in ("docs", "tests", "docs+tests", "code", "?"):
+        elif item.get("kind") in ("docs", "tests", "docs+tests", "code", "lokay", "?"):
             pr["kind"] = item["kind"]
         output.append(pr)
     return output
