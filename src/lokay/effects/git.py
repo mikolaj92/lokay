@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 from pathlib import Path
 from contextlib import contextmanager
@@ -10,10 +12,36 @@ from lokay.safety import validate_argv
 REF_LOCK = ("cannot lock ref", "unable to resolve reference", ".lock")
 
 
-def _git(repo: Path, args: list[str], timeout: float = 60) -> tuple[int, str, str]:
+def _git(repo: Path, args: list[str], timeout: float = 60, *, env: dict[str, str] | None = None) -> tuple[int, str, str]:
     validate_argv(["git", *args])
-    proc = run_process(["git", *args], cwd=repo, timeout=timeout)
+    proc = run_process(["git", *args], cwd=repo, timeout=timeout, env=env)
     return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+
+def commit_time(repo: Path, ref: str) -> str:
+    if not ref or ref.startswith("-") or any(char.isspace() for char in ref):
+        raise ValueError("expected a git tag or sha")
+    code, out, err = _git(repo, ["show", "-s", "--format=%cI", "--end-of-options", f"{ref}^{{commit}}", "--"])
+    if code:
+        raise ValueError(err.strip() or out.strip())
+    return out.strip()
+
+
+def merge_files(repo: Path, sha: str) -> list[dict] | None:
+    if not isinstance(sha, str) or not re.fullmatch(r"[a-fA-F0-9]{7,64}", sha):
+        raise ValueError("expected a hex sha of 7-64 characters")
+    if not repo.is_dir():
+        return None
+    env = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
+    code, out, err = _git(repo, ["show", "--first-parent", "-m", "--name-only", "--format=", "-z", sha, "--"], env=env)
+    if code or not out:
+        code, out, err = _git(repo, ["diff-tree", "--name-only", "-r", "-z", f"{sha}^1", sha, "--"], env=env)
+    if code:
+        exists, _, error = _git(repo, ["rev-parse", "--verify", "--quiet", f"{sha}^{{object}}"], env=env)
+        if exists == 1:
+            return None
+        raise ValueError(error.strip() if exists else err.strip() or out.strip())
+    return [{"path": path} for path in dict.fromkeys(out.split("\0")) if path]
 
 
 def worktree_add(repo: Path, branch: str, path: Path) -> dict:
