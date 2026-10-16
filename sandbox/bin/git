@@ -1,0 +1,28 @@
+#!/bin/sh
+check_command() {
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -C|-c|--git-dir|--work-tree|--namespace) [ "$#" -ge 2 ] || return 1; shift 2 ;;
+            --git-dir=*|--work-tree=*|--namespace=*|--no-pager|--paginate|--literal-pathspecs|--no-optional-locks) shift ;;
+            -*) return 1 ;;
+            *) break ;;
+        esac
+    done
+    command=${1-}
+    [ "$#" -eq 0 ] || shift
+    case "$command" in
+        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|remote|config) return 1 ;;
+        branch) [ "$#" -eq 0 ] || return 1 ;;
+        checkout|switch)
+            for arg do
+                case "$arg" in
+                    -b*|-B*|-c*|-C*|--branch|--branch=*|--create|--create=*|--force-create|--force-create=*|--orphan|--orphan=*) return 1 ;;
+                esac
+            done ;;
+    esac
+}
+if ! check_command "$@"; then
+    printf '%s\n' 'git: command blocked for pi' >&2
+    exit 1
+fi
+exec /usr/bin/git "$@"

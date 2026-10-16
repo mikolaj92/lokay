@@ -202,7 +202,11 @@ def build_code(
                 env=clean,
                 timeout=3600,
             )
-    except Exception:
+    except Exception as exc:
+        from lokay.effects.git import PiGitViolation
+
+        if isinstance(exc, PiGitViolation):
+            return exc.failure()
         if changes["changed"]:
             return failure(changes, worktree)
         raise

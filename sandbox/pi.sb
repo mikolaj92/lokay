@@ -1,6 +1,8 @@
 (version 1)
 (allow default)
+(deny network-outbound (remote tcp "*:22"))
 (deny file-read*
+    (subpath (string-append (param "HOME") "/.ssh"))
     (subpath (string-append (param "HOME") "/Desktop"))
     (subpath (string-append (param "HOME") "/Documents"))
     (subpath (string-append (param "HOME") "/Downloads"))
@@ -13,7 +15,6 @@
 (allow file-write*
     (subpath (param "WORKTREE"))
     (subpath (param "ARTIFACT_DIR"))
-    (subpath (param "GITDIR"))
     (subpath (param "TMPDIR"))
     (subpath "/private/tmp")
     (subpath "/private/var/folders")
@@ -25,3 +26,4 @@
     (subpath (string-append (param "HOME") "/.local/state"))
     (subpath (string-append (param "HOME") "/.npm"))
     (subpath (string-append (param "HOME") "/.config/uv")))
+(deny file-write* (subpath (param "GITDIR")))
