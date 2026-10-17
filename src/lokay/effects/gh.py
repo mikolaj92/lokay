@@ -284,14 +284,14 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
 
 def dashboard_request(*args):
     try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=60)
+        code, out, err = _gh(list(args))
     except subprocess.TimeoutExpired:
         raise RuntimeError("gh timed out after 60s") from None
     except OSError:
         raise RuntimeError("gh could not start") from None
-    if result.returncode:
-        raise RuntimeError(f"gh {args[0]} failed (exit {result.returncode})")
+    if code:
+        raise RuntimeError(f"gh {args[0]} failed (exit {code})")
     try:
-        return json.loads(result.stdout)
+        return json.loads(out)
     except ValueError:
         raise RuntimeError("gh returned invalid JSON") from None

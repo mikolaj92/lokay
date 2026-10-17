@@ -22,7 +22,7 @@ from lokay.build import _git as build_git
 from lokay.types import Finding, Note, parse_finding, to_dict
 from lokay.config import load_repos, tick_budget
 from lokay.effects.gh import _gh, auth_status, open_issues, open_pr_for
-from lokay.lock import acquire, release
+from lokay.store import acquire_lock, release_lock, lock_path
 from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
                        process_groups, retry_sleep, run_process, tick_deadline)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
@@ -189,7 +189,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         attempted = False
         try:
             check_deadline()
-            held = acquire(name.split("/")[0], name)
+            held = acquire_lock(lock_path(name.split("/")[0], name))
             if held["result"] != "held":
                 continue
             current = main_status().get(name, {})
@@ -205,7 +205,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         finally:
             if held and held["result"] == "held":
                 try:
-                    release(held)
+                    release_lock(held)
                 except Exception as exc:
                     store.log_event("main_checks", repo=name, outcome={"result": "failed", "reason": str(exc)})
         if attempted:
@@ -242,7 +242,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             if saved.get("awaiting") == "children":
                 from lokay.effects.gh import children_merged
 
-                held = acquire(name.split("/")[0], name)
+                held = acquire_lock(lock_path(name.split("/")[0], name))
                 if held["result"] == "held":
                     try:
                         saved = state_read(name, issue)
@@ -255,7 +255,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             state_update(name, issue, **fields)
                             saved = state_read(name, issue)
                     finally:
-                        release(held)
+                        release_lock(held)
             if saved:
                 states[issue] = saved
         busy = False
@@ -273,7 +273,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             row["headRefName"] == (saved.get("branch") or f"lokay/{issue}"))
                            for row in closed_prs)]
             if closing:
-                held = acquire(name.split("/")[0], name)
+                held = acquire_lock(lock_path(name.split("/")[0], name))
                 busy = held["result"] != "held"
                 if not busy:
                     try:
@@ -288,7 +288,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             cleanup = worktree_remove(root, worktree, safe=True, branch=f"lokay/{issue}")
                             store.log_event("closed_cleanup", repo=name, issue=issue, outcome=cleanup)
                     finally:
-                        release(held)
+                        release_lock(held)
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}),
                                       states=states, busy=busy))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
@@ -344,7 +344,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             repo = replace(repo, issues=issues[:len(states)], states={**repo.states, **states},
                            open_prs=frozenset(open_prs))
         else:
-            held = acquire(name.split("/")[0], name)
+            held = acquire_lock(lock_path(name.split("/")[0], name))
             if held["result"] != "held":
                 if selected.kind == "pr":
                     blocked.extend((name, int(row["headRefName"][6:]),
@@ -402,7 +402,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
-                    release(held)
+                    release_lock(held)
                     raise
         snapshot = replace(snapshot, repos=tuple(repo if row.name == name else row for row in snapshot.repos))
 
@@ -505,7 +505,7 @@ def _tick() -> dict:
             print(dumps(result, separators=(",", ":")))
         return result
     finally:
-        release(outcome["held"])
+        release_lock(outcome["held"])
 
 
 def _ensure_worktree(picked: dict) -> Path:
