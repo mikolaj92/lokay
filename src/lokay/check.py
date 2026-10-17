@@ -273,7 +273,7 @@ def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | Non
                for result in (*checked["unknown"], *checked["unlocated_fail"]))]
     result = checked["result"]
     if result == "merge":
-        result = "fix" if located else "wait" if unlocated or outcome.get("result") in ("fix", "wait") else "merge"
+        result = "fix" if located else "merge"
     return {**outcome, **checked, "result": result, "uwagi": [*located, *findings],
             "notes": notes, "replan": [], "unlocated_findings": unlocated}
 

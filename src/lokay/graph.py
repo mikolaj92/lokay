@@ -95,6 +95,34 @@ def pick(snapshot: Snapshot) -> Pick | None:
                 and repo.states.get(number, {}).get("result") != "parked"
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
+    due = []
+    for repo in snapshot.repos:
+        if repo.busy:
+            continue
+        for issue, state in repo.states.items():
+            if (state.get("result") in ("parked", "merged")
+                    or state.get("waiting_on") == "human" or state.get("awaiting") == "human"
+                    or (snapshot.only_issue is not None and snapshot.only_issue != issue)):
+                continue
+            retry_at = state.get("retry_at", 0)
+            last_attempt = state.get("last_attempt", 0)
+            pending = state.get("result") == "pending" and state.get("node") in ("build", "check")
+            if retry_at > snapshot.now:
+                continue
+            if pending and last_attempt + 300 > snapshot.now and retry_at <= 0:
+                continue
+            if not (state.get("waiting_on") in ("ci", "retry_at") or retry_at > 0
+                    or (pending and last_attempt + 300 <= snapshot.now)):
+                continue
+            due.append((retry_at, last_attempt, repo.name, issue, state))
+    if due:
+        _, _, repo, issue, state = min(due, key=lambda row: row[:4])
+        if state.get("pr"):
+            target = {"number": state["pr"], "headRefName": state.get("branch") or f"lokay/{issue}"}
+            if state.get("sha"):
+                target["headRefOid"] = state["sha"]
+            return Pick(repo, issue, "pr", target)
+        return Pick(repo, issue, "issue", {"number": issue})
     for repo in repos:
         if repo.busy:
             continue
