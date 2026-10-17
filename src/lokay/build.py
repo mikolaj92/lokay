@@ -5,12 +5,13 @@ import re
 import hashlib
 from contextlib import contextmanager
 from pathlib import Path
+from typing import cast
 
 from lokay import store
 
-from lokay.effects.git import base_branch, git_try, commit_paths, git, head as git_head, push, guard, failure
-from lokay.effects.gh import checks_table, pr_create
-from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
+from lokay.effects.git import base_branch, git_try, commit_paths, git, head as git_head, push
+from lokay.effects.gh import checks_table, open_pr_for, pr_create
+from lokay.effects.pi import pi_env, run_pi
 from lokay.effects.tests import check_uv_lock
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
@@ -177,6 +178,34 @@ def pr_body(worktree: Path, plan_path: Path, issue: int, verdict: dict | None = 
     return body
 
 
+def recover_no_changes(worktree: Path, outcome: dict, branch: str | None, *, picked: dict | None = None) -> dict:
+    if picked is None:
+        upstream = (git(worktree, "for-each-ref", "--format=%(upstream:short)", f"refs/heads/{branch}") if branch else "")
+        if branch is not None and upstream == f"origin/{branch}":
+            git(worktree, "fetch", "origin", branch)
+            if int(git(worktree, "rev-list", "--count", f"{upstream}..HEAD")) > 0:
+                return {"result": "done", "artifact": outcome["head"], "pi_response": outcome["pi_tail"]}
+        return {
+            "result": "failed",
+            "reason": "no_changes",
+            "explanation": f"pi exited 0 but made no commits in {worktree}. pi said:\n" + outcome["pi_tail"],
+            "artifact": str(worktree),
+        }
+    if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
+        pr = open_pr_for(picked["repo"], cast(str, branch))
+        if pr:
+            base = base_branch(worktree)
+            git(worktree, "fetch", "origin", base)
+            if int(git(worktree, "rev-list", "--count", f"origin/{base}..HEAD")) > 0:
+                store.rounds_append(picked["repo"], picked["issue"],
+                                   "no_changes: fix already on branch, checking existing PR")
+                outcome = {**outcome, "result": "done", "reason": None,
+                           "artifact": git_head(worktree)}
+        if outcome.get("result") == "no_changes":
+            outcome = {**outcome, "result": "failed", "reason": "no_changes"}
+    return outcome
+
+
 def build_code(
     worktree: Path,
     plan: str,
@@ -202,27 +231,16 @@ def build_code(
     )
     if kind == "docs_change":
         prompt += "\n\n" + Path(__file__).resolve().parents[2].joinpath("prompts/build_docs_change.md").read_text()
-    changes = {"changed": False}
-    try:
-        with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
-            proc = run_process(
-                sandboxed(["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt], worktree, clean),
-                cwd=worktree,
-                env=clean,
-                timeout=3600,
-            )
-    except Exception as exc:
-        from lokay.effects.git import PiGitViolation
-
-        if isinstance(exc, PiGitViolation):
-            return exc.failure()
-        if changes["changed"]:
-            return failure(changes, worktree)
-        raise
-    finally:
-        cleanup_worktree_caches(worktree)
-    if changes["changed"]:
-        return failure(changes, worktree)
+    proc = run_pi(
+        worktree,
+        prompt,
+        clone_path,
+        env=clean,
+        cwd=worktree,
+        timeout=3600,
+    )
+    if isinstance(proc, dict):
+        return proc
     if proc.returncode != 0:
         tidy_and_commit(worktree, "lokay build", before)
         explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
@@ -267,18 +285,43 @@ def build_code(
             "artifact": str(worktree),
         }
     if not log:
-        upstream = (git(worktree, "for-each-ref", "--format=%(upstream:short)", f"refs/heads/{expected_branch}") if expected_branch else "")
-        if expected_branch is not None and upstream == f"origin/{expected_branch}":
-            git(worktree, "fetch", "origin", expected_branch)
-            if int(git(worktree, "rev-list", "--count", f"{upstream}..HEAD")) > 0:
-                return {"result": "done", "artifact": head, "pi_response": pi_tail}
-        return {
-            "result": "failed",
-            "reason": "no_changes",
-            "explanation": f"pi exited 0 but made no commits in {worktree}. pi said:\n" + pi_tail,
-            "artifact": str(worktree),
-        }
+        return recover_no_changes(worktree, {"head": head, "pi_tail": pi_tail}, expected_branch)
     return {"result": "done", "artifact": head, "pi_response": pi_tail}
+
+
+def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
+    before = worktree_status(worktree)
+    clean = pi_env(env, worktree)
+    clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
+    proc = run_pi(
+        worktree,
+        prompt,
+        clone_path,
+        env=clean,
+        cwd=worktree,
+        timeout=3600,
+        missing_is_failure=True,
+    )
+    if isinstance(proc, dict):
+        return proc
+    tidy_and_commit(worktree, "lokay fix", before)
+    if proc.returncode != 0:
+        return {"result": "failed", "artifact": ""}
+    code, out, err = git_try(worktree, "rev-parse", "HEAD", timeout=30)
+    if code:
+        raise RuntimeError(err.strip())
+    sha = out.strip()
+    if sha == previous:
+        return {"result": "failed", "reason": "no_changes", "artifact": "",
+                "pi_response": proc.stdout or proc.stderr or ""}
+    return {"result": "done", "artifact": sha, "pi_response": (proc.stdout or proc.stderr or "")[-1500:]}
+
+
+def fix_publish(worktree: Path, branch: str, expected: str | None) -> dict:
+    pushed = push(worktree, branch, expected)
+    if pushed["result"] != "pushed":
+        return {"result": pushed["result"], "sha": pushed.get("sha", "")}
+    return {"result": "pushed", "sha": pushed["sha"]}
 
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:

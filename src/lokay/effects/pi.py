@@ -11,7 +11,7 @@ import signal
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -501,6 +501,51 @@ def _run_pi_process(
                                 selector.unregister(key.fileobj)
 
 
+def run_pi(
+    worktree: Path,
+    prompt: str,
+    clone_path: Path | str | None = None,
+    *,
+    env: Mapping[str, str],
+    cwd: Path | None,
+    timeout: float = 3600,
+    extra_dir: Path | None = None,
+    guarded: bool = True,
+    json_mode: bool = False,
+    missing_is_failure: bool = False,
+) -> subprocess.CompletedProcess[Any] | dict:
+    from lokay.effects.git import PiGitViolation, failure, guard
+
+    argv = ["pi", "-p"]
+    if json_mode:
+        argv += ["--mode", "json"]
+    argv += ["--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt]
+    guard_paths = [Path(__file__).resolve().parents[3], clone_path] if guarded else None
+    changes = {"changed": False}
+    try:
+        with (guard(guard_paths) if guard_paths is not None else nullcontext(changes)) as changes:
+            proc = run_process(
+                sandboxed(argv, worktree, env, extra_dir),
+                cwd=cwd,
+                env=env,
+                timeout=timeout,
+            )
+    except Exception as exc:
+        if isinstance(exc, PiGitViolation):
+            return exc.failure()
+        if changes["changed"]:
+            return failure(changes, worktree)
+        if missing_is_failure and isinstance(exc, FileNotFoundError):
+            return {"result": "failed", "artifact": ""}
+        raise
+    finally:
+        if guard_paths is not None:
+            cleanup_worktree_caches(worktree)
+    if changes["changed"]:
+        return failure(changes, worktree)
+    return proc
+
+
 def pi_step(
     prompt: str,
     artifact: Path,
@@ -515,19 +560,21 @@ def pi_step(
     model = child.get("LOKAY2_MODEL", "")
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
-    from lokay.effects.git import PiGitViolation
     from lokay import store
 
     store.ensure_directory(artifact.parent)
-    try:
-        proc = run_process(
-            sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child, artifact.parent.resolve()),
-            cwd=cwd,
-            env=child,
-            timeout=timeout,
-        )
-    except PiGitViolation as exc:
-        return exc.failure()
+    proc = run_pi(
+        worktree,
+        prompt,
+        env=child,
+        cwd=cwd,
+        timeout=timeout,
+        extra_dir=artifact.parent.resolve(),
+        guarded=False,
+        json_mode=True,
+    )
+    if isinstance(proc, dict):
+        return proc
     if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
         return {"result": "failed", "artifact": ""}
     return {"result": "done", "artifact": str(artifact)}

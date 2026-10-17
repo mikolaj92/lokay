@@ -312,7 +312,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     from lokay.types import Run, Progress
     from lokay.check import QUESTIONS
     from lokay.effects.decide import decide
-    from lokay.fix import fix_code, fix_publish
+    from lokay.build import fix_code, fix_publish
     from lokay.effects.git import git_try
     import hashlib
     import os

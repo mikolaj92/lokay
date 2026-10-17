@@ -751,7 +751,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
 
 
 def _prepare(picked: dict) -> tuple | dict:
-    from lokay.build import build_code, build_publish
+    from lokay.build import build_code, build_publish, recover_no_changes
 
     from lokay import plan
 
@@ -839,18 +839,7 @@ def _prepare(picked: dict) -> tuple | dict:
                        clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
                        **({"build_note": build_note} if build_note else {}),
                        **({"kind": "docs_change"} if saved.get("plan_kind", "code") == "docs_change" else {}))
-    if built.get("result") == "no_changes" or built.get("reason") == "no_changes":
-        pr = open_pr_for(picked["repo"], branch)
-        if pr:
-            base = base_branch(worktree)
-            git(worktree, "fetch", "origin", base)
-            if int(git(worktree, "rev-list", "--count", f"origin/{base}..HEAD")) > 0:
-                rounds_append(picked["repo"], picked["issue"],
-                              "no_changes: fix already on branch, checking existing PR")
-                built = {**built, "result": "done", "reason": None,
-                         "artifact": git_head(worktree)}
-        if built.get("result") == "no_changes":
-            built = {**built, "result": "failed", "reason": "no_changes"}
+    built = recover_no_changes(worktree, built, branch, picked=picked)
     if built.get("result") == "failed":
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
@@ -1057,8 +1046,7 @@ def _resume(picked: dict) -> tuple | dict:
             ] or [{"pytanie": "conflict", "plik": "", "log": "Complete the pending merge (MERGE_HEAD exists)."}]}
         state_update(picked["repo"], picked["issue"], node="fix", result="fix", sha=sha, verdict=verdict)
         return worktree, branch, sha, repo.get("test") or [], 1
-    from lokay.build import tidy_and_commit
-    from lokay.fix import fix_publish
+    from lokay.build import fix_publish, tidy_and_commit
 
     tidy_and_commit(worktree, "lokay resume")
     code, out, err = git_try(worktree, "fetch", "origin", branch)
@@ -1140,7 +1128,7 @@ def dismissed_key(row: dict) -> list:
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.check import hunks
-    from lokay.fix import fix_publish
+    from lokay.build import fix_publish
     from lokay.effects.git import git_try
     from lokay.effects.gh import check_comment, pr_files
     from lokay import finish
