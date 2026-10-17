@@ -162,21 +162,14 @@ def docs(x: CheckInput) -> CheckResult:
         elif kind == "-":
             change["net"] -= 1
     expanded = [(path, change) for path, change in changes.items() if change["net"] > 0]
-    requested = re.search(
-        r"\b(?:README|docs|ADR|RFC|design\s+doc\w*|projekt\w*|dokument\w*|documentation|decyzj\w*|guide|changelog)\b",
-        x.issue_title + "\n" + x.issue_body, re.IGNORECASE)
-    unplanned = [(path, change) for path, change in expanded if not any(
-        re.search(r"(?<![\w./-])" + re.escape(candidate) + r"/?(?![\w./-])", x.plan)
-        for candidate in (path, str(Path(path).parent)) if candidate != ".")]
-    offenders = unplanned if requested else expanded
-    if expanded and not offenders:
-        return CheckResult("docs", "pass", "requested documentation changes match the plan", ())
-    if offenders:
-        hint = "trim only these expanded files: " + ", ".join(path for path, _ in offenders)
-        hint += "; never delete documentation that the issue or plan requires"
-        return CheckResult("docs", "fail", "documentation expanded without request or plan: " + "; ".join(
-            f"{path}: +{change['net']} net lines" for path, change in offenders), tuple(
-                Finding(path, change["line"], change["line"], hint, "docs") for path, change in offenders))
+    if re.search(r"\b(?:dodaj\s+(?:sekcję|plik)|nowy\s+dokument|add\s+(?:a\s+)?(?:section|file|document))\b",
+                 x.issue_body, re.IGNORECASE):
+        return CheckResult("docs", "pass", "explicit request to add a document or section", ())
+    if sum(change["net"] for change in changes.values()) > 0:
+        return CheckResult("docs", "fail", "documentation expanded: " + "; ".join(
+            f"{path}: +{change['net']} net lines" for path, change in expanded), tuple(
+                Finding(path, change["line"], change["line"], "shorten: docs must not grow", "docs")
+                for path, change in expanded))
     return CheckResult("docs", "pass", "no documentation expansion", ())
 
 

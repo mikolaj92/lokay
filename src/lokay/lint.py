@@ -22,11 +22,11 @@ def diff_lines(diff: str):
         if line.startswith("diff --git "):
             path = ""
             in_hunk = False
-        elif not in_hunk and line.startswith("+++ "):
+        elif not in_hunk and line.startswith(("--- ", "+++ ")) and line != "+++ /dev/null":
             path = line[4:].split("\t", 1)[0]
             if path.startswith('"'):
                 path = ast.literal_eval(path)
-            if path.startswith("b/"):
+            if path.startswith("a/" if line.startswith("--- ") else "b/"):
                 path = path[2:]
             if Path(path).is_absolute() or ".." in Path(path).parts:
                 path = ""
