@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import gzip
-import hashlib
 import json
 import math
 import re
@@ -13,6 +12,7 @@ from pathlib import Path
 from lokay import config
 from lokay.dashboard import kind
 from lokay.effects.git import commit_time, merge_files
+from lokay.replay import unpack
 
 
 def utc(value: str) -> datetime:
@@ -26,27 +26,6 @@ def boundary(value: str) -> datetime:
     if re.match(r"^\d{4}-\d\d-\d\d", value):
         return utc(value)
     return datetime.fromisoformat(commit_time(Path(__file__).resolve().parents[2], value)).astimezone(timezone.utc)
-
-
-def unpack(value, home: Path):
-    if not isinstance(value, dict) or set(value) != {"blob"}:
-        return value
-    reference = value["blob"]
-    if not isinstance(reference, str) or not re.fullmatch(r"(?:sha256:)?[a-f0-9]{64}", reference):
-        raise ValueError("invalid blob hash")
-    sha = reference.removeprefix("sha256:")
-    candidates = (home / "ticks/blobs" / sha, home / "blobs" / sha[:2] / sha)
-    for candidate in candidates:
-        for path in (candidate, candidate.with_suffix(".gz")):
-            if not path.is_file():
-                continue
-            raw = path.read_bytes()
-            if path.suffix == ".gz":
-                raw = gzip.decompress(raw)
-            if hashlib.sha256(raw).hexdigest() != sha:
-                raise ValueError("blob hash mismatch")
-            return json.loads(raw)
-    return None
 
 
 def changed_files(value, home: Path):
