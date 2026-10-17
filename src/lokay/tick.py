@@ -246,10 +246,19 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     if main_sha is None:
                         main_sha = parking_main_sha(name)
                     row["main_sha"] = main_sha
-                    if not saved.get("parked_at"):
-                        state_update(name, issue, parked_at=time.time(), parked_main_sha=main_sha,
-                                     parked_plan_sha=saved.get("plan_accepted_sha"))
-                        saved = state_read(name, issue)
+                    if saved.get("parked_at") is None:
+                        held = acquire(name.split("/")[0], name)
+                        if held["result"] != "held":
+                            repo = replace(repo, busy=True)
+                            continue
+                        try:
+                            saved = state_read(name, issue)
+                            if saved.get("parked_at") is None:
+                                state_update(name, issue, parked_at=time.time(), parked_main_sha=main_sha,
+                                             parked_plan_sha=saved.get("plan_accepted_sha"))
+                                saved = state_read(name, issue)
+                        finally:
+                            release(held)
                 states[issue] = saved
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
@@ -319,6 +328,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             if labelled or saved.get("result") == "parked":
                                 resumed = {"failures": 0, "retry_at": 0, "awaiting": None,
                                            "last_error": None, "run_rounds": 0, "fix_history": [],
+                                           "fix_counts": [], "diff_fingerprint": None,
+                                           "fix_fingerprint": None, "fix_hunk_fingerprint": None,
                                            "verdict": None, "parked_at": None,
                                            "parked_main_sha": None, "parked_plan_sha": None}
                                 node = "check"

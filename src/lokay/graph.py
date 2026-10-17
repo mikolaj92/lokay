@@ -112,7 +112,8 @@ def pick(snapshot: Snapshot) -> Pick | None:
             parked = (state.get("result") == "parked"
                       or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
             resume = parked and (
-                snapshot.now - (state.get("parked_at") or snapshot.now) >= 6 * 3600
+                (state.get("parked_at") is not None
+                 and snapshot.now - state["parked_at"] >= 6 * 3600)
                 or (bool(state.get("parked_main_sha"))
                     and bool(pr.get("main_sha"))
                     and state["parked_main_sha"] != pr["main_sha"])
