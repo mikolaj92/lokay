@@ -66,6 +66,24 @@ def commit_time(repo: Path, ref: str) -> str:
     return out.strip()
 
 
+def merge_conflicts(repo: Path, sha: str) -> list[str]:
+    if not isinstance(sha, str) or not re.fullmatch(r"[a-fA-F0-9]{7,64}", sha):
+        raise ValueError("expected a hex sha of 7-64 characters")
+    try:
+        base = base_branch(repo)
+        code, out, _ = _git(repo, ["merge-tree", "--write-tree", "--name-only", "-z", f"origin/{base}", sha])
+        if code == 0:
+            return []
+        if code == 1:
+            fields = out.split("\0")
+            end = fields.index("", 1)
+            if re.fullmatch(r"(?:[a-fA-F0-9]{40}|[a-fA-F0-9]{64})", fields[0]) and end > 1:
+                return fields[1:end]
+    except Exception:
+        raise RuntimeError("merge conflict check failed") from None
+    raise RuntimeError("merge conflict check failed")
+
+
 def merge_files(repo: Path, sha: str) -> list[dict] | None:
     if not isinstance(sha, str) or not re.fullmatch(r"[a-fA-F0-9]{7,64}", sha):
         raise ValueError("expected a hex sha of 7-64 characters")
