@@ -1602,6 +1602,15 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 raise RuntimeError(stat.stderr or "diff stat failed")
             return stat.stdout or ""
 
+        plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
+        plan_text = plan_path.read_text() if plan_path.is_file() else ""
+        check_input = CheckInput(
+            repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
+            issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
+            plan=plan_text, diff=diff.stdout or "", hunks=rows, ci=ci, worktree=worktree,
+        )
+        check_results = run_checks(check_input)
+        checks_failed = any(result.status == "fail" for result in check_results)
         directory = run_dir(picked["repo"], picked["issue"])
         decision_state = check_state(directory, rounds + 1, diff.stdout or "",
                                      _retry(picked, "check", read_stat), ci,
@@ -1610,9 +1619,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                      issue_body=(saved.get("issue_body") or "")[:4000],
                                      history=saved.get("check_history", [])[-5:])
         decisions = []
+<<<<<<< Updated upstream
         kinds = ("docs",) if docs_only(diff.stdout or "") else tuple(
             p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))
             if p.stem != "check_docs")
+=======
+        kinds = () if checks_failed else tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
+>>>>>>> Stashed changes
         for kind in kinds:
             decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
                                       lambda request: _retry(picked, "check", lambda: decide(request)))
@@ -1685,20 +1698,15 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if code != 0:
             raise RuntimeError(err or "scope paths lookup failed")
         repo_files = list(filter(None, tracked.split("\0")))
-        plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-        plan_text = plan_path.read_text() if plan_path.is_file() else ""
         scope = code_scope_issue(files, plan_text, repo_files)
-        if scope and dismissed_key(scope) not in dismissed_keys:
+        if not checks_failed and scope and dismissed_key(scope) not in dismissed_keys:
             verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
             rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
-        check_input = CheckInput(
-            repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
-            issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
-            plan=plan_text, diff=diff.stdout or "", hunks=rows, ci=ci, worktree=worktree,
-        )
         from lokay.check import apply_checks
 
-        verdict = apply_checks(verdict, run_checks(check_input), ci)
+        verdict = apply_checks(verdict, check_results, ci)
+        if checks_failed:
+            verdict = {**verdict, "result": "fix"}
         saved_merge = state_read(picked["repo"], picked["issue"])
         if verdict["result"] == "merge" and (
             saved_merge.get("merge_conflict_sha") == sha
