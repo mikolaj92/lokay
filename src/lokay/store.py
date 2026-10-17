@@ -158,10 +158,28 @@ def repo_attempt(repo: str, timestamp: float) -> None:
     write_json(path, {"last_attempt": timestamp})
 
 
+def escalation_fields(state: dict) -> dict:
+    levels = ("easy", "medium", "hard", "too_big")
+    difficulty = state.get("difficulty")
+    if difficulty not in levels:
+        difficulty = "easy" if state.get("plan_mode") == "single" else "hard"
+    return {
+        "difficulty": levels[min(levels.index(difficulty) + 1, 3)],
+        "node": "plan", "result": "pending", "retry_at": 0, "awaiting": None,
+        "run_rounds": 0, "no_progress": 0, "fix_history": [], "fix_counts": [],
+        "plan_prompt": None, "plan_branches": {}, "plan_synthesis": {},
+        "plan_accepted_sha": None, "plan_phase": "write", "plan_notes": [],
+        "wait_escape": None, "verdict": None, "failures": 0, "last_error": None,
+        "reason": None, "ladder_since": time.time(),
+    }
+
+
 def derive_waiting_on(state: dict, now: float | None = None) -> str:
     now = time.time() if now is None else now
+    if state.get("awaiting") == "children":
+        return "children"
     if state.get("result") == "parked":
-        return "human"
+        return "ready"
     if state.get("result") == "wait":
         return "retry_at" if state.get("retry_at", 0) > now else "ready"
     if state.get("awaiting") == "human":
@@ -215,6 +233,8 @@ def round_fields(state: dict, *, diff_fingerprint: str | None = None,
         for name, status in current_checks.items())
     progressed = progressed or (completed and checks is not None and state.get("progress_pending", False))
     fields = {"no_progress": 0 if accepted_plan or progressed else state.get("no_progress", 0) + int(completed)}
+    if diff_fingerprint is not None and diff_fingerprint != previous_diff:
+        fields["diff_changed_at"] = time.time()
     if (completed and checks is not None) or accepted_plan:
         fields["progress_pending"] = False
     elif progressed:

@@ -125,7 +125,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             continue
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
-                and repo.states.get(number, {}).get("result") != "parked"
+                and repo.states.get(number, {}).get("waiting_on") != "children"
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
     due = []
@@ -133,8 +133,10 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if repo.busy:
             continue
         for issue, state in repo.states.items():
-            if (state.get("result") in ("parked", "merged")
-                    or state.get("waiting_on") == "human" or state.get("awaiting") == "human"
+            if (state.get("result") == "merged"
+                    or (state.get("result") != "parked"
+                        and (state.get("waiting_on") == "human" or state.get("awaiting") == "human"))
+                    or state.get("waiting_on") == "children"
                     or (snapshot.only_issue is not None and snapshot.only_issue != issue)):
                 continue
             retry_at = state.get("retry_at", 0)
@@ -172,19 +174,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             state = repo.states[issue]
             parked = (state.get("result") == "parked"
                       or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
-            resume = parked and (
-                (state.get("parked_at") is not None
-                 and snapshot.now - state["parked_at"] >= 6 * 3600)
-                or (bool(state.get("parked_main_sha"))
-                    and bool(pr.get("main_sha"))
-                    and state["parked_main_sha"] != pr["main_sha"])
-                or (bool(state.get("plan_accepted_sha"))
-                    and state.get("plan_accepted_sha") != state.get("parked_plan_sha"))
-                or (state.get("result") == "parked"
-                    and "run_rounds reached" in (state.get("reason") or "")
-                    and not state.get("migrated_1955")))
-            if (resume or (not parked
-                           and state.get("waiting_on", "ready" if not state else None) == "ready")):
+            if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
                 ready.append((_kind(pr, pr=True), state.get("last_attempt", 0), pr["number"], issue, pr))
         if ready:
             _, _, _, issue, target = min(ready, key=lambda row: row[:4])
@@ -194,8 +184,8 @@ def pick(snapshot: Snapshot) -> Pick | None:
         for issue in sorted(repo.issues, key=lambda row: (_kind(row), row.get("createdAt") or "", row["number"])):
             number = issue["number"]
             if ((snapshot.only_issue is None or snapshot.only_issue == number)
-                    and repo.states[number].get("result") != "parked"
-                    and repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready"
+                    and (repo.states[number].get("result") == "parked"
+                         or repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready")
                     and number not in repo.open_prs):
                 return Pick(repo.name, number, "issue", issue)
     return None
