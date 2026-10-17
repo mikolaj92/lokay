@@ -1559,9 +1559,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if code != 0:
             raise RuntimeError(err or "scope diff failed")
         files = changed.splitlines()
+        code, tracked, err = _git(worktree, ["ls-files", "-z"])
+        if code != 0:
+            raise RuntimeError(err or "scope paths lookup failed")
+        repo_files = list(filter(None, tracked.split("\0")))
         plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
         plan_text = plan_path.read_text() if plan_path.is_file() else ""
-        scope = code_scope_issue(files, plan_text)
+        scope = code_scope_issue(files, plan_text, repo_files)
         if scope and dismissed_key(scope) not in dismissed_keys:
             verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
             rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
