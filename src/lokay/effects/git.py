@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from contextlib import contextmanager
@@ -184,6 +185,96 @@ def worktree_remove(repo: Path, path: Path) -> dict:
     if code != 0 and path.exists():
         return {"result": "failed", "error": err.strip() or out.strip()}
     return {"result": "removed", "path": str(path)}
+
+
+def disk_sweep(repos: list[dict], env: dict[str, str]) -> dict:
+    roots = sorted({Path(os.path.abspath(os.path.expanduser(repo["clone_path"]))) for repo in repos})
+    report = {"result": "blocked", "before": {}, "after": {}, "repositories": []}
+    try:
+        from lokay.config import STATE
+
+        discovered = run_process(["uv", "cache", "dir"], env=env, timeout=15)
+        lines = (discovered.stdout or "").splitlines()
+        if discovered.returncode != 0 or len(lines) != 1 or not Path(lines[0].strip()).is_absolute():
+            raise ValueError("uv cache directory discovery failed: expected one absolute path")
+        volumes = sorted({Path.home(), Path.cwd(), STATE, Path(lines[0].strip()), *roots})
+        for path in volumes:
+            volume = path
+            while not volume.exists():
+                volume = volume.parent
+            report["before"][str(path)] = shutil.disk_usage(volume).free
+        report["urgent"] = any(free < 10000000000 for free in report["before"].values())
+        for root in roots:
+            report["repositories"].append({"path": str(root), **reap_worktrees(root)})
+        try:
+            pruned = run_process(["uv", "cache", "prune"], env=env, timeout=60)
+            report["cache"] = {"result": "pruned" if pruned.returncode == 0 else "failed",
+                               "returncode": pruned.returncode}
+        except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            report["cache"] = {"result": "failed", "error": str(exc)}
+        for path in volumes:
+            volume = path
+            while not volume.exists():
+                volume = volume.parent
+            report["after"][str(path)] = shutil.disk_usage(volume).free
+        if all(free >= 5000000000 for free in report["after"].values()):
+            report["result"] = "ready"
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        report["error"] = str(exc)
+    return report
+
+
+def reap_worktrees(repo: Path) -> dict:
+    removed = []
+    try:
+        if repo.is_symlink() or repo.resolve() != repo.absolute():
+            raise ValueError("symlink repository path")
+
+        def checked(args):
+            code, out, err = _git(repo, args)
+            if code:
+                raise RuntimeError(err.strip() or "git verification failed")
+            return out.strip()
+
+        if Path(checked(["rev-parse", "--show-toplevel"])) != repo:
+            raise ValueError("repository top-level mismatch")
+        common = (repo / checked(["rev-parse", "--git-common-dir"])).resolve()
+        if any(common.rglob("*.lock")):
+            raise ValueError("repository lock present")
+        remote = checked(["ls-remote", "--exit-code", "origin", "refs/heads/main"])
+        fields = remote.split()
+        if len(fields) != 2 or fields[1] != "refs/heads/main":
+            raise ValueError("origin/main not confirmed")
+        main = checked(["rev-parse", "refs/remotes/origin/main"])
+        if main != fields[0]:
+            raise ValueError("origin/main is stale")
+        attributes = checked(["log", "--all", "--format=%H", "--", ".gitattributes"])
+        if attributes:
+            raise ValueError("LFS preservation not verified for repository with attributes")
+        records = checked(["worktree", "list", "--porcelain", "-z"])
+        used = {field.removeprefix("branch ") for field in records.split("\0")
+                if field.startswith("branch ")}
+        branches = checked(["for-each-ref", "--format=%(refname)", "refs/heads/lokay/"])
+        for ref in sorted(branches.splitlines()):
+            if ref in used:
+                continue
+            sha = checked(["rev-parse", ref])
+            code, published, _ = _git(repo, ["ls-remote", "--exit-code", "origin", ref])
+            if code != 0 or published.split() != [sha, ref]:
+                continue
+            code, _, _ = _git(repo, ["merge-base", "--is-ancestor", sha, main])
+            if code != 0:
+                continue
+            confirmed = checked(["ls-remote", "--exit-code", "origin", "refs/heads/main"])
+            if confirmed != remote or checked(["rev-parse", ref]) != sha:
+                raise ValueError("references changed during sweep")
+            code, _, err = _git(repo, ["branch", "-d", "--", ref.removeprefix("refs/heads/")])
+            if code == 0:
+                removed.append(ref)
+        return {"result": "swept", "removed_branches": removed,
+                "worktrees": "retained: inactivity and service dependencies unverified"}
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        return {"result": "failed", "removed_branches": removed, "error": str(exc)}
 
 
 def remote_sha(repo: Path, branch: str) -> str | None:
