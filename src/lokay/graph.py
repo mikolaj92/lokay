@@ -1,9 +1,10 @@
+from copy import deepcopy
 from dataclasses import replace
 import re
 from typing import assert_never
 
 from lokay.types import (
-    Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
+    PLAN_RESET, Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick,
 )
 
@@ -28,15 +29,12 @@ def step(run: Run, event: Event) -> Run:
                           result="failed", reason=reason, last_error=None if to_plan else reason,
                           failures=failures, retry_at=event.ts + delay if delay else 0)
             if to_plan:
-                fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
-                              plan_accepted_sha=None)
+                fields.update(**deepcopy(PLAN_RESET))
         case Planned():
-            fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                          plan_accepted_sha=None)
+            fields.update(node="plan", **deepcopy(PLAN_RESET))
         case Built():
             if outcome.get("result") == "failed":
-                fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                              plan_accepted_sha=None,
+                fields.update(node="plan", **deepcopy(PLAN_RESET),
                               result="failed", reason=outcome.get("reason") or "build failed",
                               failures=current.get("failures", 0) + 1, retry_at=0)
             elif outcome.get("result") == "done":
@@ -60,8 +58,7 @@ def step(run: Run, event: Event) -> Run:
             previous_sha = outcome.get('previous_sha', None if outcome.get('result') == 'pushed' else current.get('sha'))
             if sha and sha == previous_sha:
                 if sha in rechecks:
-                    fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                                  plan_accepted_sha=None)
+                    fields.update(node="plan", **deepcopy(PLAN_RESET))
                 else:
                     fields.update(node="check", verdict=None, dispute_rechecks=rechecks + [sha])
             else:

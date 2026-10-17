@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from functools import partial
 
 import hashlib
@@ -14,7 +15,8 @@ from pathlib import Path
 
 from lokay import graph, store
 from dataclasses import replace
-from lokay.types import Event, Run, Snapshot, RepoSnapshot, Updated, parse_event
+from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Updated, parse_event
+from lokay.merge import merge_blocked
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, worktree_remove
 from lokay.effects.git import git, head as git_head
@@ -624,8 +626,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             if escalated := escalate(picked):
                 raise Escalated(escalated)
             prompt = replan_prompt(picked, "Single plan rejected", outcome["uwagi"])
-            state_update(repo, issue, plan_phase="write", plan_prompt=prompt,
-                         plan_branches={}, plan_synthesis={}, plan_accepted_sha=None, plan_notes=[])
+            state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt, plan_notes=[])
             continue
         paths = {}
         for perspective in plan.PERSPECTIVES[:2 if difficulty == "medium" else 3]:
@@ -688,8 +689,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         if len(paths) != (2 if difficulty == "medium" else 3):
             reasons = [{"perspective": name, "reason": branch.get("reason")} for name, branch in branches.items()]
             prompt = replan_prompt(picked, "Not all required plans were accepted", reasons)
-            state_update(repo, issue, plan_branches={}, plan_synthesis={}, plan_prompt=prompt,
-                         plan_phase="write", plan_accepted_sha=None)
+            state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt)
             retry_sleep(20)
             continue
         if difficulty == "medium":
@@ -739,8 +739,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
             if synthesis["fingerprint"] == fingerprint:
                 prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
-                state_update(repo, issue, plan_branches={}, plan_synthesis={}, plan_prompt=prompt,
-                             plan_phase="write", plan_accepted_sha=None)
+                state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt)
                 fresh = True
             else:
                 synthesis.update(phase="write", fingerprint=fingerprint, uwagi=outcome["uwagi"])
@@ -1091,41 +1090,6 @@ def _resume(picked: dict) -> tuple | dict:
     return worktree, branch, sha, repo.get("test") or [], 1
 
 
-def finding_summary(raw: dict) -> dict:
-    item = parse_finding(raw)
-    return {"pytanie": item.lens if "pytanie" in raw else raw.get("warstwa", ""),
-            "plik": item.plik if isinstance(item, Finding) else "",
-            "linie": [item.linia_od if isinstance(item, Finding) and "linia_od" in raw else None,
-                      item.linia_do if isinstance(item, Finding) and "linia_do" in raw else None],
-            "zmiana": item.zmiana if isinstance(item, Finding) else "",
-            "uzasadnienie": (raw.get("uzasadnienie") or raw.get("log") or "")[:300]}
-
-
-def finding_fingerprint(raw: dict) -> list:
-    item = parse_finding(raw)
-    return [item.plik if isinstance(item, Finding) else None,
-            item.lens if "pytanie" in raw else raw.get("warstwa"),
-            item.zmiana if isinstance(item, Finding) and "zmiana" in raw else None]
-
-
-def finding_key(raw: dict) -> tuple:
-    item = parse_finding(raw)
-    if not isinstance(item, Finding):
-        return ("", "", "", "")
-    return (item.plik, item.linia_od if "linia_od" in raw else "",
-            item.linia_do if "linia_do" in raw else "", item.zmiana)
-
-
-def dismissed_key(row: dict) -> list:
-    item = parse_finding(row)
-    if not isinstance(item, Finding) and not item.pytanie:
-        return [row.get("warstwa"), row.get("log")]
-    return [item.plik if isinstance(item, Finding) else None,
-            item.linia_od if isinstance(item, Finding) and "linia_od" in row else None,
-            item.linia_do if isinstance(item, Finding) and "linia_do" in row else None,
-            item.lens if "pytanie" in row else None]
-
-
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.check import hunks
     from lokay.build import fix_publish
@@ -1181,7 +1145,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if merged is not None:
                 return merged
         saved = state_read(picked["repo"], picked["issue"])
-        blocked = saved.get("merge_conflict_sha") == sha or saved.get("merge_attempts", {}).get(sha, 0) >= 2
+        blocked = merge_blocked(saved, sha)
         if blocked and pending == "fix":
             pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
             if not pr:
