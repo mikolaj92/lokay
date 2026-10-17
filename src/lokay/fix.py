@@ -26,6 +26,7 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
                 cwd=worktree,
                 env=clean,
                 timeout=3600,
+                retry="pi",
             )
     except Exception as exc:
         from lokay.effects.git import PiGitViolation

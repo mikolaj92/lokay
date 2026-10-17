@@ -201,6 +201,7 @@ def build_code(
                 cwd=worktree,
                 env=clean,
                 timeout=3600,
+                retry="pi",
             )
     except Exception as exc:
         from lokay.effects.git import PiGitViolation

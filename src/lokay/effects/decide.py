@@ -106,7 +106,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 },
                 "required": ["probabilities", "choice", "reason"], "additionalProperties": False,
             }
-        return {
+        wire = {
             "model": model,
             "messages": [
                 {"role": "system", "content": "You are a careful code reviewer. Answer each question "
@@ -124,6 +124,11 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                            "required": list(properties), "additionalProperties": False},
             }},
         }
+        while len(dumps(wire)) >= 6000:
+            previous = len(dumps(user))
+            user = _trim_wire(user, limit=max(1, previous - max(1, (len(dumps(wire)) - 5999) // 2)))
+            wire["messages"][1]["content"] = dumps(user)
+        return wire
     if api == "tensorfold":
         questions = [{
             "id": question["id"],
@@ -274,7 +279,7 @@ def _decide(internal: Mapping) -> dict:
     size = len(body.encode("utf-8"))
     print(f"decide: request bytes={size} approx_tokens={size // 3}", file=sys.stderr)
     try:
-        proc = run_process(cmd, timeout=float(timeout) + 2,
+        proc = run_process(cmd, timeout=float(timeout) + 2, retry="curl",
                            input=f"authorization: Bearer {key}\n" if key else None)
     except (OSError, subprocess.TimeoutExpired):
         raise DecisionError("decision request failed or timed out") from None
