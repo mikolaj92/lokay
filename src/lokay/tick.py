@@ -20,7 +20,7 @@ from lokay.effects.git import base_branch, worktree_remove
 from lokay.effects.git import git, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
-from lokay.config import load_repos, tick_budget
+from lokay.config import load_repos, repo as repo_config, tick_budget
 from lokay.effects.gh import gh_json, gh_ok, auth_status, open_issues, open_pr_for
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
@@ -407,7 +407,7 @@ def refresh_body(repo: str, issue: int) -> dict:
     from lokay.build import pr_body
     from lokay.effects.gh import pr_set_body
 
-    config = next(row for row in load_repos() if row["name"] == repo)
+    config = repo_config(repo)
     _, worktree = _repo_paths(config, issue)
     pr = open_pr_for(repo, f"lokay/{issue}")
     if not pr:
@@ -507,7 +507,7 @@ def _tick() -> dict:
 def _ensure_worktree(picked: dict) -> Path:
     from lokay.effects.git import ensure_worktree
 
-    config = next(row for row in load_repos() if row["name"] == picked["repo"])
+    config = repo_config(picked["repo"])
     root, worktree = _repo_paths(config, picked["issue"])
     outcome = ensure_worktree(root, f"lokay/{picked['issue']}", worktree)
     if outcome.get("result") != "added":
@@ -775,7 +775,7 @@ def _prepare(picked: dict) -> tuple | dict:
             raise RuntimeError("invalid difficulty choice")
         state_update(picked["repo"], picked["issue"], difficulty=answer["choice"], difficulty_decision=answer)
         saved = state_read(picked["repo"], picked["issue"])
-    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    repo = repo_config(picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
     _ensure_worktree(picked)
     if saved["difficulty"] == "too_big":
@@ -1019,7 +1019,7 @@ def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
 def _resume(picked: dict) -> tuple | dict:
     from lokay.effects.git import git_try
 
-    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    repo = repo_config(picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
     branch = f"lokay/{picked['issue']}"
     try:
@@ -1145,7 +1145,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.effects.gh import check_comment, pr_files
     from lokay import finish
 
-    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    repo = repo_config(picked["repo"])
     clone_path, _ = _repo_paths(repo, picked["issue"])
     saved = state_read(picked["repo"], picked["issue"])
     rounds = saved.get("check_rounds", 0)

@@ -4,7 +4,9 @@ import math
 import os
 import sys
 from pathlib import Path
+from functools import cache
 
+HOME = Path.home() / ".lokay"
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -22,10 +24,15 @@ def tick_budget(env: dict[str, str] | None = None) -> float:
 
 
 def load_repos(path: Path | None = None) -> list[dict]:
-    import yaml
-
     if path is None:
         path = Path(os.environ.get("LOKAY2_REPOS_FILE") or ROOT / "repos.yaml")
+    return _load_repos(path.resolve())
+
+
+@cache
+def _load_repos(path: Path) -> list[dict]:
+    import yaml
+
     raw = yaml.safe_load(path.read_text()) or {}
     repos = raw.get("repos") or []
     configured = []
@@ -62,3 +69,7 @@ def load_repos(path: Path | None = None) -> list[dict]:
             continue
         configured.append(repo)
     return configured
+
+
+def repo(name: str) -> dict:
+    return next(row for row in load_repos() if row["name"] == name)

@@ -28,9 +28,9 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
         return outcome
     sha = outcome["merge_sha"]
     if clone_path is None:
-        from lokay.config import load_repos
+        from lokay.config import repo
 
-        clone_path = Path(next(row["clone_path"] for row in load_repos() if row["name"] == repo_name)).expanduser()
+        clone_path = Path(repo(repo_name)["clone_path"]).expanduser()
     check_main(repo_name, clone_path, sha, number, base=base)
     state_update(repo_name if "/" in repo_name else f"{owner}/{repo_name}", issue, **{**rounds, "result": "merged", "sha": sha,
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})

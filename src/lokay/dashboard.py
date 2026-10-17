@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from lokay import config
+from lokay.config import load_repos
 from lokay.store import write_json
 from lokay.effects.gh import dashboard_request as gh
 
@@ -131,10 +133,9 @@ def models() -> dict:
     return {"provider": redact(values.get(names[0], "—")), "model": redact(values.get(names[1], "—"))}
 
 
-def enabled_repos(path: Path) -> list[str]:
+def enabled_repos() -> list[str]:
     try:
-        data = yaml.safe_load(path.read_text())
-        entries = data.get("repos", []) if isinstance(data, dict) else []
+        entries = load_repos()
         return sorted({entry["name"] for entry in entries if isinstance(entry, dict)
                        and entry.get("merge") == "on" and isinstance(entry.get("name"), str)
                        and REPO.fullmatch(entry["name"])})
@@ -161,8 +162,7 @@ def prs(data, merged: bool) -> list[dict]:
 
 class Dashboard:
     def __init__(self):
-        self.home = Path(os.environ.get("LOKAY_HOME", "~/.lokay")).expanduser()
-        self.repos_file = Path(os.environ.get("LOKAY_REPOS_YAML", str(self.home / "host/repos.yaml"))).expanduser()
+        self.home = config.HOME
         self.cache_path = self.home / "dashboard-cache.json"
         cached = read_json(self.cache_path)
         self.cache = {"repos": {}, "last_refresh": stamp(cached.get("last_refresh")) or None,
@@ -194,7 +194,7 @@ class Dashboard:
                 self.cache["error"] = "Could not save dashboard cache"
 
     def refresh(self):
-        repos = enabled_repos(self.repos_file)
+        repos = enabled_repos()
         try:
             limits = gh("api", "rate_limit")
             if number(limits["resources"]["core"]["remaining"]) < 200:
@@ -309,7 +309,7 @@ class Dashboard:
 
         statuses = main_status(self.home)
         merged, opened, per_repo = [], [], []
-        for name in enabled_repos(self.repos_file):
+        for name in enabled_repos():
             item = cache["repos"].get(name, {})
             merges = [{**pr, "repo": name} for pr in item.get("merged", [])]
             opens = [{**pr, "repo": name} for pr in item.get("open", [])]

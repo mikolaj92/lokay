@@ -7,7 +7,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from lokay.config import load_repos
+from lokay.config import repo as repo_config
 from lokay.effects.gh import gh_json, gh_ok, fit_body
 from lokay.effects.git import git_try, base_branch
 from lokay.store import main_status, save_main_status
@@ -52,7 +52,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     from lokay.checks import CheckInput, lockfile
 
     if config is None:
-        config = next(row for row in load_repos() if row["name"] == repo)
+        config = repo_config(repo)
 
     def checked(path, args):
         code, out, err = git_try(path, *args)

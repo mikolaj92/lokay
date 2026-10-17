@@ -8,10 +8,10 @@ import os
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from threading import Event, Thread
 import sys
 
+from lokay.config import HOME
 from lokay.effects.gh import gh_json, gh_ok
 from lokay.store import RUNS, main_status
 
@@ -63,7 +63,7 @@ def status() -> None:
 
 
 def monitor() -> dict:
-    path = Path.home() / ".lokay" / "heartbeat.json"
+    path = HOME / "heartbeat.json"
     reasons = []
     try:
         beat = json.loads(path.read_text())
