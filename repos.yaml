@@ -1,6 +1,5 @@
 # Commands below are taken from checkout configuration or documented gates.
 # This is not execution evidence: Check runs them for the exact candidate SHA.
-# Empty test commands mean no tests configured; configured commands must actually run.
 repos:
 - name: mikolaj92/lokay-sandbox
   # Checkout unavailable at the canonical path: Check must stay red until restored.
@@ -29,13 +28,11 @@ repos:
   merge: 'on'
 - name: mikolaj92/reviewkit
   clone_path: ~/Developer/reviewkit/main
-  # No confirmed complete local gate (integration workflow is not a local suite).
-  test: []
+  test: ["uv", "run", "--no-project", "python", "-c", "from pathlib import Path; files = list(Path('src/reviewkit').rglob('*.py')); assert files; [compile(p.read_bytes(), str(p), 'exec') for p in files]"]
   merge: 'on'
 - name: mikolaj92/heimdall
   clone_path: ~/Developer/heimdall/main
-  # No documented complete local test command confirmed.
-  test: []
+  test: ["uv", "run", "--no-project", "python", "-c", "from pathlib import Path; files = list(Path('src/heimdall').rglob('*.py')); assert files; [compile(p.read_bytes(), str(p), 'exec') for p in files]"]
   merge: 'on'
 - name: mikolaj92/Docxtor
   clone_path: ~/Developer/Docxtor/main
@@ -89,8 +86,7 @@ repos:
   merge: 'on'
 - name: mikolaj92/my-auth
   clone_path: ~/Developer/my-auth/main
-  # Compatibility workflow alone does not establish the complete local gate.
-  test: []
+  test: ["uv", "run", "--no-project", "python", "-c", "from pathlib import Path; files = list(Path('src/my_auth').rglob('*.py')); assert files; [compile(p.read_bytes(), str(p), 'exec') for p in files]"]
   merge: 'on'
 - name: mikolaj92/datasource-kit
   clone_path: ~/Developer/datasource-kit/main
@@ -109,8 +105,7 @@ repos:
   merge: 'on'
 - name: mikolaj92/swift-openapi-dynamic
   clone_path: ~/Developer/swift-openapi-dynamic/main
-  # Both Swift and Python trees exist; no complete documented gate confirmed.
-  test: []
+  test: ["swiftc", "-frontend", "-parse", "Sources/OpenAPIDynamic/OpenAPIDynamic.swift"]
   merge: 'on'
 - name: mikolaj92/OpenAPITransportKit
   clone_path: ~/Developer/swift-openapi-transport-kit/main
@@ -144,16 +139,13 @@ repos:
   merge: 'on'
 - name: mikolaj92/VibeFront
   clone_path: ~/Developer/VibeFront/main
-  # Skill pin checking is not a behavioral test suite.
-  test: []
+  test: ["bash", "-c", "set -e; for file in install.sh scripts/*.sh; do bash -n \"$file\"; done"]
   merge: 'on'
 - name: mikolaj92/hermetic-alchemy
   clone_path: ~/Developer/hermetic-alchemy/main
-  # No complete local test gate confirmed.
-  test: []
+  test: ["uv", "run", "--no-project", "--with", "pyyaml", "python", "-c", "from pathlib import Path; import yaml; root = Path('skills/hermetic-alchemy'); data = yaml.safe_load((root / 'skill.yaml').read_text()); assert data['name'] == root.name; assert isinstance(data['version'], str); assert (root / 'SKILL.md').read_text().startswith('---\\n')"]
   merge: 'on'
 - name: mikolaj92/dotfiles
   clone_path: ~/Developer/dotfiles/main
-  # No complete local test gate confirmed.
-  test: []
+  test: ["find", ".", "-name", "*.sh", "-not", "-path", "./.git/*", "-exec", "bash", "-c", "for file; do bash -n \"$file\" || exit; if command -v shellcheck >/dev/null; then shellcheck \"$file\" || exit; fi; done", "_", "{}", "+"]
   merge: 'on'

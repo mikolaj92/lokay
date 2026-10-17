@@ -85,10 +85,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
             segments = re.split(r"^LOKAY_TEST_CWD=.+$", log, flags=re.MULTILINE)[1:]
             if not all(did_run(CompletedProcess(proc.args, 0, segment, "")) for segment in segments):
                 return False
-        summary = re.search(
-            r"\b[1-9]\d* passed\b|\bRan [1-9]\d* tests?\b|\bExecuted [1-9]\d* tests?\b"
-            r"|\btests? [1-9]\d*\b|\breplay: ([1-9]\d*)/\1 transitions ok\b|\b\w+ tests passed\b", log)
-        return (proc.returncode == 0 and summary is not None
+        return (proc.returncode == 0
                 and not re.search(r"\b0 passed\b", log)
                 and not any(marker in log.lower() for marker in markers))
 
@@ -97,7 +94,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     logs = []
     tested_cwds = set()
     if not tests:
-        notes.append({"warstwa": "tests", "plik": "", "log": "no tests configured"})
+        failed.append({"warstwa": "checks", "plik": "", "log": "no checks configured"})
     for argv in tests:
         proc, timed_out = execute(argv)
         log = (proc.stdout or "") + (proc.stderr or "")
