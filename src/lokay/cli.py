@@ -154,6 +154,13 @@ def main(argv: list[str] | None = None) -> int:
         dashboard_main()
         return 0
     if args.node == "start":
+        import importlib
+        import pkgutil
+        import lokay
+
+        for module in pkgutil.walk_packages(lokay.__path__, lokay.__name__ + "."):
+            importlib.import_module(module.name)
+
         from lokay.tick import main as start_main
         from lokay.observe import ticking
 
