@@ -365,8 +365,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         node = saved.get("node") or ("check" if pr else "plan")
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
-                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time(),
-                                     **({"plan_mode": "single"} if not saved else {}))
+                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
                     else:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
@@ -399,7 +398,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 node = "plan"
                         state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=time.time(),
-                                     **resumed, **({"plan_mode": "single"} if not saved else {}))
+                                     **resumed)
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -623,11 +622,9 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                              plan_kind=outcome.get("kind", "code"),
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
-            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                         **store.round_fields(state_read(repo, issue)))
+            state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
             if escalated := escalate(picked):
                 raise Escalated(escalated)
             prompt = replan_prompt(picked, "Single plan rejected", outcome["uwagi"])
@@ -670,7 +667,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 except RetryLater as exc:
                     branch.update(phase="failed", reason=str(exc), accepted_sha=None)
                     state_update(repo, issue, plan_branches=branches,
-                                 run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
                                  **store.round_fields(state_read(repo, issue)))
                     if escalated := escalate(picked):
                         raise Escalated(escalated)
@@ -684,8 +680,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                     state_update(repo, issue, plan_branches=branches, fix_history=[], fix_counts=[],
                                  **store.round_fields(state_read(repo, issue), accepted_plan=True))
                     break
-                state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                             **store.round_fields(state_read(repo, issue)))
+                state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
                 if escalated := escalate(picked):
                     raise Escalated(escalated)
                 fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
@@ -711,7 +706,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                          plan_comparison=comparison, plan_kind=branches[choice].get("kind", "code"),
                          plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                          plan_notes=[], fix_history=[], fix_counts=[],
-                         run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
                          **store.round_fields(state_read(repo, issue), accepted_plan=True))
             return rounds
         synthesis = synthesis or {"phase": "write", "fingerprint": None, "uwagi": [], "rounds": 0}
@@ -741,11 +735,9 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                              plan_synthesis=synthesis, plan_kind=outcome.get("kind", "code"),
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
-            state_update(repo, issue, run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
-                         **store.round_fields(state_read(repo, issue)))
+            state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
             if escalated := escalate(picked):
                 raise Escalated(escalated)
             fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
@@ -1277,7 +1269,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             continue
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
-        ci, log = finish.local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows, rounds, diff)
+        ci = finish.local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows)
         pr_number, remote = finish.remote_checks(picked, branch, sha)
         if remote["result"] == "sha_moved":
             _retry(picked, "check", sync_head)
@@ -1301,19 +1293,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
         verdict, rounds = finish.verdict(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, log, check_notes, diff_fingerprint, kinds, conflict_fix)
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
         pending = verdict["result"]
         escalated = escalate(picked, verdict.get("uwagi"))
         if escalated:
             return escalated
         if pending == "wait":
             return finish.wait(picked, verdict, head)
-        if pending == "plan":
-            findings = verdict["replan"] + verdict["uwagi"]
-            reason = "\n".join(item["prompt"] for item in verdict["replan"])
-            rounds_append(picked["repo"], picked["issue"], "Check → Plan: " + reason)
-            prompt = replan_prompt(picked, reason, findings, head)
-            state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
-                         plan_prompt=prompt)
-            continue
         state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})

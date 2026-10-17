@@ -40,7 +40,6 @@ def exclude_caches(worktree: Path) -> None:
 
 
 def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
-    """Snapshot dirty paths, including edits with unchanged status codes."""
     status = command(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
     if status.returncode:
         raise RuntimeError((status.stderr or status.stdout or "").strip())
@@ -84,7 +83,6 @@ def generated_cleanup(worktree: Path):
 
 
 def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) -> tuple[list[str], list[str]]:
-    """Restore incidental edits, remove untracked artifacts, commit pi's paths."""
     merge_head = worktree / _git(worktree, ["rev-parse", "--git-path", "MERGE_HEAD"])
     if merge_head.exists():
         if _git(worktree, ["ls-files", "-u"]):
@@ -144,7 +142,6 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
         for parent in path.parents:
             if is_cache(parent.as_posix()):
                 directories.add(worktree / parent)
-    # ls-files omits empty directories. Include them without following symlinks.
     for root, dirs, _ in os.walk(worktree, followlinks=False):
         dirs[:] = [name for name in dirs if name != ".git"]
         relative = Path(root).relative_to(worktree)
@@ -154,7 +151,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
         try:
             directory.rmdir()
         except OSError:
-            pass  # Keep directories containing tracked files.
+            pass
     exclude_caches(worktree)
     after = worktree_status(worktree)
     selected = sorted(path for path in after if path != ".lokay" and not path.startswith(".lokay/")

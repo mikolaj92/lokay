@@ -3,7 +3,7 @@ import re
 from typing import assert_never
 
 from lokay.types import (
-    Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Conflict, Failed,
+    Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick,
 )
 
@@ -29,14 +29,14 @@ def step(run: Run, event: Event) -> Run:
                           failures=failures, retry_at=event.ts + delay if delay else 0)
             if to_plan:
                 fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
-                              plan_evaluations=0, plan_accepted_sha=None)
+                              plan_accepted_sha=None)
         case Planned():
             fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                          plan_evaluations=0, plan_accepted_sha=None)
+                          plan_accepted_sha=None)
         case Built():
             if outcome.get("result") == "failed":
                 fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                              plan_evaluations=0, plan_accepted_sha=None,
+                              plan_accepted_sha=None,
                               result="failed", reason=outcome.get("reason") or "build failed",
                               failures=current.get("failures", 0) + 1, retry_at=0)
             elif outcome.get("result") == "done":
@@ -52,11 +52,8 @@ def step(run: Run, event: Event) -> Run:
         case Published():
             if outcome.get("result") == "pr_open":
                 fields.update(node="check", verdict=None)
-        case Checked() | Conflict():
+        case Checked():
             fields["node"] = outcome["result"]
-            if outcome["result"] == "plan":
-                fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
-                              plan_evaluations=0, plan_accepted_sha=None)
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
             rechecks = current.get("dispute_rechecks", [])
@@ -64,7 +61,7 @@ def step(run: Run, event: Event) -> Run:
             if sha and sha == previous_sha:
                 if sha in rechecks:
                     fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
-                                  plan_evaluations=0, plan_accepted_sha=None)
+                                  plan_accepted_sha=None)
                 else:
                     fields.update(node="check", verdict=None, dispute_rechecks=rechecks + [sha])
             else:

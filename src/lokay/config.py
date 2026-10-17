@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-STATE = Path.home() / ".lokay"
 
 
 def tick_budget(env: dict[str, str] | None = None) -> float:

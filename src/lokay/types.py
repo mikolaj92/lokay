@@ -57,11 +57,6 @@ class Closed(Updated):
 
 
 @dataclass(frozen=True)
-class Conflict(Updated):
-    pass
-
-
-@dataclass(frozen=True)
 class Failed(Updated):
     pass
 
@@ -96,7 +91,7 @@ class Progress(Updated):
     pass
 
 
-Event: TypeAlias = Planned | Synthesized | Built | Checked | Merged | Closed | Conflict | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Updated
+Event: TypeAlias = Planned | Synthesized | Built | Checked | Merged | Closed | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Updated
 
 
 def parse_event(raw: dict) -> Event:
@@ -119,7 +114,7 @@ def event_record(event: Event) -> dict:
         return event.raw
     actions = {
         Planned: "replan", Synthesized: "synthesis", Built: "build_complete",
-        Checked: "verdict", Conflict: "verdict", Merged: "merge_complete",
+        Checked: "verdict", Merged: "merge_complete",
         Failed: "needs_help", Retried: "retry_succeeded", FixToBuild: "fix_to_build",
         Published: "published", Fixed: "fix_complete", RedMain: "red_main", Closed: "closed",
     }

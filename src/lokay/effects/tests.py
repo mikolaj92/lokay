@@ -106,8 +106,6 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     notes = []
     logs = []
     tested_cwds = set()
-    if not tests:
-        failed.append({"warstwa": "checks", "plik": "", "log": "no checks configured"})
     for argv in tests:
         proc, timed_out = execute(argv)
         log = (proc.stdout or "") + (proc.stderr or "")

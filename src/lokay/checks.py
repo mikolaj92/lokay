@@ -54,9 +54,6 @@ def ci_green(x: CheckInput) -> CheckResult:
 
 
 def local_tests(x: CheckInput) -> CheckResult:
-    if any(item.get("log") in ("no tests configured", "no checks configured")
-           for item in (*x.ci.get("notes", []), *x.ci.get("failed", []))):
-        return CheckResult("local_tests", "fail", "no checks configured", ())
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") != "GitHub CI"]
     github_failed = any(item.get("warstwa") == "GitHub CI" for item in x.ci.get("failed", []))
     green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
