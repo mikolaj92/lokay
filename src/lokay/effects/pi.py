@@ -480,7 +480,9 @@ def pi_step(
     if not provider or not model:
         return {"result": "failed", "artifact": ""}
     from lokay.effects.git import PiGitViolation
+    from lokay import store
 
+    store.ensure_directory(artifact.parent)
     try:
         proc = run_process(
             sandboxed(["pi", "-p", "--mode", "json", "--provider", provider, "--model", model, prompt], worktree, child, artifact.parent.resolve()),

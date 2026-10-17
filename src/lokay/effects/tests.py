@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from pathlib import Path
 
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
@@ -8,10 +10,18 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from lokay.effects.pi import run_process
     from lokay.build import generated_cleanup
 
+    cache = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
+    env = {**os.environ, "UV_CACHE_DIR": str(cache)}
+
     def execute(argv):
+        if cache.is_relative_to(Path(cwd).resolve()):
+            return CompletedProcess(argv, 1, "", f"UV_CACHE_DIR must be outside cwd: {cache}"), False
+        if any(re.search(r"(?:^|[\s;|&])(?:--cache-dir(?:=|\s|$)|UV_CACHE_DIR=)", arg)
+               for arg in argv):
+            return CompletedProcess(argv, 1, "", "configured command must not override UV_CACHE_DIR or --cache-dir"), False
         try:
             with generated_cleanup(Path(cwd)):
-                return run_process(argv, cwd=cwd, timeout=timeout), False
+                return run_process(argv, cwd=cwd, timeout=timeout, env=env), False
         except TimeoutExpired:
             return CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s"), True
         except OSError as exc:

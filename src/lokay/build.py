@@ -84,7 +84,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     merge_head = worktree / _git(worktree, ["rev-parse", "--git-path", "MERGE_HEAD"])
     if merge_head.exists():
         if _git(worktree, ["ls-files", "-u"]):
-            _git(worktree, ["merge", "--abort"])
+            return [], []
         else:
             _git(worktree, ["commit", "--no-edit"])
 
