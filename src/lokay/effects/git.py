@@ -189,7 +189,7 @@ def worktree_remove(repo: Path, path: Path) -> dict:
 
 def disk_sweep(repos: list[dict], env: dict[str, str]) -> dict:
     roots = sorted({Path(os.path.abspath(os.path.expanduser(repo["clone_path"]))) for repo in repos})
-    volumes = sorted({Path.cwd(), *roots})
+    volumes = sorted({Path.home(), Path.cwd(), *roots})
     report = {"result": "blocked", "before": {}, "after": {}, "repositories": []}
     try:
         for path in volumes:
