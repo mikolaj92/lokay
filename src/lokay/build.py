@@ -14,6 +14,7 @@ from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandb
 from lokay.effects.tests import check_uv_lock
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
+from lokay.types import IssueKind
 
 LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
@@ -196,6 +197,7 @@ def build_code(
     clone_path: Path | str | None = None,
     build_note: str | None = None,
     previous_head: str | None = None,
+    kind: IssueKind = "code",
 ) -> dict:
     previous_head = previous_head or _git(worktree, ["rev-parse", "HEAD"])
     clean = pi_env(env, worktree)
@@ -208,6 +210,8 @@ def build_code(
         + "\n\n" + untrusted_issue_block(title, body)
         + ("\n\n" + build_note if build_note else "")
     )
+    if kind == "docs_change":
+        prompt += "\n\n" + Path(__file__).resolve().parents[2].joinpath("prompts/build_docs_change.md").read_text()
     changes = {"changed": False}
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:

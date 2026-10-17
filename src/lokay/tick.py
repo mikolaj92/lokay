@@ -620,6 +620,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             rounds_append(repo, issue, f"Plan single {rounds}: Decision {outcome['next']}")
             if outcome["next"] == "ok":
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
+                             plan_kind=outcome.get("kind", "code"),
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
                              run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
@@ -677,7 +678,8 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                     break
                 rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: Decision {outcome['next']}")
                 if outcome["next"] == "ok":
-                    branch.update(phase="accepted", accepted_sha=hashlib.sha256(branch_art.read_bytes()).hexdigest())
+                    branch.update(phase="accepted", accepted_sha=hashlib.sha256(branch_art.read_bytes()).hexdigest(),
+                                  kind=outcome.get("kind", "code"))
                     paths[perspective] = branch_art
                     state_update(repo, issue, plan_branches=branches, fix_history=[], fix_counts=[],
                                  **store.round_fields(state_read(repo, issue), accepted_plan=True))
@@ -706,7 +708,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 raise RuntimeError("invalid plan comparison choice")
             store.write_artifact(art, paths[choice].read_text())
             state_update(repo, issue, _event={"action": "synthesis", "outcome": {"next": "ok"}},
-                         plan_comparison=comparison,
+                         plan_comparison=comparison, plan_kind=branches[choice].get("kind", "code"),
                          plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                          plan_notes=[], fix_history=[], fix_counts=[],
                          run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
@@ -736,7 +738,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             if outcome["next"] == "ok":
                 synthesis["phase"] = "accepted"
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
-                             plan_synthesis=synthesis,
+                             plan_synthesis=synthesis, plan_kind=outcome.get("kind", "code"),
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
                              run_rounds=state_read(repo, issue).get("run_rounds", 0) + 1,
@@ -849,7 +851,8 @@ def _prepare(picked: dict) -> tuple | dict:
     check_deadline()
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
                        clone_path=root, previous_head=state_read(picked["repo"], picked["issue"]).get("previous_head"),
-                       **({"build_note": build_note} if build_note else {}))
+                       **({"build_note": build_note} if build_note else {}),
+                       **({"kind": "docs_change"} if saved.get("plan_kind", "code") == "docs_change" else {}))
     if built.get("result") == "no_changes" or built.get("reason") == "no_changes":
         pr = open_pr_for(picked["repo"], branch)
         if pr:

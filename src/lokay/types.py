@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
+IssueKind: TypeAlias = Literal["code", "docs_change"]
+
 
 @dataclass(frozen=True)
 class Run:
