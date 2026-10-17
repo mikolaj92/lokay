@@ -11,7 +11,7 @@ import signal
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -71,7 +71,7 @@ def cleanup_process_groups() -> None:
 
 
 def cleanup_worktree_caches(worktree: Path) -> None:
-    from lokay.effects.git import command
+    from lokay.effects.git import git_try
 
     token = tick_deadline.set(None)
     try:
@@ -79,26 +79,26 @@ def cleanup_worktree_caches(worktree: Path) -> None:
             directory = worktree / name
             if directory.is_symlink() or not directory.is_dir():
                 continue
-            tracked = command(worktree, ["ls-files", "-z", "--", name])
-            if tracked.returncode != 0:
-                raise RuntimeError(tracked.stderr or "tracked cache lookup failed")
-            if tracked.stdout:
+            code, out, err = git_try(worktree, "ls-files", "-z", "--", name, timeout=30)
+            if code != 0:
+                raise RuntimeError(err or "tracked cache lookup failed")
+            if out:
                 continue
-            ignored = command(worktree, ["check-ignore", "-q", "--", name + "/"])
-            if ignored.returncode == 0:
+            code, _, err = git_try(worktree, "check-ignore", "-q", "--", name + "/", timeout=30)
+            if code == 0:
                 shutil.rmtree(directory)
-            elif ignored.returncode != 1:
-                raise RuntimeError(ignored.stderr or "ignored cache lookup failed")
+            elif code != 1:
+                raise RuntimeError(err or "ignored cache lookup failed")
     finally:
         tick_deadline.reset(token)
 
 
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
-    from lokay.effects.git import command
+    from lokay.effects.git import git_try
 
     worktree = Path(worktree).resolve()
-    git = command(worktree, ["rev-parse", "--git-common-dir"])
-    gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
+    code, out, _ = git_try(worktree, "rev-parse", "--git-common-dir", timeout=30)
+    gitdir = (worktree / out.strip()).resolve() if code == 0 else worktree
     env = dict(base)
     for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
                 "GIT_ASKPASS", "SSH_AUTH_SOCK"):
@@ -196,47 +196,53 @@ def run_process(
     cwd: str | Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
-    input: str | None = None,
-) -> subprocess.CompletedProcess[str]:
+    input: str | bytes | None = None,
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
     from lokay.store import log_event
 
     command = next((index for index, arg in enumerate(argv)
-                    if Path(arg).name == "gh" or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
+                    if Path(arg).name in ("gh", "git") or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
     if command is None:
-        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
     call = Path(argv[command]).name
     started = time.monotonic()
     output = None
     ok = False
     try:
-        from lokay.effects.git import pi_git_guard
+        if call != "pi":
+            proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
+        else:
+            from lokay.effects.git import pi_git_guard
 
-        with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()) if call == "pi" else nullcontext():
-            for attempt in range(4):
-                proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
-                if pi_command(argv) is None or proc.returncode == 0 or attempt == 3:
-                    break
-                match = re.search(
-                    r"\b(?:401|429|5\d{2})\b|overloaded|rate[ _-]limit|ECONNRESET|Empty reply",
-                    (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
-                )
-                if match is None:
-                    break
-                log_event("retry", call="pi", attempt=attempt + 1, reason=match[0])
-                retry_sleep(3 ** attempt)
-            else:
-                raise AssertionError("unreachable")
-        if pi_command(argv) is not None:
+            with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()):
+                for attempt in range(4):
+                    proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
+                    if proc.returncode == 0 or attempt == 3:
+                        break
+                    match = re.search(
+                        r"\b(?:401|429|5\d{2})\b|overloaded|rate[ _-]limit|ECONNRESET|Empty reply",
+                        (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
+                    )
+                    if match is None:
+                        break
+                    log_event("retry", call="pi", attempt=attempt + 1, reason=match[0])
+                    retry_sleep(3 ** attempt)
+                else:
+                    raise AssertionError("unreachable")
             proc.stdout = pi_assistant_text(proc.stdout)
-        output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
+        output = {"stdout": proc.stdout.decode(errors="replace") if isinstance(proc.stdout, bytes) else proc.stdout,
+                  "stderr": proc.stderr.decode(errors="replace") if isinstance(proc.stderr, bytes) else proc.stderr,
+                  "returncode": proc.returncode}
         ok = proc.returncode == 0
         return proc
     except BaseException as exc:
         output = {"error": type(exc).__name__, "reason": str(exc)}
         raise
     finally:
-        log_event("call", call=call, name=" ".join(argv[command + 1:command + 3])[:200] if call == "gh" else "pi -p",
-                  input={"argv": list(argv[command:]), "stdin": input},
+        log_event("call", call=call, name="pi -p" if call == "pi" else " ".join(argv[command + 1:command + 3])[:200],
+                  input={"argv": list(argv[command:]),
+                         "stdin": input.decode(errors="replace") if isinstance(input, bytes) else input},
                   output=output, started=started, ok=ok)
 
 
@@ -367,8 +373,9 @@ def _run_process(
     cwd: str | Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
-    input: str | None = None,
-) -> subprocess.CompletedProcess[str]:
+    input: str | bytes | None = None,
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("process timeout must be finite and positive")
@@ -378,8 +385,8 @@ def _run_process(
     if remaining is not None and remaining <= 0:
         raise TickExpired()
     if pi_command(argv) is not None:
-        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
-    with _process(argv, cwd, env, input, text=True) as process:
+        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=cast(str | None, input))
+    with _process(argv, cwd, env, input, text=text) as process:
         remaining = None if deadline is None else max(0, deadline - time.monotonic())
         tick_limited = remaining is not None and remaining <= timeout
         effective_timeout = timeout if remaining is None else min(timeout, remaining)

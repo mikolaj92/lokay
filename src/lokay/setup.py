@@ -5,7 +5,8 @@ import shutil
 from pathlib import Path
 from lokay.effects.pi import TimeoutExpired
 
-from lokay.build import _git, generated_cleanup
+from lokay.build import generated_cleanup
+from lokay.effects.git import git
 from lokay.effects.pi import pi_env, run_process
 from lokay.store import rounds_append
 
@@ -13,7 +14,7 @@ from lokay.store import rounds_append
 def remove_venv(worktree: Path, venv: Path) -> None:
     if venv.is_symlink() or not venv.is_dir():
         return
-    if not _git(worktree, ["--literal-pathspecs", "ls-files", "--", venv.relative_to(worktree).as_posix()]):
+    if not git(worktree, "--literal-pathspecs", "ls-files", "--", venv.relative_to(worktree).as_posix()):
         shutil.rmtree(venv)
 
 

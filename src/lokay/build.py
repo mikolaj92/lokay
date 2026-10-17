@@ -8,7 +8,7 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.effects.git import base_branch, command, commit_paths, push, guard, failure
+from lokay.effects.git import base_branch, git_try, commit_paths, git, head as git_head, push, guard, failure
 from lokay.effects.gh import checks_table, pr_create
 from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
 from lokay.effects.tests import check_uv_lock
@@ -23,15 +23,8 @@ LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "composer.lock": "composer.json", "bun.lockb": "package.json"}
 
 
-def _git(repo: Path, args: list[str]) -> str:
-    proc = command(repo, args)
-    if proc.returncode != 0:
-        raise RuntimeError((proc.stderr or proc.stdout or "").strip())
-    return (proc.stdout or "").strip()
-
-
 def exclude_caches(worktree: Path) -> None:
-    exclude = worktree / _git(worktree, ["rev-parse", "--git-path", "info/exclude"])
+    exclude = worktree / git(worktree, "rev-parse", "--git-path", "info/exclude")
     existing = exclude.read_text() if exclude.exists() else ""
     missing = [pattern for pattern in CACHE_PATTERNS if pattern not in existing.splitlines()]
     if missing:
@@ -40,10 +33,10 @@ def exclude_caches(worktree: Path) -> None:
 
 
 def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
-    status = command(worktree, ["status", "--porcelain", "-z", "--untracked-files=all"])
-    if status.returncode:
-        raise RuntimeError((status.stderr or status.stdout or "").strip())
-    entries = iter(status.stdout.split("\0"))
+    code, out, err = git_try(worktree, "status", "--porcelain", "-z", "--untracked-files=all", timeout=30)
+    if code:
+        raise RuntimeError((err or out).strip())
+    entries = iter(out.split("\0"))
     names = set()
     for entry in entries:
         if not entry:
@@ -57,7 +50,7 @@ def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
         content = (os.readlink(file).encode() if file.is_symlink() else
                    file.read_bytes() if file.is_file() else b"")
         result[name] = (hashlib.sha256(content).hexdigest(),
-                        _git(worktree, ["diff", "--cached", "--binary", "--", name]))
+                        git(worktree, "diff", "--cached", "--binary", "--", name))
     return result
 
 
@@ -67,31 +60,31 @@ def generated_cleanup(worktree: Path):
     if not (worktree / ".git").exists():
         yield drifted
         return
-    before = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
+    before = set(filter(None, git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
     locks = {name: (worktree / name).read_bytes() if (worktree / name).is_file() else None
-             for name in _git(worktree, ["ls-files", "-z"]).split("\0")
+             for name in git(worktree, "ls-files", "-z").split("\0")
              if Path(name).name in LOCKFILES}
     try:
         yield drifted
     finally:
         drifted.extend(name for name, content in sorted(locks.items())
                        if ((worktree / name).read_bytes() if (worktree / name).is_file() else None) != content)
-        after = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
+        after = set(filter(None, git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
         generated = {name for name in after - before if Path(name).name not in LOCKFILES}
         if generated:
-            _git(worktree, ["--literal-pathspecs", "clean", "-fd", "--", *sorted(generated)])
+            git(worktree, "--literal-pathspecs", "clean", "-fd", "--", *sorted(generated))
 
 
 def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) -> tuple[list[str], list[str]]:
-    merge_head = worktree / _git(worktree, ["rev-parse", "--git-path", "MERGE_HEAD"])
+    merge_head = worktree / git(worktree, "rev-parse", "--git-path", "MERGE_HEAD")
     if merge_head.exists():
-        if _git(worktree, ["ls-files", "-u"]):
-            _git(worktree, ["merge", "--abort"])
+        if git(worktree, "ls-files", "-u"):
+            git(worktree, "merge", "--abort")
         else:
-            _git(worktree, ["commit", "--no-edit"])
+            git(worktree, "commit", "--no-edit")
 
     def names(args: list[str]) -> set[str]:
-        return set(filter(None, _git(worktree, args).split("\0")))
+        return set(filter(None, git(worktree, *args).split("\0")))
 
     base = f"origin/{base_branch(worktree)}"
     modified = names(["diff", "--name-only", "-z", "HEAD"])
@@ -109,24 +102,24 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
                          and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     for path in stale_locks:
         if path in names(["ls-tree", "-r", "--name-only", "-z", base]):
-            _git(worktree, ["checkout", base, "--", path])
+            git(worktree, "checkout", base, "--", path)
         else:
-            _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
+            git(worktree, "rm", "-f", "--ignore-unmatch", "--", path)
     junk = sorted(path for path in modified - valid_locks if path not in stale_locks and Path(path).name in siblings
                   and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     tracked = names(["ls-tree", "-r", "--name-only", "-z", "HEAD"])
     cache_paths = {path for path in modified | branch_changes if is_cache(path)}
     if cache_paths:
-        _git(worktree, ["--literal-pathspecs", "rm", "-r", "-f", "--ignore-unmatch", "--", *sorted(cache_paths)])
+        git(worktree, "--literal-pathspecs", "rm", "-r", "-f", "--ignore-unmatch", "--", *sorted(cache_paths))
     artifacts = {path for path in modified if is_artifact(path, worktree)
                  and (path not in tracked or is_cache(path) or path.startswith("tmp/"))}
     junk = sorted(set(junk) | artifacts)
     restore = sorted((set(junk) & tracked) - cache_paths)
     if restore:
-        _git(worktree, ["checkout", "HEAD", "--", *restore])
+        git(worktree, "checkout", "HEAD", "--", *restore)
     added = sorted(artifacts - tracked)
     if added:
-        _git(worktree, ["rm", "-r", "--cached", "-f", "--ignore-unmatch", "--", *added])
+        git(worktree, "rm", "-r", "--cached", "-f", "--ignore-unmatch", "--", *added)
     untracked = names(["ls-files", "--others", "--exclude-standard", "-z"])
     untracked |= names(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
     directories = set()
@@ -176,7 +169,7 @@ def pr_body(worktree: Path, plan_path: Path, issue: int, verdict: dict | None = 
         raise RuntimeError(f"cannot read plan {plan_path}: {exc}") from exc
     goal = re.search(r"^## Cel[^\n]*\n.*?(?=^## |\Z)", plan, re.MULTILINE | re.DOTALL)
     base = f"origin/{base_branch(worktree)}"
-    stat = _git(worktree, ["diff", "--stat", f"{base}...HEAD"])
+    stat = git(worktree, "diff", "--stat", f"{base}...HEAD")
     body = f"Issue #{issue}\n\n" + (goal.group().strip() if goal else "## Cel")
     body += f"\n\n## Zmienione pliki\n\n```text\n{stat}\n```\n"
     if verdict and verdict.get("checks"):
@@ -196,7 +189,7 @@ def build_code(
     previous_head: str | None = None,
     kind: IssueKind = "code",
 ) -> dict:
-    previous_head = previous_head or _git(worktree, ["rev-parse", "HEAD"])
+    previous_head = previous_head or git_head(worktree)
     clean = pi_env(env, worktree)
     clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
     exclude_caches(worktree)
@@ -241,24 +234,24 @@ def build_code(
     for args in (["diff", "--name-status", "--diff-filter=A", f"{base}..HEAD"],
                  ["diff", "--name-status", "--diff-filter=A", "HEAD"],
                  ["diff", "--cached", "--name-status", "--diff-filter=A"]):
-        added.update(line.split("\t", 1)[1] for line in _git(worktree, args).splitlines() if "\t" in line)
-    added.update(_git(worktree, ["ls-files", "--others", "--exclude-standard"]).splitlines())
+        added.update(line.split("\t", 1)[1] for line in git(worktree, *args).splitlines() if "\t" in line)
+    added.update(git(worktree, "ls-files", "--others", "--exclude-standard").splitlines())
     removed = sorted(path for path in added if is_test(path))
     for path in removed:
-        _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
+        git(worktree, "rm", "-f", "--ignore-unmatch", "--", path)
         file = worktree / path
         if file.exists() or file.is_symlink():
             store.remove_file(file)
     tidy_and_commit(worktree, "lokay build", before)
     if removed:
-        remaining = _git(worktree, ["diff", "--name-only", base, "HEAD"]).splitlines()
-        deleted = set(_git(worktree, ["diff", "--name-only", "--diff-filter=D", previous_head, "HEAD"]).splitlines())
+        remaining = git(worktree, "diff", "--name-only", base, "HEAD").splitlines()
+        deleted = set(git(worktree, "diff", "--name-only", "--diff-filter=D", previous_head, "HEAD").splitlines())
         if not any(not is_test(path) for path in remaining) and not (deleted & set(removed)):
             return {"result": "failed", "reason": "tests_only",
                     "explanation": "Build added only tests: " + ", ".join(removed) + ". Implement the production change."}
-    branch_now = _git(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])
-    log = _git(worktree, ["log", "--oneline", f"{previous_head}..HEAD"])
-    head = _git(worktree, ["rev-parse", "HEAD"])
+    branch_now = git(worktree, "rev-parse", "--abbrev-ref", "HEAD")
+    log = git(worktree, "log", "--oneline", f"{previous_head}..HEAD")
+    head = git_head(worktree)
     wrong = expected_branch is not None and branch_now != expected_branch
     pi_tail = (proc.stdout or proc.stderr or "")[-1500:]
     if wrong:
@@ -274,11 +267,10 @@ def build_code(
             "artifact": str(worktree),
         }
     if not log:
-        upstream = (_git(worktree, ["for-each-ref", "--format=%(upstream:short)",
-                                   f"refs/heads/{expected_branch}"]) if expected_branch else "")
+        upstream = (git(worktree, "for-each-ref", "--format=%(upstream:short)", f"refs/heads/{expected_branch}") if expected_branch else "")
         if expected_branch is not None and upstream == f"origin/{expected_branch}":
-            _git(worktree, ["fetch", "origin", expected_branch])
-            if int(_git(worktree, ["rev-list", "--count", f"{upstream}..HEAD"])) > 0:
+            git(worktree, "fetch", "origin", expected_branch)
+            if int(git(worktree, "rev-list", "--count", f"{upstream}..HEAD")) > 0:
                 return {"result": "done", "artifact": head, "pi_response": pi_tail}
         return {
             "result": "failed",

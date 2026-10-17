@@ -4,11 +4,11 @@ import re
 import tokenize
 from pathlib import Path
 
-from lokay.effects.git import _git
+from lokay.effects.git import git_try
 
 
 def git_output(cwd: Path, args: list[str]) -> str:
-    code, out, err = _git(cwd, args)
+    code, out, err = git_try(cwd, *args)
     if code:
         raise ValueError(err.strip() or out.strip())
     return out
