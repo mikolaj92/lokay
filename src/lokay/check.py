@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from json import dumps
+from math import isfinite
 
 import json
 import os
@@ -10,7 +12,7 @@ from pathlib import Path
 from lokay import store
 
 from lokay.effects.decide import DecisionError, from_wire
-from lokay.types import CheckResult, Finding, parse_finding, to_dict
+from lokay.types import CheckResult, Finding, Note, parse_finding, to_dict
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
@@ -19,6 +21,44 @@ QUESTIONS = Path(__file__).parents[2] / "questions"
 THRESHOLD = 0.85
 HUNK_LIMIT = 1500
 NIT = 0.5
+
+
+def classify_multilens(findings: tuple[Finding | Note, ...], file_lines: int | None = None,
+                       repeated: bool = False) -> Finding | None:
+    lenses = tuple(sorted({item.lens for item in findings if item.lens}))
+    if repeated or len(lenses) < 5:
+        return None
+    for item in findings:
+        if (not isinstance(item, Finding) or not item.plik
+                or type(item.linia_od) is not int or type(item.linia_do) is not int
+                or item.linia_od < 1 or item.linia_do < item.linia_od
+                or item.linia_do - item.linia_od + 1 > 50
+                or (file_lines is not None and
+                    (item.linia_do > file_lines or item.linia_od == 1 and item.linia_do == file_lines))):
+            return None
+    first = findings[0]
+    if any((item.plik, item.linia_od, item.linia_do) !=
+           (first.plik, first.linia_od, first.linia_do) for item in findings):
+        return None
+    probabilities = []
+    for item in findings:
+        try:
+            p = float((item._raw or {}).get("p", 0))
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not isfinite(p) or not 0 <= p <= 1:
+            return None
+        probabilities.append(p)
+    p = max(probabilities)
+    if p < 0.5:
+        return None
+    representative = findings[probabilities.index(p)]
+    raw = to_dict(representative)
+    levels = ("low", "medium", "high", "critical")
+    severity = raw.get("severity", "medium")
+    level = levels.index(severity) if severity in levels else 1
+    raw.update(p=p, severity=levels[min(level + 1, 3)], lenses=list(lenses))
+    return replace(representative, lenses=lenses, _raw=raw)
 
 
 def hunks(diff: str) -> list[dict]:

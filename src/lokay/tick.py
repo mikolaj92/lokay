@@ -18,7 +18,7 @@ from lokay.types import Event, Run, Progress, Snapshot, RepoSnapshot, Updated, p
 from lokay.effects.git import base_branch, command
 from lokay.build import _git as build_git
 
-from lokay.types import Finding, Note, parse_finding
+from lokay.types import Finding, Note, parse_finding, to_dict
 from lokay.config import load_repos, tick_budget
 from lokay.effects.gh import _gh, auth_status, open_issues, open_pr_for
 from lokay.lock import acquire, release
@@ -1051,7 +1051,7 @@ def dismissed_key(row: dict) -> list:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks, hunk_finding
+    from lokay.check import QUESTIONS, aggregate, check_state, classify_multilens, decide_batches, hunks, hunk_finding
     from lokay.main_guard import local_baseline, run_repo_tests
     from lokay.checks import CheckInput, run_checks
     from lokay.effects.decide import decide
@@ -1524,12 +1524,29 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             for finding in decision["uwagi"]:
                 key = finding_key(finding)
                 groups.setdefault(key, []).append(finding)
-        degenerate = {key for key, findings in groups.items()
-                      if len({parse_finding(finding).lens or "" for finding in findings}) >= 5}
+        multilens = {key for key, findings in groups.items()
+                      if len({item.lens for finding in findings
+                              if (item := parse_finding(finding)).lens}) >= 5}
         check_notes = state_read(picked["repo"], picked["issue"]).get("check_notes", [])
-        for key in sorted(degenerate, key=lambda row: tuple("" if value is None else str(value) for value in row)):
+        history = saved.get("check_history", [])
+        previous = history[-1] if history and history[-1].get("sha") != sha else {}
+        previous_fingerprints = {tuple(finding_fingerprint(row)) for row in previous.get("findings", [])}
+        amplified = []
+        for key in sorted(multilens, key=lambda row: tuple("" if value is None else str(value) for value in row)):
             findings = groups[key]
-            categories = sorted({parse_finding(finding).lens or "" for finding in findings})
+            parsed = tuple(map(parse_finding, findings))
+            categories = sorted({item.lens or "" for item in parsed})
+            file_lines = None
+            if isinstance(parsed[0], Finding):
+                try:
+                    file_lines = len((worktree / parsed[0].plik).read_text().splitlines())
+                except (OSError, UnicodeError):
+                    pass
+            repeated = any(tuple(finding_fingerprint(row)) in previous_fingerprints for row in findings)
+            finding = classify_multilens(parsed, file_lines=file_lines, repeated=repeated)
+            if finding is not None:
+                amplified.append(to_dict(finding))
+                continue
             for finding in findings:
                 if finding not in check_notes:
                     check_notes.append(finding)
@@ -1548,10 +1565,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             original = decision["uwagi"]
             decision["uwagi"] = [finding for finding in original
                                  if finding_key(finding)
-                                 not in degenerate
+                                 not in multilens
                                  and dismissed_key(finding) not in dismissed_keys]
             if original and not decision["uwagi"] and not decision.get("replan"):
                 decision["next"] = "ok"
+        for finding in amplified:
+            if dismissed_key(finding) not in dismissed_keys:
+                decisions.append({"sha": sha, "next": "issue", "uwagi": [finding]})
         verdict = aggregate(sha, ci, decisions)
         from lokay.scope import code_scope_issue
 
