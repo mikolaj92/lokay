@@ -109,8 +109,18 @@ def pick(snapshot: Snapshot) -> Pick | None:
             if snapshot.only_issue is not None and snapshot.only_issue != issue:
                 continue
             state = repo.states[issue]
-            if (state.get("waiting_on", "ready" if not state else None) == "ready"
-                    and state.get("result") != "parked"):
+            parked = (state.get("result") == "parked"
+                      or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
+            resume = parked and (
+                (state.get("parked_at") is not None
+                 and snapshot.now - state["parked_at"] >= 6 * 3600)
+                or (bool(state.get("parked_main_sha"))
+                    and bool(pr.get("main_sha"))
+                    and state["parked_main_sha"] != pr["main_sha"])
+                or (bool(state.get("plan_accepted_sha"))
+                    and state.get("plan_accepted_sha") != state.get("parked_plan_sha")))
+            if (resume or (not parked
+                           and state.get("waiting_on", "ready" if not state else None) == "ready")):
                 ready.append((state.get("last_attempt", 0), pr["number"], issue, pr))
         if ready:
             _, _, issue, target = min(ready, key=lambda row: row[:3])

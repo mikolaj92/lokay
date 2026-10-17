@@ -226,12 +226,13 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if selected.kind == "prs":
             code, out, err = _gh([
                 "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                "--json", "number,headRefName,headRefOid",
+                "--json", "number,headRefName,headRefOid,labels",
             ])
             if code != 0:
                 raise RuntimeError(err.strip() or "pr list failed")
             prs = tuple(json.loads(out or "[]"))
             states = {}
+            main_sha = None
             for row in prs:
                 branch = row["headRefName"]
                 if not branch.startswith("lokay/") or not branch[6:].isdecimal():
@@ -239,7 +240,26 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 issue = int(branch[6:])
                 if only_issue is not None and issue != only_issue:
                     continue
-                saved = states[issue] = state_read(name, issue)
+                saved = state_read(name, issue)
+                if (saved.get("result") == "parked"
+                        or any(label["name"] == "lokay-parked" for label in row.get("labels", []))):
+                    if main_sha is None:
+                        main_sha = parking_main_sha(name)
+                    row["main_sha"] = main_sha
+                    if saved.get("parked_at") is None:
+                        held = acquire(name.split("/")[0], name)
+                        if held["result"] != "held":
+                            repo = replace(repo, busy=True)
+                            continue
+                        try:
+                            saved = state_read(name, issue)
+                            if saved.get("parked_at") is None:
+                                state_update(name, issue, parked_at=time.time(), parked_main_sha=main_sha,
+                                             parked_plan_sha=saved.get("plan_accepted_sha"))
+                                saved = state_read(name, issue)
+                        finally:
+                            release(held)
+                states[issue] = saved
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
             repo = replace(repo, prs=prs, states={**repo.states, **states})
@@ -294,14 +314,31 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
                         node = saved.get("node")
+                        resumed = {}
                         if pr:
                             branch = pr["headRefName"]
+                            labelled = any(label["name"] == "lokay-parked" for label in pr.get("labels", []))
+                            if labelled:
+                                code, out, err = _gh([
+                                    "pr", "edit", str(pr["number"]), "--repo", name,
+                                    "--remove-label", "lokay-parked",
+                                ])
+                                if code != 0:
+                                    raise RuntimeError(err.strip() or out.strip() or "park label removal failed")
+                            if labelled or saved.get("result") == "parked":
+                                resumed = {"failures": 0, "retry_at": 0, "awaiting": None,
+                                           "last_error": None, "run_rounds": 0, "fix_history": [],
+                                           "fix_counts": [], "diff_fingerprint": None,
+                                           "fix_fingerprint": None, "fix_hunk_fingerprint": None,
+                                           "verdict": None, "parked_at": None,
+                                           "parked_main_sha": None, "parked_plan_sha": None}
+                                node = "check"
                             node = node if node in ("plan", "build", "check", "fix", "merge") else "check"
                         else:
                             node = node or "plan"
                         state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=time.time(),
-                                     **({"plan_mode": "single"} if not saved else {}))
+                                     **resumed, **({"plan_mode": "single"} if not saved else {}))
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -762,6 +799,13 @@ def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch
     return {"result": "failed", "reason": reason}
 
 
+def parking_main_sha(repo: str) -> str:
+    code, out, err = _gh(["api", f"repos/{repo}/commits/HEAD", "--jq", ".sha"])
+    if code != 0 or not out.strip():
+        raise RuntimeError(err.strip() or "parking main SHA unavailable")
+    return out.strip()
+
+
 def park(picked: dict, uwagi: list | None = None, *, force: bool = False,
          reason: str | None = None) -> dict | None:
     repo, issue = picked["repo"], picked["issue"]
@@ -779,7 +823,9 @@ def park(picked: dict, uwagi: list | None = None, *, force: bool = False,
     if saved.get("result") == "parked":
         return {"result": "parked", "reason": reason}
     pr = saved.get("pr")
-    state_update(repo, issue, result="parked", reason=reason, retry_at=0, awaiting="human")
+    state_update(repo, issue, result="parked", reason=reason, retry_at=0, awaiting="human",
+                 parked_at=time.time(), parked_main_sha=parking_main_sha(repo),
+                 parked_plan_sha=saved.get("plan_accepted_sha"))
     if not pr and saved.get("branch"):
         opened = open_pr_for(repo, saved["branch"])
         pr = opened["number"] if opened else None
