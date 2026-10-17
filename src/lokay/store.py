@@ -336,7 +336,7 @@ def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
     worker = worker_index()
     keys = ("time", "version", "result", "repo", "issue", "node", "node_since",
             "failures", "last_error", "idle_reason", "issue_since", "queue_since",
-            "last_merge", "worker", "main_status")
+            "last_merge", "worker")
     snapshots = previous.get("workers", {})
     workers = {index: {key: snapshot[key] for key in keys if key in snapshot}
                for index in ("0", "1", "2")
@@ -365,13 +365,16 @@ def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
         installed = version("lokay")
     except PackageNotFoundError:
         installed = "unknown"
-    previous["main_status"] = main_status()
     previous.update(time=datetime.now(timezone.utc).isoformat(),
                     version=os.environ.get("LOKAY_VERSION", installed))
     if worker is not None:
         workers[worker] = dict(previous)
     if workers:
         previous["workers"] = workers
+    previous["main_status"] = {
+        repo: {key: status[key] for key in ("status", "since", "culprit", "issue") if key in status}
+        for repo, status in main_status().items()
+    }
     write_json(path, previous)
     return previous
 
