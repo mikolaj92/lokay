@@ -154,8 +154,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
     repos_file = child.get("LOKAY2_REPOS_FILE")
     only_repo = child.get("LOKAY2_REPO")
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
-    repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
-             if not only_repo or repo["name"] == only_repo]
+    configured = load_repos(Path(repos_file) if repos_file else None)
+    repos = [repo for repo in configured if not only_repo or repo["name"] == only_repo]
     blocked = []
 
     def idle():
@@ -167,7 +167,40 @@ def pick(env: dict[str, str] | None = None) -> dict:
         return {"result": "idle", "reason": "no_work"}
 
     from lokay.store import main_status
+    from lokay.main_guard import check_main
 
+    statuses = main_status()
+    for repo in sorted(configured, key=lambda row: (statuses.get(row["name"], {}).get("checked_at", 0), row["name"])):
+        name = repo["name"]
+        clone = Path(repo["clone_path"]).expanduser()
+        if (repo["merge"] != "on" or name == "mikolaj92/Temida" or not clone.is_dir()
+                or statuses.get(name, {}).get("checked_at", 0) > time.time() - 3600):
+            continue
+        held = None
+        attempted = False
+        try:
+            check_deadline()
+            held = acquire(name.split("/")[0], name)
+            if held["result"] != "held":
+                continue
+            current = main_status().get(name, {})
+            if current.get("checked_at", 0) > time.time() - 3600:
+                continue
+            attempted = True
+            store.save_main_status(name, {**current, "checked_at": time.time()})
+            check_main(name, clone, config=repo)
+        except TickExpired:
+            raise
+        except Exception as exc:
+            store.log_event("main_checks", repo=name, outcome={"result": "failed", "reason": str(exc)})
+        finally:
+            if held and held["result"] == "held":
+                try:
+                    release(held)
+                except Exception as exc:
+                    store.log_event("main_checks", repo=name, outcome={"result": "failed", "reason": str(exc)})
+        if attempted:
+            break
     statuses = main_status()
     snapshots = []
     for repo in repos:
