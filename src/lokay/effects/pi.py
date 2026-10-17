@@ -102,9 +102,21 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
                 "GIT_ASKPASS", "SSH_AUTH_SOCK"):
         env.pop(key, None)
+    temporary = Path(env.get("TMPDIR") or "/tmp").resolve()
+    if temporary.is_relative_to(Path(worktree).resolve()):
+        temporary = Path("/tmp").resolve()
+    state = tempfile.mkdtemp(prefix="lokay-pi-", dir=temporary)
+    cache = (Path(env.get("HOME") or Path.home()) / ".cache").resolve()
+    if cache.is_relative_to(worktree):
+        cache = Path(state) / "cache"
+    for key, default in (("XDG_CACHE_HOME", cache), ("UV_CACHE_DIR", cache / "uv")):
+        directory = (worktree / env[key]).resolve() if env.get(key) else default
+        env[key] = str(default if directory.is_relative_to(worktree) else directory)
     env.update({
-        "GH_CONFIG_DIR": tempfile.mkdtemp(dir=os.path.realpath(env.get("TMPDIR") or "/tmp")),
-        "UV_CACHE_DIR": str(Path(env.get("HOME") or Path.home()) / ".cache" / "uv"),
+        "GH_CONFIG_DIR": state,
+        "LOKAY_STATE_DIR": state,
+        "XDG_STATE_HOME": state,
+        "TMPDIR": state,
         "PATH": str(Path(__file__).resolve().parents[3] / "sandbox/bin") + os.pathsep + env.get("PATH", os.defpath),
         "LOKAY_PI_WORKTREE": str(worktree),
         "LOKAY_PI_GITDIR": str(gitdir),

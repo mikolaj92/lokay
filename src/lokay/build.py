@@ -119,7 +119,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     cache_paths = {path for path in modified | branch_changes if is_cache(path)}
     if cache_paths:
         _git(worktree, ["--literal-pathspecs", "rm", "-r", "-f", "--ignore-unmatch", "--", *sorted(cache_paths)])
-    artifacts = {path for path in modified if is_artifact(path)
+    artifacts = {path for path in modified if is_artifact(path, worktree)
                  and (path not in tracked or is_cache(path) or path.startswith("tmp/"))}
     junk = sorted(set(junk) | artifacts)
     restore = sorted((set(junk) & tracked) - cache_paths)
@@ -133,11 +133,13 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     directories = set()
     for name in sorted(untracked):
         path = Path(name)
-        if not is_artifact(name):
+        if not is_artifact(name, worktree):
             continue
         file = worktree / path
-        if file.is_file() or file.is_symlink():
+        if file.is_symlink() or file.is_file():
             store.remove_file(file)
+        elif file.is_dir() and not any(item.startswith(path.as_posix().rstrip("/") + "/") for item in tracked):
+            store.remove_directory(file)
         for parent in path.parents:
             if is_cache(parent.as_posix()):
                 directories.add(worktree / parent)
@@ -158,9 +160,11 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
                       and (path in cache_paths or path in stale_locks or path in valid_locks
                            or before is None or before.get(path) != after[path]))
     index_paths = names(["ls-files", "-z"])
-    stage = [path for path in selected if ".local" not in Path(path).parts[:-1]
-             and not (Path(path).match("uv-*.lock") and (worktree / path).is_file()
-                      and (worktree / path).stat().st_size == 0)
+    stage = [path for path in selected
+             if not path.endswith("/") and not (worktree / path).is_dir()
+             and (not is_artifact(path, worktree)
+                 or (path in index_paths and not (worktree / path).exists()
+                     and not (worktree / path).is_symlink()))
              and (path in index_paths or (worktree / path).exists()
                   or (worktree / path).is_symlink())]
     committed = commit_paths(worktree, stage, message)

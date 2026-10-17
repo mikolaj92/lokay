@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 
 CACHE_PATTERNS = [
@@ -18,9 +18,22 @@ def is_cache(path: str) -> bool:
                for part in parts for pattern in CACHE_PATTERNS)
 
 
-def is_artifact(path: str) -> bool:
+def is_artifact(path: str, worktree: Path | None = None) -> bool:
     parts = PurePosixPath(path).parts
-    return (is_cache(path) or path.endswith((".log", ".sqlite", ".sqlite-shm", ".sqlite-wal"))
+    name = PurePosixPath(path).name
+    return (is_cache(path) or path.endswith(("/", ".log", ".sqlite", ".sqlite-shm", ".sqlite-wal"))
+            or any(part == "git-v0" or part.endswith("uv-cache") for part in parts)
+            or (worktree is not None and ((worktree / path).is_dir()
+                or any((worktree / parent / ".git").exists()
+                       or ((worktree / parent / "HEAD").is_file()
+                           and (worktree / parent / "objects").is_dir())
+                       for parent in (PurePosixPath(path), *PurePosixPath(path).parents)
+                       if parent != PurePosixPath("."))))
+            or ".local" in parts[:-1]
+            or (len(parts) > 1 and parts[0].startswith(".tmp"))
+            or any(fnmatch.fnmatchcase(name, pattern) for pattern in ("procs-*.json", "uv-*.lock"))
+            or (worktree is not None and name.endswith(".lock")
+                and (worktree / path).is_file() and (worktree / path).stat().st_size == 0)
             or any(part in {".validation", ".sandbox", "sandbox"} for part in parts[:-1])
             or (path.startswith("tmp/") and path.endswith(".lock"))
             or parts[-2:] == ("bin", "gh"))
