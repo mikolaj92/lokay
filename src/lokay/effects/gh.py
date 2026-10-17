@@ -10,8 +10,8 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
-from lokay.effects.pi import retry_sleep, run_process
-from lokay.store import log_event
+from lokay.effects.pi import run_process
+from lokay.effects.retry import retry
 from lokay.safety import validate_argv
 from lokay.types import CheckResult, Note, parse_finding
 
@@ -64,40 +64,45 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | No
         index += 1
     validate_argv(["gh", *args])
     attempts = 1 if args[:2] == ["issue", "create"] else 4
-    for attempt in range(attempts):
-        try:
-            proc = run_process([gh_bin(), *args], env=env, timeout=60, cwd=str(cwd) if cwd is not None else None)
-        except subprocess.TimeoutExpired:
-            if attempt == attempts - 1:
-                raise
-            reason = "gh timed out"
-        else:
-            match = re.search(
-                r"Something went wrong while executing your query|\bHTTP\s+(?:502|503|504)\b|"
-                r"\btimeout\b|\btimed out\b|\bconnection reset\b|\bECONNRESET\b",
-                (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
-            )
-            if proc.returncode == 0 or match is None or attempt == attempts - 1:
-                return proc.returncode, proc.stdout or "", proc.stderr or ""
-            reason = match[0]
-        log_event("retry", call="gh", attempt=attempt + 1, reason=reason)
-        retry_sleep(3 ** attempt)
-    raise AssertionError("unreachable")
+    def transient(proc):
+        if isinstance(proc, subprocess.TimeoutExpired):
+            return "gh timed out"
+        if isinstance(proc, Exception) or proc.returncode == 0:
+            return None
+        match = re.search(
+            r"Something went wrong while executing your query|\bHTTP\s+(?:502|503|504)\b|"
+            r"\btimeout\b|\btimed out\b|\bconnection reset\b|\bECONNRESET\b",
+            (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
+        )
+        return match[0] if match else None
+
+    proc = retry(lambda: run_process([gh_bin(), *args], env=env, timeout=60,
+                                    cwd=str(cwd) if cwd is not None else None), attempts, transient, call="gh")
+    return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+
+def gh_ok(args: list[str], *, error: str = "gh failed", strip: bool = True, include_stdout: bool = False) -> str:
+    code, out, err = _gh(args)
+    if code != 0:
+        reason = err.strip() if strip else err
+        raise RuntimeError(reason or (out.strip() if include_stdout else "") or error)
+    return out
+
+
+def gh_json(args: list[str], *, error: str = "gh failed", strip: bool = True, default: str | None = None):
+    out = gh_ok(args, error=error, strip=strip)
+    return json.loads(out if default is None else out or default)
 
 
 def create_child_issue(repo: str, parent: int, index: int, task: dict, generation: int) -> int:
     marker = f"Lokay parent: #{parent}; split: {generation}; task: {index}"
-    code, out, err = _gh(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000",
-                          "--json", "number,body"])
-    if code:
-        raise RuntimeError(err.strip() or "child issue lookup failed")
-    for row in json.loads(out or "[]"):
+    rows = gh_json(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000",
+                    "--json", "number,body"], error="child issue lookup failed", default="[]")
+    for row in rows:
         if marker in (row.get("body") or "").splitlines():
             return int(row["number"])
-    code, out, err = _gh(["issue", "create", "--repo", repo, "--title", task["title"],
-                          "--body", marker + "\n\n" + task["body"]])
-    if code:
-        raise RuntimeError(err.strip() or "child issue create failed")
+    out = gh_ok(["issue", "create", "--repo", repo, "--title", task["title"],
+                 "--body", marker + "\n\n" + task["body"]], error="child issue create failed")
     match = re.search(r"https://github\.com/" + re.escape(repo) + r"/issues/(\d+)\s*$", out)
     if not match:
         raise RuntimeError("child issue URL missing")
@@ -106,39 +111,32 @@ def create_child_issue(repo: str, parent: int, index: int, task: dict, generatio
 
 def children_merged(repo: str, children: list[int]) -> bool:
     for issue in children:
-        code, out, err = _gh(["pr", "list", "--repo", repo, "--head", f"lokay/{issue}",
-                              "--state", "merged", "--json", "number"])
-        if code:
-            raise RuntimeError(err.strip() or "child merge lookup failed")
-        if not json.loads(out or "[]"):
+        if not gh_json(["pr", "list", "--repo", repo, "--head", f"lokay/{issue}",
+                        "--state", "merged", "--json", "number"],
+                       error="child merge lookup failed", default="[]"):
             return False
     return bool(children)
 
 
 def open_issues(repo: str) -> list[dict]:
-    code, out, err = _gh(
-        ["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000", "--json", "number,createdAt,title,labels,state"]
+    rows = gh_json(
+        ["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000", "--json", "number,createdAt,title,labels,state"],
+        error="issue list failed", default="[]",
     )
-    if code != 0:
-        raise RuntimeError(err.strip() or "issue list failed")
-    rows = json.loads(out or "[]")
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
 
 
 def open_pr_for(repo: str, branch: str) -> dict | None:
-    code, out, err = _gh(
-        ["pr", "list", "--repo", repo, "--head", branch, "--state", "open", "--json", "number,headRefOid,baseRefName"]
+    rows = gh_json(
+        ["pr", "list", "--repo", repo, "--head", branch, "--state", "open", "--json", "number,headRefOid,baseRefName"],
+        error="pr list failed", default="[]",
     )
-    if code != 0:
-        raise RuntimeError(err.strip() or "pr list failed")
-    rows = json.loads(out or "[]")
     return rows[0] if rows else None
 
 
 def pr_files(repo: str, number: int) -> list[str]:
-    code, out, err = _gh(["api", "--paginate", f"repos/{repo}/pulls/{number}/files", "--jq", ".[].filename"])
-    if code:
-        raise RuntimeError(err.strip() or "PR files lookup failed")
+    out = gh_ok(["api", "--paginate", f"repos/{repo}/pulls/{number}/files", "--jq", ".[].filename"],
+                error="PR files lookup failed")
     return out.splitlines()
 
 
@@ -158,17 +156,13 @@ def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict
 
 def pr_set_body(repo: str, number: int, body: str, issue: int) -> dict:
     marked = body.rstrip() + f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
-    code, out, err = _gh(["pr", "edit", str(number), "--repo", repo, "--body", fit_body(marked)])
-    if code != 0:
-        raise RuntimeError(err.strip() or "pr edit failed")
+    gh_ok(["pr", "edit", str(number), "--repo", repo, "--body", fit_body(marked)], error="pr edit failed")
     return {"result": "updated", "pr": number}
 
 
 def pr_checks(repo: str, number: int, sha: str) -> dict:
-    code, out, err = _gh(["pr", "view", str(number), "--repo", repo, "--json", "statusCheckRollup,headRefOid"])
-    if code != 0:
-        raise RuntimeError(err.strip() or "pr view failed")
-    view = json.loads(out)
+    view = gh_json(["pr", "view", str(number), "--repo", repo, "--json", "statusCheckRollup,headRefOid"],
+                   error="pr view failed")
     if view.get("headRefOid") != sha:
         return {"result": "sha_moved", "sha": view.get("headRefOid") or ""}
     rollup = view.get("statusCheckRollup") or []
@@ -247,9 +241,7 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
     if notes:
         body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
             f"- {note.pytanie}: {note.note}" for note in notes)
-    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", fit_body(body)])
-    if code != 0:
-        raise RuntimeError(err.strip() or "Check comment failed")
+    out = gh_ok(["pr", "comment", str(number), "--repo", repo, "--body", fit_body(body)], error="Check comment failed")
     return {"result": "commented", "url": out.strip()}
 
 
@@ -273,10 +265,9 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
         if "not mergeable" in blob or "conflict" in blob:
             return {"result": "conflict", "merge_sha": None}
         raise RuntimeError(err.strip() or out.strip() or "merge failed")
-    code, out, err = _gh(["pr", "view", str(number), "--repo", repo, "--json", "mergeCommit"])
-    if code:
-        raise RuntimeError(err or "merge commit lookup failed")
-    sha = (json.loads(out).get("mergeCommit") or {}).get("oid")
+    view = gh_json(["pr", "view", str(number), "--repo", repo, "--json", "mergeCommit"],
+                   error="merge commit lookup failed", strip=False)
+    sha = (view.get("mergeCommit") or {}).get("oid")
     if not sha:
         raise RuntimeError("merge commit missing")
     return {"result": "merged", "merge_sha": sha}

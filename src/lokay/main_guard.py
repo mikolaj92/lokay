@@ -3,13 +3,12 @@ from __future__ import annotations
 from dataclasses import asdict
 from json import dumps
 
-import json
 import tempfile
 import time
 from pathlib import Path
 
 from lokay.config import load_repos
-from lokay.effects.gh import _gh, fit_body
+from lokay.effects.gh import gh_json, gh_ok, fit_body
 from lokay.effects.git import git_try, base_branch
 from lokay.store import main_status, save_main_status
 from lokay.types import Finding, parse_finding
@@ -29,28 +28,23 @@ def run_repo_tests(repo: dict, sha: str, worktree: Path) -> dict:
 
 
 def guard_issue(repo: str, body: str) -> int:
-    code, out, err = _gh(["issue", "list", "--repo", repo, "--state", "all",
-                          "--limit", "1000000", "--json", "number,title,body,state"])
-    if code:
-        raise RuntimeError(err or "main issue lookup failed")
-    matches = [row for row in json.loads(out or "[]")
+    rows = gh_json(["issue", "list", "--repo", repo, "--state", "all",
+                    "--limit", "1000000", "--json", "number,title,body,state"],
+                   error="main issue lookup failed", strip=False, default="[]")
+    matches = [row for row in rows
                if row["title"] == TITLE or MARKER in (row.get("body") or "")]
     text = fit_body(f"<!-- {MARKER} -->\n{body}")
     if matches:
         issue = min(matches, key=lambda row: int(row["number"]))
         number = int(issue["number"])
-        code, _, err = _gh(["issue", "edit", str(number), "--repo", repo,
-                            "--title", TITLE, "--body", text])
-        if code:
-            raise RuntimeError(err or "main issue edit failed")
+        gh_ok(["issue", "edit", str(number), "--repo", repo,
+               "--title", TITLE, "--body", text], error="main issue edit failed", strip=False)
         if issue.get("state") == "CLOSED":
-            code, _, err = _gh(["issue", "reopen", str(number), "--repo", repo])
-            if code:
-                raise RuntimeError(err or "main issue reopen failed")
+            gh_ok(["issue", "reopen", str(number), "--repo", repo],
+                  error="main issue reopen failed", strip=False)
         return number
-    code, out, err = _gh(["issue", "create", "--repo", repo, "--title", TITLE, "--body", text])
-    if code:
-        raise RuntimeError(err or "main issue create failed")
+    out = gh_ok(["issue", "create", "--repo", repo, "--title", TITLE, "--body", text],
+                error="main issue create failed", strip=False)
     return int(out.strip().rstrip("/").rsplit("/", 1)[1])
 
 

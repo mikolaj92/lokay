@@ -8,6 +8,7 @@ from pathlib import Path
 from contextlib import contextmanager
 
 from lokay.effects.pi import run_process
+from lokay.effects.retry import retry
 from lokay.safety import validate_argv
 
 REF_LOCK = ("cannot lock ref", "unable to resolve reference", ".lock")
@@ -298,20 +299,26 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
         return {"result": "pushed", "sha": current, "attempts": 0}
     if current != expected_remote_sha:
         return {"result": "remote_moved", "sha": current or ""}
-    last = ""
-    for attempt in range(1, attempts + 1):
+    if attempts <= 0:
+        return {"result": "failed", "error": ""}
+    attempt = 0
+
+    def push_once():
+        nonlocal attempt
+        attempt += 1
         code, out, err = git_try(repo, "push", "-u", "origin", branch, timeout=120)
         if code == 0:
             head, sha, _ = git_try(repo, "rev-parse", "HEAD")
             return {"result": "pushed", "sha": sha.strip(), "attempts": attempt} if head == 0 else {"result": "failed"}
-        last = (err or out).lower()
-        locked = any(mark in last for mark in REF_LOCK)
-        if not locked or attempt == attempts:
-            return {"result": "failed", "error": (err or out).strip()}
-        from lokay.effects.pi import retry_sleep
+        return {"result": "failed", "error": (err or out).strip()}
 
-        retry_sleep(0.2 * attempt)
-    return {"result": "failed", "error": last}
+    def transient(result):
+        if isinstance(result, Exception):
+            return None
+        error = result.get("error", "").lower()
+        return error if any(mark in error for mark in REF_LOCK) else None
+
+    return retry(push_once, attempts, transient, delay=lambda attempt: 0.2 * (attempt + 1))
 
 
 def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:

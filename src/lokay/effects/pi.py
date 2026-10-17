@@ -19,6 +19,7 @@ from subprocess import TimeoutExpired
 from typing import Any, BinaryIO, cast
 
 from lokay import store
+from lokay.effects.retry import retry
 
 
 PI_IDLE_SECONDS = 300
@@ -216,20 +217,17 @@ def run_process(
             from lokay.effects.git import pi_git_guard
 
             with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()):
-                for attempt in range(4):
-                    proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
-                    if proc.returncode == 0 or attempt == 3:
-                        break
+                def transient(proc):
+                    if isinstance(proc, Exception) or proc.returncode == 0:
+                        return None
                     match = re.search(
                         r"\b(?:401|429|5\d{2})\b|overloaded|rate[ _-]limit|ECONNRESET|Empty reply",
                         (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
                     )
-                    if match is None:
-                        break
-                    log_event("retry", call="pi", attempt=attempt + 1, reason=match[0])
-                    retry_sleep(3 ** attempt)
-                else:
-                    raise AssertionError("unreachable")
+                    return match[0] if match else None
+
+                proc = retry(lambda: _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text),
+                             4, transient, call="pi")
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout.decode(errors="replace") if isinstance(proc.stdout, bytes) else proc.stdout,
                   "stderr": proc.stderr.decode(errors="replace") if isinstance(proc.stderr, bytes) else proc.stderr,
