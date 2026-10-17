@@ -56,7 +56,17 @@ def step(run: Run, event: Event) -> Run:
                 fields.update(plan_phase="write", plan_branches={}, plan_synthesis={},
                               plan_evaluations=0, plan_accepted_sha=None)
         case Fixed():
-            fields.update(node="check", verdict=None)
+            sha = outcome.get("sha") or fields.get("sha")
+            rechecks = current.get("dispute_rechecks", [])
+            previous_sha = outcome.get('previous_sha', None if outcome.get('result') == 'pushed' else current.get('sha'))
+            if sha and sha == previous_sha:
+                if sha in rechecks:
+                    fields.update(node="plan", plan_phase="write", plan_branches={}, plan_synthesis={},
+                                  plan_evaluations=0, plan_accepted_sha=None)
+                else:
+                    fields.update(node="check", verdict=None, dispute_rechecks=rechecks + [sha])
+            else:
+                fields.update(node="check", verdict=None)
         case Merged():
             fields["result"] = outcome["result"]
         case RedMain():
