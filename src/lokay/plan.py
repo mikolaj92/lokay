@@ -26,6 +26,15 @@ def plan_questions(plan: str = "") -> dict:
                 "instructions": "Is the plan complete?",
                 "options": {"ok": "ship it", "revise": "fix the plan"},
             },
+            {
+                "id": "kind",
+                "type": "choice",
+                "instructions": "What kind of change does the issue require?",
+                "options": {
+                    "code": "the issue changes code",
+                    "docs_change": "the issue only touches docs (including 'add a missing description')",
+                },
+            },
             *[
                 {
                     "id": name,
@@ -182,6 +191,9 @@ def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | Non
 
 
 def verdict(answers: dict) -> dict:
+    kind = answers["kind"]["choice"] if "kind" in answers else "code"
+    if kind not in ("code", "docs_change"):
+        raise ValueError("unknown issue kind")
     confidence = answers["next"]["confidence"]
     uwagi = []
     notes = []
@@ -191,7 +203,8 @@ def verdict(answers: dict) -> dict:
             uwagi.append({"kryterium": name, "p": p})
         elif p < 0.5:
             notes.append({"kryterium": name, "p": p})
-    return {"next": "revise" if uwagi else "ok", "confidence": confidence, "uwagi": uwagi, "notes": notes}
+    return {"next": "revise" if uwagi else "ok", "kind": kind,
+            "confidence": confidence, "uwagi": uwagi, "notes": notes}
 
 
 def difficulty_questions(title: str, body: str | None) -> dict:
