@@ -63,11 +63,12 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | No
             args[index] = "--title=" + arg[len("--title="):][:256]
         index += 1
     validate_argv(["gh", *args])
-    for attempt in range(4):
+    attempts = 1 if args[:2] == ["issue", "create"] else 4
+    for attempt in range(attempts):
         try:
             proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": str(cwd)} if cwd is not None else {}))
         except subprocess.TimeoutExpired:
-            if attempt == 3:
+            if attempt == attempts - 1:
                 raise
             reason = "gh timed out"
         else:
@@ -76,12 +77,42 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | No
                 r"\btimeout\b|\btimed out\b|\bconnection reset\b|\bECONNRESET\b",
                 (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
             )
-            if proc.returncode == 0 or match is None or attempt == 3:
+            if proc.returncode == 0 or match is None or attempt == attempts - 1:
                 return proc.returncode, proc.stdout or "", proc.stderr or ""
             reason = match[0]
         log_event("retry", call="gh", attempt=attempt + 1, reason=reason)
         retry_sleep(3 ** attempt)
     raise AssertionError("unreachable")
+
+
+def create_child_issue(repo: str, parent: int, index: int, task: dict, generation: int) -> int:
+    marker = f"Lokay parent: #{parent}; split: {generation}; task: {index}"
+    code, out, err = _gh(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000",
+                          "--json", "number,body"])
+    if code:
+        raise RuntimeError(err.strip() or "child issue lookup failed")
+    for row in json.loads(out or "[]"):
+        if marker in (row.get("body") or "").splitlines():
+            return int(row["number"])
+    code, out, err = _gh(["issue", "create", "--repo", repo, "--title", task["title"],
+                          "--body", marker + "\n\n" + task["body"]])
+    if code:
+        raise RuntimeError(err.strip() or "child issue create failed")
+    match = re.search(r"https://github\.com/" + re.escape(repo) + r"/issues/(\d+)\s*$", out)
+    if not match:
+        raise RuntimeError("child issue URL missing")
+    return int(match[1])
+
+
+def children_merged(repo: str, children: list[int]) -> bool:
+    for issue in children:
+        code, out, err = _gh(["pr", "list", "--repo", repo, "--head", f"lokay/{issue}",
+                              "--state", "merged", "--json", "number"])
+        if code:
+            raise RuntimeError(err.strip() or "child merge lookup failed")
+        if not json.loads(out or "[]"):
+            return False
+    return bool(children)
 
 
 def open_issues(repo: str) -> list[dict]:
