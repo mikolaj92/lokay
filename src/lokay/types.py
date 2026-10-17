@@ -160,6 +160,7 @@ class Finding:
     linia_do: int
     zmiana: str = ""
     lens: str = ""
+    lenses: tuple[str, ...] = ()
     _raw: dict | None = field(default=None, repr=False, compare=False, kw_only=True)
 
 
@@ -192,14 +193,22 @@ def parse_finding(raw: dict) -> Finding | Note:
 
     lens = text("pytanie") or text("lens")
     if text("plik"):
-        return Finding(text("plik"), line("linia_od"), line("linia_do"), text("zmiana"), lens, _raw=dict(raw))
+        return Finding(text("plik"), line("linia_od"), line("linia_do"), text("zmiana"), lens,
+                       tuple(raw.get("lenses") or ()), _raw=dict(raw))
     return Note(lens, text("pytanie"), text("note"), _raw=dict(raw))
 
 
 def to_dict(item: Finding | Note) -> dict:
     if item._raw is not None:
-        return dict(item._raw)
+        raw = dict(item._raw)
+    elif isinstance(item, Finding):
+        raw = {"plik": item.plik, "linia_od": item.linia_od, "linia_do": item.linia_do,
+               "zmiana": item.zmiana, "pytanie": item.lens}
+    else:
+        raw = {"pytanie": item.pytanie or item.lens, "note": item.note}
     if isinstance(item, Finding):
-        return {"plik": item.plik, "linia_od": item.linia_od, "linia_do": item.linia_do,
-                "zmiana": item.zmiana, "pytanie": item.lens}
-    return {"pytanie": item.pytanie or item.lens, "note": item.note}
+        if item.lenses:
+            raw["lenses"] = list(item.lenses)
+        elif raw.get("lenses"):
+            raw.pop("lenses")
+    return raw
