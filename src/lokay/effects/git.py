@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
+from subprocess import CompletedProcess
+from typing import Any
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -22,26 +23,26 @@ def base_branch(path: Path, *, branch: str | None = None) -> str:
     from lokay.effects.gh import _gh, open_pr_for
     import json
 
-    def git(args):
-        code, out, err = _git(path, args)
+    def checked(args):
+        code, out, err = git_try(path, *args)
         if code:
             raise RuntimeError(err or out)
         return out.strip()
 
-    root = Path(git(["rev-parse", "--show-toplevel"]))
+    root = Path(checked(["rev-parse", "--show-toplevel"]))
     root_key = (root, branch)
     if root_key not in BASE_BRANCHES:
-        common = (path / git(["rev-parse", "--git-common-dir"])).resolve()
+        common = (path / checked(["rev-parse", "--git-common-dir"])).resolve()
         if common not in REPOSITORIES:
             code, out, err = _gh(["repo", "view", "--json", "nameWithOwner,defaultBranchRef"], cwd=root)
             if code == 0:
                 REPOSITORIES[common] = json.loads(out)
         repo = REPOSITORIES.get(common, {})
-        head = branch if branch is not None else git(["branch", "--show-current"])
+        head = branch if branch is not None else checked(["branch", "--show-current"])
         pr = open_pr_for(repo["nameWithOwner"], head) if head and repo else None
         base = (pr or {}).get("baseRefName") or (repo.get("defaultBranchRef") or {}).get("name")
         if not base:
-            code, out, err = _git(path, ["symbolic-ref", "refs/remotes/origin/HEAD"])
+            code, out, err = git_try(path, "symbolic-ref", "refs/remotes/origin/HEAD")
             base = out.strip().removeprefix("refs/remotes/origin/") if code == 0 else ""
             base = base or "main"
         if common not in REPOSITORIES:
@@ -51,16 +52,33 @@ def base_branch(path: Path, *, branch: str | None = None) -> str:
     return BASE_BRANCHES[root_key]
 
 
-def _git(repo: Path, args: list[str], timeout: float = 60, *, env: dict[str, str] | None = None) -> tuple[int, str, str]:
-    validate_argv(["git", *args])
-    proc = run_process(["git", *args], cwd=repo, timeout=timeout, env=env)
+def _command(repo: Path | None, args: list[str], *, timeout: float, env: dict[str, str] | None = None,
+             input: bytes | None = None, text: bool = True) -> CompletedProcess[Any]:
+    argv = ["git", *args]
+    validate_argv(argv)
+    return run_process(argv, cwd=repo, timeout=timeout, env=env, input=input, text=text)
+
+
+def git_try(path: Path, *args: str, timeout: float = 60, env: dict[str, str] | None = None) -> tuple[int, str, str]:
+    proc = _command(path, list(args), timeout=timeout, env=env)
     return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+
+def git(path: Path, *args: str, timeout: float = 30) -> str:
+    code, out, err = git_try(path, *args, timeout=timeout)
+    if code:
+        raise RuntimeError((err or out).strip())
+    return out.strip()
+
+
+def head(path: Path) -> str:
+    return git(path, "rev-parse", "HEAD")
 
 
 def commit_time(repo: Path, ref: str) -> str:
     if not ref or ref.startswith("-") or any(char.isspace() for char in ref):
         raise ValueError("expected a git tag or sha")
-    code, out, err = _git(repo, ["show", "-s", "--format=%cI", "--end-of-options", f"{ref}^{{commit}}", "--"])
+    code, out, err = git_try(repo, "show", "-s", "--format=%cI", "--end-of-options", f"{ref}^{{commit}}", "--")
     if code:
         raise ValueError(err.strip() or out.strip())
     return out.strip()
@@ -71,7 +89,7 @@ def merge_conflicts(repo: Path, sha: str) -> list[str]:
         raise ValueError("expected a hex sha of 7-64 characters")
     try:
         base = base_branch(repo)
-        code, out, _ = _git(repo, ["merge-tree", "--write-tree", "--name-only", "-z", f"origin/{base}", sha])
+        code, out, _ = git_try(repo, "merge-tree", "--write-tree", "--name-only", "-z", f"origin/{base}", sha)
         if code == 0:
             return []
         if code == 1:
@@ -90,11 +108,11 @@ def merge_files(repo: Path, sha: str) -> list[dict] | None:
     if not repo.is_dir():
         return None
     env = {**os.environ, "GIT_NO_LAZY_FETCH": "1"}
-    code, out, err = _git(repo, ["show", "--first-parent", "-m", "--name-only", "--format=", "-z", sha, "--"], env=env)
+    code, out, err = git_try(repo, "show", "--first-parent", "-m", "--name-only", "--format=", "-z", sha, "--", env=env)
     if code or not out:
-        code, out, err = _git(repo, ["diff-tree", "--name-only", "-r", "-z", f"{sha}^1", sha, "--"], env=env)
+        code, out, err = git_try(repo, "diff-tree", "--name-only", "-r", "-z", f"{sha}^1", sha, "--", env=env)
     if code:
-        exists, _, error = _git(repo, ["rev-parse", "--verify", "--quiet", f"{sha}^{{object}}"], env=env)
+        exists, _, error = git_try(repo, "rev-parse", "--verify", "--quiet", f"{sha}^{{object}}", env=env)
         if exists == 1:
             return None
         raise ValueError(error.strip() if exists else err.strip() or out.strip())
@@ -103,7 +121,7 @@ def merge_files(repo: Path, sha: str) -> list[dict] | None:
 
 def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
     def checked(where, args):
-        code, out, err = _git(where, args)
+        code, out, err = git_try(where, *args)
         if code:
             raise RuntimeError(err.strip() or out.strip() or f"git {args} failed ({code})")
         return out
@@ -173,11 +191,11 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
             checked(repo, ["worktree", "remove", "--force", str(path)])
         if any(row.get("branch") == f"refs/heads/{branch}" for row in registrations()):
             raise ValueError("branch already registered at another worktree")
-        code, out, err = _git(repo, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+        code, out, err = git_try(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}")
         if code == 0:
             args = ["worktree", "add", str(path), branch]
         elif code == 1:
-            code, out, err = _git(repo, ["ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}"])
+            code, out, err = git_try(repo, "ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}")
             if code not in (0, 2):
                 raise RuntimeError(err.strip() or out.strip() or f"ls-remote failed ({code})")
             base = branch if code == 0 else "main"
@@ -196,7 +214,7 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
 def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None) -> dict:
     if safe:
         def checked(where, args):
-            code, out, err = _git(where, args)
+            code, out, err = git_try(where, *args)
             if code:
                 raise RuntimeError(err.strip() or out.strip() or "cleanup lookup failed")
             return out.strip()
@@ -240,14 +258,14 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             return {"result": "removed", "path": str(path)}
         except (OSError, ValueError, RuntimeError) as exc:
             return {"result": "failed", "error": str(exc)}
-    code, out, err = _git(repo, ["worktree", "remove", "--force", str(path)])
+    code, out, err = git_try(repo, "worktree", "remove", "--force", str(path))
     if code != 0 and path.exists():
         return {"result": "failed", "error": err.strip() or out.strip()}
     return {"result": "removed", "path": str(path)}
 
 
 def remote_sha(repo: Path, branch: str) -> str | None:
-    code, out, err = _git(repo, ["ls-remote", "origin", f"refs/heads/{branch}"])
+    code, out, err = git_try(repo, "ls-remote", "origin", f"refs/heads/{branch}")
     if code != 0:
         return None
     line = out.strip().splitlines()
@@ -270,7 +288,7 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
         }
     branch = short
     current = remote_sha(repo, branch)
-    head_code, head_sha, _ = _git(repo, ["rev-parse", "HEAD"])
+    head_code, head_sha, _ = git_try(repo, "rev-parse", "HEAD")
     if (
         expected_remote_sha
         and head_code == 0
@@ -282,9 +300,9 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
         return {"result": "remote_moved", "sha": current or ""}
     last = ""
     for attempt in range(1, attempts + 1):
-        code, out, err = _git(repo, ["push", "-u", "origin", branch], timeout=120)
+        code, out, err = git_try(repo, "push", "-u", "origin", branch, timeout=120)
         if code == 0:
-            head, sha, _ = _git(repo, ["rev-parse", "HEAD"])
+            head, sha, _ = git_try(repo, "rev-parse", "HEAD")
             return {"result": "pushed", "sha": sha.strip(), "attempts": attempt} if head == 0 else {"result": "failed"}
         last = (err or out).lower()
         locked = any(mark in last for mark in REF_LOCK)
@@ -298,7 +316,7 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
 
 def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     def checked(args: list[str]) -> str:
-        code, out, err = _git(repo, ["--literal-pathspecs", *args])
+        code, out, err = git_try(repo, "--literal-pathspecs", *args)
         if code:
             raise RuntimeError((err or out).strip())
         return out
@@ -314,10 +332,6 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     return committed
 
 
-def command(repo: Path, args: list[str], *, timeout: float = 30):
-    return run_process(["git", *args], cwd=repo, timeout=timeout)
-
-
 class PiGitViolation(RuntimeError):
     def failure(self) -> dict:
         return {"result": "failed", "reason": "pi_git_changed", "explanation": str(self), "artifact": ""}
@@ -326,10 +340,10 @@ class PiGitViolation(RuntimeError):
 @contextmanager
 def pi_git_guard(path: Path):
     def checked(args):
-        proc = command(path, args)
-        if proc.returncode != 0:
-            raise PiGitViolation(f"pi git checks failed: {proc.stderr.strip()}")
-        return proc.stdout
+        code, out, err = git_try(path, *args, timeout=30)
+        if code != 0:
+            raise PiGitViolation(f"pi git checks failed: {err.strip()}")
+        return out
 
     head = checked(["rev-parse", "HEAD"]).strip()
     refs = checked(["for-each-ref"])
@@ -350,17 +364,15 @@ def pi_git_guard(path: Path):
 
 
 def guarded_command(path: Path, *args: str, input: bytes | None = None) -> bytes:
-    return subprocess.run(
-        ["git", "--literal-pathspecs", "-C", str(path), *args], input=input,
-        capture_output=True, check=True, timeout=60,
-    ).stdout
+    proc = _command(None, ["--literal-pathspecs", "-C", str(path), *args],
+                    input=input, timeout=60, text=False)
+    proc.check_returncode()
+    return proc.stdout
 
 
 def path_at_head(path: Path, head: str, name: str) -> bool:
-    return subprocess.run(
-        ["git", "-C", str(path), "cat-file", "-e", f"{head}:{name}"],
-        capture_output=True, timeout=60,
-    ).returncode == 0
+    return _command(None, ["-C", str(path), "cat-file", "-e", f"{head}:{name}"],
+                    timeout=60, text=False).returncode == 0
 
 
 def _snapshot(path: Path) -> dict:

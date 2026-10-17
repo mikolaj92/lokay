@@ -14,12 +14,12 @@ from pathlib import Path
 
 from lokay import graph, store
 from dataclasses import replace
-from lokay.types import Event, Run, Progress, Snapshot, RepoSnapshot, Updated, parse_event
+from lokay.types import Event, Run, Snapshot, RepoSnapshot, Updated, parse_event
 from lokay.effects import maintenance
-from lokay.effects.git import base_branch, command, worktree_remove
-from lokay.build import _git as build_git
+from lokay.effects.git import base_branch, worktree_remove
+from lokay.effects.git import git, head as git_head
 
-from lokay.types import Finding, Note, parse_finding, to_dict
+from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, tick_budget
 from lokay.effects.gh import _gh, auth_status, open_issues, open_pr_for
 from lokay.store import acquire_lock, release_lock, lock_path
@@ -551,9 +551,9 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
         if configured:
             _, worktree = _repo_paths(configured, issue)
             if worktree.exists():
-                from lokay.effects.git import _git
+                from lokay.effects.git import git_try
 
-                code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+                code, out, err = git_try(worktree, "rev-parse", "HEAD")
                 if code != 0:
                     raise RuntimeError(err or "HEAD lookup failed")
                 head = out.strip()
@@ -808,7 +808,7 @@ def _prepare(picked: dict) -> tuple | dict:
         return {"result": "pending", "children": children}
 
     if saved.get("node", picked["node"]) == "plan" and worktree.exists() and not saved.get("previous_head"):
-        state_update(picked["repo"], picked["issue"], previous_head=build_git(worktree, ["rev-parse", "HEAD"]))
+        state_update(picked["repo"], picked["issue"], previous_head=git_head(worktree))
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = saved.get("plan_rounds", 0)
     accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
@@ -826,11 +826,11 @@ def _prepare(picked: dict) -> tuple | dict:
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
     base = base_branch(worktree)
     try:
-        build_git(worktree, ["fetch", "origin", base])
+        git(worktree, "fetch", "origin", base)
     except RuntimeError as exc:
         return needs_help(picked, f"build fetch: {exc}")
     try:
-        build_git(worktree, ["merge", "--no-edit", f"origin/{base}"])
+        git(worktree, "merge", "--no-edit", f"origin/{base}")
     except RuntimeError as exc:
         return needs_help(picked, f"build merge: {exc}")
     from lokay.setup import prepare_dependencies
@@ -849,12 +849,12 @@ def _prepare(picked: dict) -> tuple | dict:
         pr = open_pr_for(picked["repo"], branch)
         if pr:
             base = base_branch(worktree)
-            build_git(worktree, ["fetch", "origin", base])
-            if int(build_git(worktree, ["rev-list", "--count", f"origin/{base}..HEAD"])) > 0:
+            git(worktree, "fetch", "origin", base)
+            if int(git(worktree, "rev-list", "--count", f"origin/{base}..HEAD")) > 0:
                 rounds_append(picked["repo"], picked["issue"],
                               "no_changes: fix already on branch, checking existing PR")
                 built = {**built, "result": "done", "reason": None,
-                         "artifact": build_git(worktree, ["rev-parse", "HEAD"])}
+                         "artifact": git_head(worktree)}
         if built.get("result") == "no_changes":
             built = {**built, "result": "failed", "reason": "no_changes"}
     if built.get("result") == "failed":
@@ -863,7 +863,7 @@ def _prepare(picked: dict) -> tuple | dict:
         rounds_append(picked["repo"], picked["issue"], f"Build → Plan: {reason}")
         state_update(picked["repo"], picked["issue"], _event={"action": "build_complete", "outcome": built},
                      plan_prompt=replan_prompt(picked, f"Uwagi (Build): {reason}: {explanation}", [built],
-                                               build_git(worktree, ["rev-parse", "HEAD"]) if worktree.exists() else None))
+                                               git_head(worktree) if worktree.exists() else None))
         return {**built, "next": "plan"}
     if built.get("result") != "done":
         raise RuntimeError(f"unexpected Build outcome: {built}")
@@ -943,12 +943,12 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
 
 
 def fix_to_build(picked: dict, worktree: Path) -> dict | None:
-    from lokay.effects.git import _git
+    from lokay.effects.git import git_try
     from lokay.scope import is_test
 
     saved = state_read(picked["repo"], picked["issue"])
     ci = saved.get("local_ci") or {}
-    code, head, err = _git(worktree, ["rev-parse", "HEAD"])
+    code, head, err = git_try(worktree, "rev-parse", "HEAD")
     if code != 0:
         raise RuntimeError(err or "HEAD lookup failed")
     if ci.get("sha") != head.strip():
@@ -959,12 +959,12 @@ def fix_to_build(picked: dict, worktree: Path) -> dict | None:
     failed = re.findall(r"^FAILED\s+([^\s:]+)::", log, re.MULTILINE)
     if not failed:
         return None
-    code, added, err = _git(worktree, ["diff", "--name-status", "--diff-filter=A", f"origin/{base_branch(worktree)}...HEAD"])
+    code, added, err = git_try(worktree, "diff", "--name-status", "--diff-filter=A", f"origin/{base_branch(worktree)}...HEAD")
     if code != 0:
         raise RuntimeError(err or "added test diff failed")
     added_tests = {line.split("\t", 1)[1] for line in added.splitlines()
                    if "\t" in line and is_test(line.split("\t", 1)[1])}
-    code, tracked, err = _git(worktree, ["ls-files"])
+    code, tracked, err = git_try(worktree, "ls-files")
     if code != 0:
         raise RuntimeError(err or "test paths lookup failed")
     tests = [path for path in tracked.splitlines() if is_test(path)]
@@ -1024,7 +1024,7 @@ def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
 
 
 def _resume(picked: dict) -> tuple | dict:
-    from lokay.effects.git import _git
+    from lokay.effects.git import git_try
 
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
@@ -1048,10 +1048,10 @@ def _resume(picked: dict) -> tuple | dict:
         _ensure_worktree(picked)
     except Exception as exc:
         return needs_help(picked, f"resume worktree: {exc}", sha)
-    code, files, err = _git(worktree, ["diff", "--name-only", "--diff-filter=U", "-z"])
+    code, files, err = git_try(worktree, "diff", "--name-only", "--diff-filter=U", "-z")
     if code:
         return needs_help(picked, f"resume index: {err.strip() or files.strip()}", sha)
-    merge_code, out, err = _git(worktree, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"])
+    merge_code, out, err = git_try(worktree, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
     if merge_code not in (0, 1):
         return needs_help(picked, f"resume merge: {err.strip() or out.strip()}", sha)
     if files or merge_code == 0:
@@ -1068,23 +1068,23 @@ def _resume(picked: dict) -> tuple | dict:
     from lokay.fix import fix_publish
 
     tidy_and_commit(worktree, "lokay resume")
-    code, out, err = _git(worktree, ["fetch", "origin", branch])
+    code, out, err = git_try(worktree, "fetch", "origin", branch)
     if code != 0:
         return needs_help(picked, f"resume fetch: {err.strip() or out.strip()}", sha)
-    code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+    code, out, err = git_try(worktree, "rev-parse", "HEAD")
     if code != 0:
         return needs_help(picked, f"resume HEAD: {err.strip() or out.strip()}", sha)
     local = out.strip()
     if local != sha:
-        ahead, out, err = _git(worktree, ["merge-base", "--is-ancestor", sha, local])
+        ahead, out, err = git_try(worktree, "merge-base", "--is-ancestor", sha, local)
         if ahead not in (0, 1):
             return needs_help(picked, f"resume ancestry: {err.strip() or out.strip()}", sha)
         behind = 1
         if ahead != 0:
-            behind, out, err = _git(worktree, ["merge-base", "--is-ancestor", local, sha])
+            behind, out, err = git_try(worktree, "merge-base", "--is-ancestor", local, sha)
             if behind not in (0, 1):
                 return needs_help(picked, f"resume ancestry: {err.strip() or out.strip()}", sha)
-            code, out, err = _git(worktree, ["merge", "--ff-only" if behind == 0 else "--no-edit", f"origin/{branch}"])
+            code, out, err = git_try(worktree, "merge", "--ff-only" if behind == 0 else "--no-edit", f"origin/{branch}")
             if code != 0:
                 reason = "sha diverged: conflict" if behind != 0 else f"resume ff: {err.strip() or out.strip()}"
                 return needs_help(picked, reason, sha)
@@ -1094,13 +1094,13 @@ def _resume(picked: dict) -> tuple | dict:
                 if published.get("result") == "failed":
                     return published
                 return needs_help(picked, f"fix_publish: {published}", sha)
-            code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+            code, out, err = git_try(worktree, "rev-parse", "HEAD")
             pr = pushed_pr(picked["repo"], branch, out.strip()) if code == 0 else None
             if code != 0 or not pr:
                 return needs_help(picked, "sha mismatch after push", sha)
             sha = out.strip()
             _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
-    code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+    code, out, err = git_try(worktree, "rev-parse", "HEAD")
     if code != 0 or out.strip() != sha:
         return needs_help(picked, f"sha mismatch: {err.strip() or out.strip()}", sha)
     saved = state_read(picked["repo"], picked["issue"])
@@ -1148,7 +1148,7 @@ def dismissed_key(row: dict) -> list:
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.check import hunks
     from lokay.fix import fix_publish
-    from lokay.effects.git import _git
+    from lokay.effects.git import git_try
     from lokay.effects.gh import check_comment, pr_files
     from lokay import finish
 
@@ -1246,19 +1246,19 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                            "Merge conflict on GitHub; change the PR before checking again.")
                     pending = "fix"
         def read_diff():
-            diff = command(worktree, ["diff", f"origin/{base}...HEAD"])
-            if diff.returncode != 0:
-                raise RuntimeError(diff.stderr or "diff failed")
-            return diff
+            code, out, err = git_try(worktree, "diff", f"origin/{base}...HEAD", timeout=30)
+            if code != 0:
+                raise RuntimeError(err or "diff failed")
+            return out
         active_node = "fix" if pending == "fix" else "check"
         diff = _retry(picked, active_node, read_diff)
         def read_head():
-            code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+            code, out, err = git_try(worktree, "rev-parse", "HEAD")
             if code != 0:
                 raise RuntimeError(err or "HEAD lookup failed")
             return out.strip()
         head = _retry(picked, active_node, read_head)
-        diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
+        diff_fingerprint = hashlib.sha256((diff or "").encode()).hexdigest()
         if pending == "fix" and verdict:
             signal, outcome = finish.fix(
                 picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
@@ -1267,7 +1267,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 return outcome
             sha, pending, verdict = outcome
             continue
-        rows = hunks(diff.stdout or "")
+        rows = hunks(diff or "")
         saved = state_read(picked["repo"], picked["issue"])
         ci = finish.local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows)
         pr_number, remote = finish.remote_checks(picked, branch, sha)

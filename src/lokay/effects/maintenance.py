@@ -11,7 +11,7 @@ from pathlib import Path
 
 from lokay import store
 from lokay.config import load_repos
-from lokay.effects.git import _git
+from lokay.effects.git import git_try
 from lokay.effects.pi import run_process
 
 
@@ -32,7 +32,7 @@ def sweep(aggressive: bool) -> None:
              "GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"}
 
     def checked(path, args):
-        code, out, err = _git(path, args, env=child)
+        code, out, err = git_try(path, *args, env=child)
         if code:
             raise RuntimeError(f"{path}: {' '.join(args)}: {err.strip() or out.strip() or code}")
         return out

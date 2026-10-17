@@ -66,7 +66,7 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | No
     attempts = 1 if args[:2] == ["issue", "create"] else 4
     for attempt in range(attempts):
         try:
-            proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": str(cwd)} if cwd is not None else {}))
+            proc = run_process([gh_bin(), *args], env=env, timeout=60, cwd=str(cwd) if cwd is not None else None)
         except subprocess.TimeoutExpired:
             if attempt == attempts - 1:
                 raise

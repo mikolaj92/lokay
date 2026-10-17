@@ -10,10 +10,10 @@ from lokay.types import Finding, parse_finding, to_dict
 
 
 def sync_head(worktree, branch):
-    from lokay.tick import build_git
+    from lokay.effects.git import git
 
     for args in (["fetch", "origin", branch], ["merge", "--ff-only", f"origin/{branch}"]):
-        build_git(worktree, args)
+        git(worktree, *args)
 
 
 def conflict_fix(picked, sha, files, log):
@@ -29,16 +29,16 @@ def conflict_fix(picked, sha, files, log):
 
 
 def sync_main(worktree, base):
-    from lokay.tick import build_git
-    from lokay.effects.git import _git
+    from lokay.effects.git import git
+    from lokay.effects.git import git_try
 
-    build_git(worktree, ["fetch", "origin", base])
-    out = build_git(worktree, ["diff", "--name-only", "--diff-filter=U"])
+    git(worktree, "fetch", "origin", base)
+    out = git(worktree, "diff", "--name-only", "--diff-filter=U")
     if out:
         return out.splitlines()
-    code, out, err = _git(worktree, ["merge", "--no-edit", f"origin/{base}"])
+    code, out, err = git_try(worktree, "merge", "--no-edit", f"origin/{base}")
     if code != 0:
-        conflict_code, files, conflict_err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
+        conflict_code, files, conflict_err = git_try(worktree, "diff", "--name-only", "--diff-filter=U")
         if conflict_code == 0 and files.strip():
             return files.splitlines()
         raise RuntimeError(conflict_err or err or out)
@@ -141,35 +141,36 @@ def remote_checks(picked, branch, sha):
 
 
 def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
-    from lokay.tick import _retry, command, dumps, finding_key, finding_fingerprint, dismissed_key
+    from lokay.tick import _retry, dumps, finding_key, finding_fingerprint, dismissed_key
+    from lokay.effects.git import git_try
     from lokay.check import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
     from lokay.checks import CheckInput, run_checks
     from lokay.effects.decide import decide
 
     def read_stat():
-        stat = command(worktree, ["diff", "--stat", f"origin/{base}...HEAD"])
-        if stat.returncode != 0:
-            raise RuntimeError(stat.stderr or "diff stat failed")
-        return stat.stdout or ""
+        code, out, err = git_try(worktree, "diff", "--stat", f"origin/{base}...HEAD", timeout=30)
+        if code != 0:
+            raise RuntimeError(err or "diff stat failed")
+        return out
 
     plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_text = plan_path.read_text() if plan_path.is_file() else ""
     check_input = CheckInput(
         repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
         issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
-        plan=plan_text, diff=diff.stdout or "", hunks=rows, ci=ci, worktree=worktree,
+        plan=plan_text, diff=diff or "", hunks=rows, ci=ci, worktree=worktree,
     )
     check_results = run_checks(check_input)
     checks_failed = any(result.status == "fail" for result in check_results)
     directory = run_dir(picked["repo"], picked["issue"])
-    decision_state = check_state(directory, rounds + 1, diff.stdout or "",
+    decision_state = check_state(directory, rounds + 1, diff or "",
                                  _retry(picked, "check", read_stat), ci,
                                  sha=sha, repo=picked["repo"], issue=picked["issue"],
                                  issue_title=(saved.get("issue_title") or "")[:4000],
                                  issue_body=(saved.get("issue_body") or "")[:4000],
                                  history=saved.get("check_history", [])[-5:])
     decisions = []
-    kinds = () if checks_failed else ("docs",) if docs_only(diff.stdout or "") else tuple(
+    kinds = () if checks_failed else ("docs",) if docs_only(diff or "") else tuple(
         p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))
         if p.stem != "check_docs")
     for kind in kinds:
@@ -240,17 +241,17 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
     from lokay.tick import _retry, dumps, dismissed_key, finding_summary, refresh_body
     from lokay.check import aggregate
-    from lokay.effects.git import _git
+    from lokay.effects.git import git_try
     from lokay.effects.gh import pr_files, check_comment
 
     verdict = aggregate(sha, ci, decisions)
     from lokay.scope import code_scope_issue
 
-    code, changed, err = _git(worktree, ["diff", "--name-only", f"origin/{base}...HEAD"])
+    code, changed, err = git_try(worktree, "diff", "--name-only", f"origin/{base}...HEAD")
     if code != 0:
         raise RuntimeError(err or "scope diff failed")
     files = changed.splitlines()
-    code, tracked, err = _git(worktree, ["ls-files", "-z"])
+    code, tracked, err = git_try(worktree, "ls-files", "-z")
     if code != 0:
         raise RuntimeError(err or "scope paths lookup failed")
     repo_files = list(filter(None, tracked.split("\0")))
@@ -312,7 +313,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     from lokay.check import QUESTIONS
     from lokay.effects.decide import decide
     from lokay.fix import fix_code, fix_publish
-    from lokay.effects.git import _git
+    from lokay.effects.git import git_try
     import hashlib
     import os
 
@@ -331,7 +332,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         for row in uwagi
     }
     fingerprint = hashlib.sha256(dumps(sorted(findings)).encode()).hexdigest()
-    hunk_text = "\n".join(line for line in (diff.stdout or "").splitlines()
+    hunk_text = "\n".join(line for line in (diff or "").splitlines()
                           if not line.startswith(("@@", "index ")))
     hunk_fingerprint = hashlib.sha256(hunk_text.encode()).hexdigest()
     saved = state_read(picked["repo"], picked["issue"])
@@ -389,7 +390,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
            if saved.get("ci") == "red" or (saved.get("local_ci") or {}).get("result") == "red"
            else "")
         + "\n\nUwagi:\n" + dumps(uwagi)
-        + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
+        + "\n\nDiff:\n" + (diff or "")[:20000]
         + "\n\nTest log:\n" + test_log
         + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
         + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
@@ -427,7 +428,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
                         "state": {"issue_title": saved.get("issue_title") or "",
                                   "issue_body": (saved.get("issue_body") or "")[:4000],
                                   "findings": findings, "justification": justification[:3000],
-                                  "diff": (diff.stdout or "")[:20000]},
+                                  "diff": (diff or "")[:20000]},
                     }
                     answer = _retry(picked, "check", lambda: decide(request))["valid"]
                     valid = answer["choice"] == "true"
@@ -512,7 +513,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     sha = pushed["sha"]
     if sha != previous_sha and pushed["result"] == "pushed":
         def read_fix_subject():
-            code, subject, err = _git(worktree, ["log", "--format=%s", f"origin/{base}..HEAD"])
+            code, subject, err = git_try(worktree, "log", "--format=%s", f"origin/{base}..HEAD")
             if code != 0:
                 raise RuntimeError(err or "fix commit subject lookup failed")
             return next(iter(subject.splitlines()), "")
@@ -530,7 +531,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint,
                  fix_hunk_fingerprint=hunk_fingerprint, diff_fingerprint=diff_fingerprint,
                  **store.round_fields(state_read(picked["repo"], picked["issue"]),
-                                      diff_fingerprint=hashlib.sha256((fixed_diff.stdout or "").encode()).hexdigest(),
+                                      diff_fingerprint=hashlib.sha256((fixed_diff or "").encode()).hexdigest(),
                                       completed=False))
     rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
     pending = "check"

@@ -3,15 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from lokay.build import tidy_and_commit, worktree_status
-from lokay.effects.git import command, push, guard, failure
+from lokay.effects.git import git_try, push, guard, failure
 from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
-
-
-def _git(repo: Path, args: list[str]) -> str:
-    proc = command(repo, args)
-    if proc.returncode != 0:
-        raise RuntimeError((proc.stderr or "").strip())
-    return (proc.stdout or "").strip()
 
 
 def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
@@ -44,7 +37,10 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
     tidy_and_commit(worktree, "lokay fix", before)
     if proc.returncode != 0:
         return {"result": "failed", "artifact": ""}
-    sha = _git(worktree, ["rev-parse", "HEAD"])
+    code, out, err = git_try(worktree, "rev-parse", "HEAD", timeout=30)
+    if code:
+        raise RuntimeError(err.strip())
+    sha = out.strip()
     if sha == previous:
         return {"result": "failed", "reason": "no_changes", "artifact": "",
                 "pi_response": proc.stdout or proc.stderr or ""}

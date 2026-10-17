@@ -49,7 +49,7 @@ def check_uv_lock(cwd: Path) -> tuple[str, str]:
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.effects.pi import run_process
-    from lokay.effects.git import command
+    from lokay.effects.git import git_try
     from lokay.build import generated_cleanup
 
     cache = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
@@ -63,10 +63,10 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
             root = Path(cwd).resolve()
             if any((path / ".git").exists() or (path / ".git").is_symlink()
                    for path in (root, *root.parents)):
-                proc = command(root, ["rev-parse", "--show-toplevel"])
-                if proc.returncode:
-                    return CompletedProcess(argv, 1, "", proc.stderr or proc.stdout or "git rev-parse failed"), False
-                top = proc.stdout.strip()
+                code, out, err = git_try(root, "rev-parse", "--show-toplevel", timeout=30)
+                if code:
+                    return CompletedProcess(argv, 1, "", err or out or "git rev-parse failed"), False
+                top = out.strip()
                 if not top or not Path(top).is_absolute():
                     return CompletedProcess(argv, 1, "", "git returned an invalid repository top-level"), False
                 root = Path(top).resolve()
