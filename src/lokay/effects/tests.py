@@ -5,6 +5,8 @@ import re
 import tempfile
 from pathlib import Path
 
+UV_CACHE_DIR = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
+
 def executed_tests(log: str) -> int:
     patterns = (
         r"(\d+) passed",
@@ -52,7 +54,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from lokay.effects.git import git_try
     from lokay.build import generated_cleanup
 
-    cache = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
+    cache = UV_CACHE_DIR
     env = {**os.environ, "UV_CACHE_DIR": str(cache), "UV_LOCKED": "1"}
 
     def execute(argv):

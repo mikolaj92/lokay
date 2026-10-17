@@ -13,6 +13,7 @@ from lokay import store
 from lokay.config import HOME, load_repos
 from lokay.effects.git import git_try
 from lokay.effects.pi import run_process
+from lokay.effects.tests import UV_CACHE_DIR
 
 
 ENV: ContextVar[dict[str, str] | None] = ContextVar("maintenance_env", default=None)
@@ -24,7 +25,8 @@ def sweep(aggressive: bool) -> None:
     timestamp = directory / "sweep.json"
     errors = []
     worktrees = branches = 0
-    cache_prune = {"result": "skipped"}
+    cache_prune: dict[str, str | int] = {"result": "skipped"}
+    lokay_cache_prune: dict[str, str | int] = {"result": "skipped"}
     before = None
     attempted = False
     env = ENV.get()
@@ -159,15 +161,20 @@ def sweep(aggressive: bool) -> None:
                                 errors.append(f"{owner}: {ref}: {exc}")
                     except Exception as exc:
                         errors.append(f"{raw}: {exc}")
-                try:
-                    proc = run_process(["uv", "cache", "prune"], env=child, timeout=300)
-                    cache_prune = {"result": "ok" if proc.returncode == 0 else "failed",
-                                   "returncode": proc.returncode}
-                    if proc.returncode:
-                        errors.append(f"uv cache prune: {proc.stderr or proc.stdout or proc.returncode}")
-                except Exception as exc:
-                    cache_prune = {"result": "failed"}
-                    errors.append(f"uv cache prune: {exc}")
+                prunes = [("uv cache prune", child, cache_prune)]
+                if UV_CACHE_DIR.exists():
+                    prunes.append(("lokay uv cache prune",
+                                   {**child, "UV_CACHE_DIR": str(UV_CACHE_DIR)}, lokay_cache_prune))
+                for label, prune_env, result in prunes:
+                    try:
+                        proc = run_process(["uv", "cache", "prune"], env=prune_env, timeout=300)
+                        result.update(result="ok" if proc.returncode == 0 else "failed",
+                                      returncode=proc.returncode)
+                        if proc.returncode:
+                            errors.append(f"{label}: {proc.stderr or proc.stdout or proc.returncode}")
+                    except Exception as exc:
+                        result.update(result="failed")
+                        errors.append(f"{label}: {exc}")
             except Exception as exc:
                 attempted = True
                 errors.append(str(exc))
@@ -180,8 +187,8 @@ def sweep(aggressive: bool) -> None:
                     except Exception as exc:
                         errors.append(str(exc))
                     store.log_event("sweep", freed_bytes=freed, worktrees=worktrees, branches=branches,
-                                    cache_prune=cache_prune, errors=errors)
+                                    cache_prune=cache_prune, lokay_cache_prune=lokay_cache_prune, errors=errors)
     except Exception as exc:
         if not attempted:
             store.log_event("sweep", freed_bytes=0, worktrees=0, branches=0,
-                            cache_prune=cache_prune, errors=[str(exc)])
+                            cache_prune=cache_prune, lokay_cache_prune=lokay_cache_prune, errors=[str(exc)])
