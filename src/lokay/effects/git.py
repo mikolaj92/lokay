@@ -189,9 +189,15 @@ def worktree_remove(repo: Path, path: Path) -> dict:
 
 def disk_sweep(repos: list[dict], env: dict[str, str]) -> dict:
     roots = sorted({Path(os.path.abspath(os.path.expanduser(repo["clone_path"]))) for repo in repos})
-    volumes = sorted({Path.home(), Path.cwd(), *roots})
     report = {"result": "blocked", "before": {}, "after": {}, "repositories": []}
     try:
+        from lokay.config import STATE
+
+        discovered = run_process(["uv", "cache", "dir"], env=env, timeout=15)
+        lines = (discovered.stdout or "").splitlines()
+        if discovered.returncode != 0 or len(lines) != 1 or not Path(lines[0].strip()).is_absolute():
+            raise ValueError("uv cache directory discovery failed: expected one absolute path")
+        volumes = sorted({Path.home(), Path.cwd(), STATE, Path(lines[0].strip()), *roots})
         for path in volumes:
             volume = path
             while not volume.exists():
@@ -213,7 +219,7 @@ def disk_sweep(repos: list[dict], env: dict[str, str]) -> dict:
             report["after"][str(path)] = shutil.disk_usage(volume).free
         if all(free >= 5000000000 for free in report["after"].values()):
             report["result"] = "ready"
-    except (OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
         report["error"] = str(exc)
     return report
 
