@@ -98,9 +98,9 @@ def secrets(x: CheckInput) -> CheckResult:
 
 
 def no_new_comments(x: CheckInput) -> CheckResult:
-    ignored = {".md", ".rst", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock"}
+    ignored = {".md", ".rst", ".txt", ".json", ".lock"}
     markers = {
-        "#": {".py", ".pyi", ".sh", ".bash", ".zsh", ".fish", ".rb", ".pl", ".pm", ".ps1", ".r", ".jl", ".ex", ".exs", ".mojo", ".php", ".tcl", ""},
+        "#": {".py", ".pyi", ".sh", ".bash", ".zsh", ".fish", ".rb", ".pl", ".pm", ".ps1", ".r", ".jl", ".ex", ".exs", ".mojo", ".php", ".tcl", ".yaml", ".yml", ".toml", ""},
         "//": {".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".java", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".swift", ".kt", ".kts", ".scala", ".php", ".dart", ".zig", ".vue", ".svelte"},
         "--": {".sql", ".lua", ".hs", ".elm", ".adb", ".ads"},
         ";": {".lisp", ".cl", ".clj", ".cljs", ".scm", ".el", ".asm", ".s"},
@@ -111,7 +111,7 @@ def no_new_comments(x: CheckInput) -> CheckResult:
     offenders = []
     for path, number, kind, text in diff_lines(x.diff):
         suffix = Path(path).suffix.lower()
-        if kind != "+" or suffix == ".py" or suffix in ignored or "docs" in Path(path).parts[:-1]:
+        if kind != "+" or suffix == ".py" or suffix in ignored:
             continue
         stripped = text.strip()
         if stripped.startswith("#!"):
