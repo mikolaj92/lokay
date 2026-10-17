@@ -45,13 +45,13 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             path = Path(directory)
             depth = len(path.relative_to(worktree).parts)
             dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules") if depth < 2 else []
-            for lock, argv in (("uv.lock", ["uv", "sync", "--frozen", "--all-extras"]),
+            for lock, argv in (("uv.lock", ["uv", "sync", "--locked", "--all-extras"]),
                                ("package-lock.json", ["npm", "ci"])):
                 if lock in files:
                     commands.append((path, argv))
     logs = []
     failed = []
-    with generated_cleanup(worktree):
+    with generated_cleanup(worktree) as drifted:
         repair_venvs(worktree)
         for cwd, argv in commands:
             venv = cwd / ".venv"
@@ -59,6 +59,7 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             try:
                 env = pi_env(dict(os.environ), Path.cwd())
                 env["UV_PROJECT_ENVIRONMENT"] = str(venv.absolute())
+                env["UV_LOCKED"] = "1"
                 proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
                 log = f"exit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
                 if proc.returncode != 0 and "not a valid Python environment" in log:
@@ -73,4 +74,5 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             if not ok:
                 failed.append({"warstwa": "setup", "plik": "", "log": log})
             rounds_append(repo["name"], issue, log[-3000:])
+    logs.extend(f"lockfile drift: {name}" for name in drifted)
     return {"log": "\n".join(logs), "failed": failed}

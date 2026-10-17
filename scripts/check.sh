@@ -5,7 +5,8 @@ sandbox=$(mktemp -d "${TMPDIR:-/tmp}/lokay-check.XXXXXX")
 trap 'rm -rf "$sandbox"' EXIT HUP INT TERM
 export UV_CACHE_DIR="$sandbox/cache"
 export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
-env -u UV_NO_SYNC -u UV_OFFLINE uv sync --frozen
+export UV_LOCKED=1
+env -u UV_NO_SYNC -u UV_OFFLINE uv sync --locked --all-extras
 .venv/bin/python -I - <<'PY'
 from pathlib import Path
 
