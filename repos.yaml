@@ -14,8 +14,8 @@ repos:
 - name: mikolaj92/Temida
   clone_path: ~/Developer/Temida/main
   test_timeout: 3600
-  setup: ["sh", "-c", "for p in packages/*/; do [ -f \"${p}pyproject.toml\" ] || continue; (cd \"$p\" && uv sync --frozen) || exit; done; uv sync --frozen"]
-  test: ["sh", "-c", "for p in packages/*/; do [ -f \"${p}pyproject.toml\" ] || continue; (cd \"$p\" && echo \"LOKAY_TEST_CWD=$PWD\" && uv run --frozen pytest) || exit; done; echo \"LOKAY_TEST_CWD=$PWD\"; uv run --frozen pytest tests"]
+  setup: ["sh", "-c", "for p in packages/*/; do [ -f \"${p}pyproject.toml\" ] || continue; (cd \"$p\" && uv sync --locked) || exit; done; uv sync --locked"]
+  test: ["sh", "-c", "for p in packages/*/; do [ -f \"${p}pyproject.toml\" ] || continue; (cd \"$p\" && echo \"LOKAY_TEST_CWD=$PWD\" && uv run --locked pytest) || exit; done; echo \"LOKAY_TEST_CWD=$PWD\"; uv run --locked pytest tests"]
   merge: 'on'
 - name: mikolaj92/msds-portal
   clone_path: ~/Developer/msds-portal/main

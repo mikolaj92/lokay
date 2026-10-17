@@ -62,21 +62,23 @@ def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
 
 @contextmanager
 def generated_cleanup(worktree: Path):
-    """Keep ignored environments; discard setup/CI output and lock rewrites."""
+    drifted = []
     if not (worktree / ".git").exists():
-        yield
+        yield drifted
         return
     before = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
-    locks = [name for name in _git(worktree, ["ls-files", "-z"]).split("\0")
-             if Path(name).name in LOCKFILES]
+    locks = {name: (worktree / name).read_bytes() if (worktree / name).is_file() else None
+             for name in _git(worktree, ["ls-files", "-z"]).split("\0")
+             if Path(name).name in LOCKFILES}
     try:
-        yield
+        yield drifted
     finally:
-        if locks:
-            _git(worktree, ["checkout", "HEAD", "--", *locks])
+        drifted.extend(name for name, content in sorted(locks.items())
+                       if ((worktree / name).read_bytes() if (worktree / name).is_file() else None) != content)
         after = set(filter(None, _git(worktree, ["ls-files", "--others", "--exclude-standard", "-z"]).split("\0")))
-        if after - before:
-            _git(worktree, ["--literal-pathspecs", "clean", "-fd", "--", *sorted(after - before)])
+        generated = {name for name in after - before if Path(name).name not in LOCKFILES}
+        if generated:
+            _git(worktree, ["--literal-pathspecs", "clean", "-fd", "--", *sorted(generated)])
 
 
 def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) -> tuple[list[str], list[str]]:
@@ -149,8 +151,11 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
                       and (path in cache_paths or path in stale_locks
                            or before is None or before.get(path) != after[path]))
     index_paths = names(["ls-files", "-z"])
-    stage = [path for path in selected if path in index_paths or (worktree / path).exists()
-             or (worktree / path).is_symlink()]
+    stage = [path for path in selected if ".local" not in Path(path).parts[:-1]
+             and not (Path(path).match("uv-*.lock") and (worktree / path).is_file()
+                      and (worktree / path).stat().st_size == 0)
+             and (path in index_paths or (worktree / path).exists()
+                  or (worktree / path).is_symlink())]
     committed = commit_paths(worktree, stage, message)
     return committed, junk
 

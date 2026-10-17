@@ -5,6 +5,34 @@ import re
 import tempfile
 from pathlib import Path
 
+def check_uv_lock(cwd: Path) -> tuple[str, str]:
+    from subprocess import TimeoutExpired
+    from lokay.effects.pi import run_process
+
+    env = {**os.environ, "UV_OFFLINE": "1"}
+    for offline in (True, False):
+        if not offline:
+            env.pop("UV_OFFLINE", None)
+        try:
+            proc = run_process(["uv", "lock", "--check"], cwd=cwd, timeout=60, env=env)
+        except (OSError, TimeoutExpired) as exc:
+            return "unknown", f"uv lock checks unavailable: {exc}"
+        if proc.returncode == 0:
+            return "pass", "uv lock checks passed"
+        log = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+        if re.search(r"lockfile[^\n]*needs to be updated", log, re.IGNORECASE):
+            return "fail", "uv.lock is out of date with pyproject.toml: run `uv lock`"
+        unavailable = re.search(
+            r"offline mode|network connectivity is disabled|not (?:found|available) in (?:the )?cache"
+            r"|not found in (?:the )?package cache|failed to (?:fetch|download|connect)"
+            r"|network (?:is unreachable|error)|unable to (?:fetch|download|connect)"
+            r"|connection (?:refused|reset)|dns error",
+            log, re.IGNORECASE)
+        if not offline or not unavailable:
+            return "unknown", "uv lock checks unavailable: " + log[-1000:]
+    return "unknown", "uv lock checks unavailable"
+
+
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.effects.pi import run_process
@@ -12,7 +40,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from lokay.build import generated_cleanup
 
     cache = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
-    env = {**os.environ, "UV_CACHE_DIR": str(cache)}
+    env = {**os.environ, "UV_CACHE_DIR": str(cache), "UV_LOCKED": "1"}
 
     def execute(argv):
         if any(re.search(r"(?:^|[\s;|&])(?:--cache-dir(?:=|\s|$)|UV_CACHE_DIR=)", arg)
@@ -31,8 +59,19 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
                 root = Path(top).resolve()
             if cache.is_relative_to(root):
                 return CompletedProcess(argv, 1, "", f"UV_CACHE_DIR must be outside repository or cwd: {cache}"), False
-            with generated_cleanup(Path(cwd)):
-                return run_process(argv, cwd=cwd, timeout=timeout, env=env), False
+            timed_out = False
+            with generated_cleanup(Path(cwd)) as drifted:
+                try:
+                    proc = run_process(argv, cwd=cwd, timeout=timeout, env=env)
+                except TimeoutExpired:
+                    proc = CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s")
+                    timed_out = True
+                except OSError as exc:
+                    proc = CompletedProcess(argv, 1, "", str(exc))
+            if drifted:
+                proc.stderr = (proc.stderr or "") + "\n" + "\n".join(
+                    f"lockfile drift: {name}" for name in drifted)
+            return proc, timed_out
         except TimeoutExpired:
             return CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s"), True
         except OSError as exc:

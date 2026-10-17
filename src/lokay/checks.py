@@ -1,4 +1,6 @@
+import os
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -154,7 +156,48 @@ def docs(x: CheckInput) -> CheckResult:
     return CheckResult("docs", "pass", "no documentation expansion", ())
 
 
-CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", "lockfile", "secrets", "permissions",
+def lockfile(x: CheckInput) -> CheckResult:
+    from lokay.build import LOCKFILES
+    from lokay.effects.tests import check_uv_lock
+
+    root = x.worktree.resolve()
+    drifted = set()
+    for line in x.ci.get("log", "").splitlines():
+        if not line.startswith("lockfile drift: "):
+            continue
+        path = Path(line.removeprefix("lockfile drift: "))
+        if (path.is_absolute() or ".." in path.parts or path.name not in LOCKFILES
+                or not (root / path).resolve().is_relative_to(root)):
+            continue
+        drifted.add(path.as_posix())
+    errors = []
+    locks = []
+    for directory, dirs, files in os.walk(root, followlinks=False, onerror=errors.append):
+        dirs[:] = sorted(name for name in dirs if name not in {".venv", "node_modules", ".git"}
+                         and not (Path(directory) / name).is_symlink())
+        if "uv.lock" in files and "pyproject.toml" in files:
+            locks.append(Path(directory) / "uv.lock")
+    available = shutil.which("uv") is not None
+    if available:
+        for path in sorted(locks):
+            status, reason = check_uv_lock(path.parent)
+            if status == "fail":
+                drifted.add(path.relative_to(root).as_posix())
+            elif status == "unknown":
+                errors.append(f"{path.relative_to(root)}: {reason}")
+    if drifted:
+        message = "uv.lock is out of date with pyproject.toml: run `uv lock`"
+        findings = tuple(Finding(name, 1, 1, message if Path(name).name == "uv.lock" else
+                                 "lockfile drift during setup or tests: review and commit the lockfile",
+                                 "lockfile") for name in sorted(drifted))
+        return CheckResult("lockfile", "fail", "; ".join(sorted(drifted)) + ": " + message, findings)
+    if errors:
+        return CheckResult("lockfile", "unknown", "; ".join(map(str, errors)), ())
+    reason = "uv unavailable" if not available else "uv lock checks passed" if locks else "no applicable uv locks"
+    return CheckResult("lockfile", "pass", reason, ())
+
+
+CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", lockfile, "secrets", "permissions",
           no_new_comments, no_unit_tests, "issue_goal", "scope", "correctness", "tests_cover", "regression",
           "architecture", "security_review", docs, "style"]
 
