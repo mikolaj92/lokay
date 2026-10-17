@@ -199,6 +199,8 @@ def state_read(repo: str, issue: int) -> dict:
     if not path.exists():
         return {}
     state = json.loads(path.read_text())
+    if "plan_mode" not in state or state["plan_mode"] == "full":
+        state["plan_mode"] = "single"
     if (state.get("waiting_on") != derive_waiting_on(state)
             or (state.get("result") == "wait" and state.get("awaiting") == "human"
                 and not state.get("wait_escape"))):
