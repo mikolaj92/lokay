@@ -63,12 +63,17 @@ def local_tests(x: CheckInput) -> CheckResult:
     passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
     if not x.ci.get("tested") and not failures:
         return CheckResult("local_tests", "unknown", "local tests not run", ())
-    reason = "local tests green" if passed else "local tests not green or not run"
+    if passed:
+        executed = x.ci.get("executed", 0)
+        if executed > 0:
+            return CheckResult("local_tests", "pass", f"{executed} passed", ())
+        if x.ci.get("syntax_only"):
+            return CheckResult("local_tests", "pass", "syntax only (repos.yaml syntax_only: true)", ())
+        return CheckResult("local_tests", "unknown", "exit 0 but no executed test count in log", ())
+    reason = "local tests not green or not run"
     timeout = next((item["timeout"] for item in failures if item.get("timeout") is not None), None)
     if not passed and timeout is not None:
         reason = f"tests timed out after {timeout} s"
-    if passed and x.ci.get("baseline"):
-        reason = f"no new local test failures against main at {x.ci['baseline']['sha']}"
     return evidence("local_tests", passed, reason, failures, 800,
                     "" if passed else x.ci.get("log", ""), "run and fix the complete local test suite")
 

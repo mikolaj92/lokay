@@ -23,7 +23,9 @@ def run_repo_tests(repo: dict, sha: str, worktree: Path) -> dict:
     from lokay.effects.tests import local_ci
 
     tests = repo.get("test") or []
-    return local_ci(sha, [tests] if tests else [], worktree, timeout=repo.get("test_timeout", 600))
+    result = local_ci(sha, [tests] if tests else [], worktree, timeout=repo.get("test_timeout", 600))
+    result["syntax_only"] = repo.get("syntax_only", False)
+    return result
 
 
 def guard_issue(repo: str, body: str) -> int:
