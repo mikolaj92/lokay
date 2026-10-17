@@ -32,7 +32,7 @@ def ticking():
     def pulse():
         while not stopped.is_set():
             try:
-                heartbeat(**CURRENT)
+                write_heartbeat(**CURRENT)
             except Exception as exc:
                 print(f"heartbeat failed: {exc}", file=sys.stderr)
             stopped.wait(float(os.environ.get("LOKAY_TICK_SECONDS", "60")))
@@ -47,11 +47,7 @@ def ticking():
     finally:
         stopped.set()
         thread.join()
-        heartbeat(**CURRENT)
-
-
-def heartbeat(result: str | None = None, **fields) -> dict:
-    return write_heartbeat(result, **fields)
+        write_heartbeat(**CURRENT)
 
 
 def status() -> None:

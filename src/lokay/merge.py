@@ -5,7 +5,7 @@ from pathlib import Path
 
 from lokay.effects.gh import merge as gh_merge
 from lokay.effects.git import base_branch, worktree_remove
-from lokay.store import state_read, state_update, write_run
+from lokay.store import state_read, state_update
 from lokay.main_guard import check_main
 
 
@@ -32,7 +32,7 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
 
         clone_path = Path(next(row["clone_path"] for row in load_repos() if row["name"] == repo_name)).expanduser()
     check_main(repo_name, clone_path, sha, number, base=base)
-    write_run(owner, repo_name, issue, {**rounds, "result": "merged", "sha": sha,
+    state_update(repo_name if "/" in repo_name else f"{owner}/{repo_name}", issue, **{**rounds, "result": "merged", "sha": sha,
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     if worktree is not None:
         try:

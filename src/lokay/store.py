@@ -20,6 +20,7 @@ from pathlib import Path
 from lokay.types import CheckResult, Event, Run, event_record, parse_event
 
 RUNS = Path.home() / ".lokay" / "runs"
+LOCKS = Path.home() / ".lokay" / "locks"
 TICK = str(uuid.uuid4())
 SEQ = 0
 CONTEXT: dict = {}
@@ -283,10 +284,6 @@ def rounds_append(repo: str, issue: int, line: str) -> Path:
     return path
 
 
-def write_run(owner: str, repo: str, issue: int, fields: dict) -> Path:
-    return state_update(repo if "/" in repo else f"{owner}/{repo}", issue, **fields)
-
-
 def write_artifact(path: Path, text: str) -> None:
     ensure_directory(path.parent)
     path.write_text(text)
@@ -425,6 +422,11 @@ def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
     }
     write_json(path, previous)
     return previous
+
+
+def lock_path(owner: str, repo: str) -> Path:
+    safe = repo.replace("/", "__")
+    return LOCKS / f"{owner}__{safe}.lock"
 
 
 def acquire_lock(path: Path) -> dict:
