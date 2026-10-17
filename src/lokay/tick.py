@@ -144,18 +144,22 @@ def host_ready(report: dict[str, str]) -> bool:
 
 
 def pick(env: dict[str, str] | None = None) -> dict:
-    if shutil.disk_usage(Path.home()).free < 5000000000:
-        return {"result": "idle", "reason": "disk"}
+    from lokay.effects.git import disk_sweep
+
+    child = os.environ if env is None else env
+    repos_file = child.get("LOKAY2_REPOS_FILE")
+    only_repo = child.get("LOKAY2_REPO")
+    repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
+             if not only_repo or repo["name"] == only_repo]
+    sweep = disk_sweep(repos, child)
+    store.log_event("disk_sweep", **sweep)
+    if sweep["result"] != "ready":
+        return {"result": "idle", "reason": "disk", "sweep": sweep}
     report = probes(env)
     if not host_ready(report):
         failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
         return {"result": "idle", "reason": "host_down", "failed": failed}
-    child = os.environ if env is None else env
-    repos_file = child.get("LOKAY2_REPOS_FILE")
-    only_repo = child.get("LOKAY2_REPO")
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
-    repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
-             if not only_repo or repo["name"] == only_repo]
     blocked = []
 
     def idle():
