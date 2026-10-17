@@ -1,17 +1,33 @@
 #!/bin/sh
 check_command() {
+    outside=0
+    if [ -n "${LOKAY_PI_WORKTREE-}" ] && [ -n "${LOKAY_PI_GITDIR-}" ]; then
+        directory=$(pwd -P) || return 1
+        case "$directory" in
+            "$LOKAY_PI_WORKTREE"|"${LOKAY_PI_WORKTREE%/}/"*|"$LOKAY_PI_GITDIR"|"${LOKAY_PI_GITDIR%/}/"*) ;;
+            *) outside=1 ;;
+        esac
+    fi
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            -C|-c|--git-dir|--work-tree|--namespace) [ "$#" -ge 2 ] || return 1; shift 2 ;;
-            --git-dir=*|--work-tree=*|--namespace=*|--no-pager|--paginate|--literal-pathspecs|--no-optional-locks) shift ;;
+            -C|--git-dir|--work-tree|--namespace) [ "$#" -ge 2 ] || return 1; outside=0; shift 2 ;;
+            --git-dir=*|--work-tree=*|--namespace=*) outside=0; shift ;;
+            -c) [ "$#" -ge 2 ] || return 1; shift 2 ;;
+            --no-pager|--paginate|--literal-pathspecs|--no-optional-locks) shift ;;
             -*) return 1 ;;
             *) break ;;
         esac
     done
     command=${1-}
     [ "$#" -eq 0 ] || shift
+    if [ "$outside" -eq 1 ]; then
+        case "$command" in
+            fetch|clone|ls-remote|rev-parse|cat-file|checkout) return 0 ;;
+            reset) [ "${1-}" != "--hard" ] || return 0 ;;
+        esac
+    fi
     case "$command" in
-        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|remote|config) return 1 ;;
+        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|clone|remote|config) return 1 ;;
         branch) [ "$#" -eq 0 ] || return 1 ;;
         checkout|switch)
             for arg do

@@ -93,6 +93,11 @@ def cleanup_worktree_caches(worktree: Path) -> None:
 
 
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
+    from lokay.effects.git import command
+
+    worktree = Path(worktree).resolve()
+    git = command(worktree, ["rev-parse", "--git-common-dir"])
+    gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
     env = dict(base)
     for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
                 "GIT_ASKPASS", "SSH_AUTH_SOCK"):
@@ -101,6 +106,8 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
         "GH_CONFIG_DIR": tempfile.mkdtemp(dir=os.path.realpath(env.get("TMPDIR") or "/tmp")),
         "UV_CACHE_DIR": str(Path(env.get("HOME") or Path.home()) / ".cache" / "uv"),
         "PATH": str(Path(__file__).resolve().parents[3] / "sandbox/bin") + os.pathsep + env.get("PATH", os.defpath),
+        "LOKAY_PI_WORKTREE": str(worktree),
+        "LOKAY_PI_GITDIR": str(gitdir),
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_TERMINAL_PROMPT": "0",
@@ -117,10 +124,7 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], ext
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
     worktree = Path(worktree).resolve()
-    from lokay.effects.git import command
-
-    git = command(worktree, ["rev-parse", "--git-common-dir"])
-    gitdir = (worktree / git.stdout.strip()).resolve() if git.returncode == 0 else worktree
+    gitdir = env.get("LOKAY_PI_GITDIR") or pi_env({}, worktree)["LOKAY_PI_GITDIR"]
     return [
         "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[3] / "sandbox/pi.sb"),
         "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
