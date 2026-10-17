@@ -91,7 +91,7 @@ must be available at `~/.lokay/host`, with its dependencies installed):
 cp scripts/ai.mikolaj.lokay2-dashboard.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/ai.mikolaj.lokay2-dashboard.plist
 ```
 
-Overrides: `LOKAY_HOME`, `LOKAY_REPOS_YAML`, `LOKAY_DASHBOARD_REFRESH` (seconds),
+Overrides: `LOKAY2_REPOS_FILE`, `LOKAY_DASHBOARD_REFRESH` (seconds),
 `LOKAY_DASHBOARD_PORT`, `LOKAY2_PROVIDER`, and `LOKAY2_MODEL`.
 Times and ETA dates use Europe/Warsaw. GitHub list limits can undercount busy
 repositories; the page states the limits.
