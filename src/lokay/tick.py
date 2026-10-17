@@ -1317,7 +1317,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     response = outcome.get("pi_response") or outcome.get("explanation") or ""
                     retry_response = ""
                     state_update(picked["repo"], picked["issue"], pi_response=response)
-                    if can_dispute:
+                    if can_dispute and sha not in state_read(picked["repo"], picked["issue"]).get("dispute_rechecks", []):
                         justification = (response.split("## Dispute", 1)[1].strip()
                                          if "## Dispute" in response else response[-2000:])
                         upheld = {}
@@ -1367,6 +1367,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                          dispute_dismissed={"sha": sha, "keys": keys})
                             _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
                         if not upheld:
+                            current = state_read(picked["repo"], picked["issue"])
+                            state_update(picked["repo"], picked["issue"],
+                                         dispute_rechecks=current.get("dispute_rechecks", []) + [sha])
                             return {"result": "done", "dispute_rejected": True}
                         remaining = [row for row in uwagi if category(row) in upheld]
                         retry_prompt = prompt.replace("\n\nUwagi:\n" + dumps(uwagi),
@@ -1380,16 +1383,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                         state_update(picked["repo"], picked["issue"], pi_response=retry_response)
                     if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
                         if "## Dispute" in response or "## Dispute" in retry_response:
-                            questions_hash = hashlib.sha256(dumps([
-                                [path.name, path.read_bytes().hex()]
-                                for path in sorted(QUESTIONS.glob("check_*.json"))
-                            ]).encode()).hexdigest()
-                            recheck_key = hashlib.sha256(dumps([fingerprint, questions_hash]).encode()).hexdigest()
                             current = state_read(picked["repo"], picked["issue"])
                             rechecks = current.get("dispute_rechecks", [])
-                            if recheck_key not in rechecks:
+                            if sha not in rechecks:
                                 state_update(picked["repo"], picked["issue"],
-                                             dispute_rechecks=rechecks + [recheck_key])
+                                             dispute_rechecks=rechecks + [sha])
                                 return {"result": "done", "dispute_recheck": True}
                         redirected = fix_to_build(picked, worktree)
                         if redirected:
@@ -1440,7 +1438,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                               completed=False))
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
-            state_update(picked["repo"], picked["issue"], _event={"action": "fix_complete", "outcome": pushed})
+            state_update(picked["repo"], picked["issue"], _event={"action": "fix_complete", "outcome": {**pushed, "previous_sha": previous_sha}})
             continue
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
