@@ -17,8 +17,6 @@ from lokay.types import CheckResult, Finding, Note, parse_finding, to_dict
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
-# Binary per-file questions require 0.85; follow-ups require a winning file
-# at least twice as likely as none.
 THRESHOLD = 0.85
 HUNK_LIMIT = 1500
 NIT = 0.5
@@ -300,7 +298,6 @@ def _decision_batches(rows, request, decide_request, api, model):
     batches.append(batch)
     for batch in batches:
         internal = request(batch)
-        # Last resort for a single oversized row or unusually large state.
         wire = _trim_wire(review_wire(internal), limit=limit,
                           string_limit=limit if api == "chat" else 3000)
         internal["state"] = wire.get("state", wire.get("input"))
@@ -342,8 +339,6 @@ def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | Non
 def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
     if ci.get("sha") != sha or any(item.get("sha", sha) != sha for item in decisions):
         raise DecisionError("sha mismatch")
-    if ci.get("result") in ("pending", "sha_moved"):
-        return {"result": "check", "sha": sha, "uwagi": []}
     uwagi = list(ci.get("failed") or [])
     for item in decisions:
         uwagi.extend(item.get("uwagi") or [])

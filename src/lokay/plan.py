@@ -139,7 +139,6 @@ def validate_synthesis(data: object, accepted: set[str]) -> dict:
                 for name in fields:
                     text(row[name])
                 sources(row["zrodla"])
-    # Also validate source arrays in any extra fields allowed by the schema.
     def walk(value):
         if isinstance(value, dict):
             for key, child in value.items():

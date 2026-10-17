@@ -60,7 +60,7 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
         try:
             merged = merge_sha(
                 picked["repo"], pr["number"], sha, verdict, worktree,
-                picked.get("held"), picked["repo"].split("/")[0], int(picked["issue"]),
+                picked["repo"].split("/")[0], int(picked["issue"]),
                 {"plan_rounds": plan_rounds, "check_rounds": rounds},
                 clone_path=clone_path,
             )
@@ -88,13 +88,13 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
     return None, base, sha, pending, verdict
 
 
-def local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows, rounds, diff):
+def local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows):
     from lokay.tick import _retry, dumps
     from lokay.main_guard import local_baseline, run_repo_tests
     from lokay.check import hunk_finding
     from lokay.setup import prepare_dependencies
 
-    state_update(picked["repo"], picked["issue"], local_ci=None, test_log=None, tested=False)
+    state_update(picked["repo"], picked["issue"], local_ci=None, tested=False)
     setup = prepare_dependencies(worktree, repo, int(picked["issue"]))
     setup = setup if isinstance(setup, dict) else {}
     if setup.get("failed"):
@@ -106,7 +106,7 @@ def local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows, rou
     if ci["result"] == "red" and not setup.get("failed"):
         ci = _retry(picked, "check", lambda: local_baseline(picked["repo"], clone_path, ci, base=base))
     ci = {**ci, "argv": list(tests)}
-    state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
+    state_update(picked["repo"], picked["issue"], local_ci=ci)
     if ci["notes"]:
         rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + dumps(ci["notes"]))
     if tests and not ci.get("baseline"):
@@ -124,12 +124,7 @@ def local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows, rou
                     break
                 directory = directory.parent
     state_update(picked["repo"], picked["issue"], tested=ci.get("tested", False))
-    log = ci["log"]
-    directory = run_dir(picked["repo"], picked["issue"])
-    store.ensure_directory(directory)
-    store.write_artifact(directory / f"check-{rounds + 1}-diff.patch", diff.stdout or "")
-    store.write_artifact(directory / f"check-{rounds + 1}-test.log", log)
-    return ci, log
+    return ci
 
 
 def remote_checks(picked, branch, sha):
@@ -242,7 +237,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
 
 
 def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, log, check_notes, diff_fingerprint, kinds, conflict_fix):
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
     from lokay.tick import _retry, dumps, dismissed_key, finding_summary, refresh_body
     from lokay.check import aggregate
     from lokay.effects.git import _git
@@ -261,7 +256,7 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
     repo_files = list(filter(None, tracked.split("\0")))
     scope = code_scope_issue(files, plan_text, repo_files)
     if not checks_failed and scope and dismissed_key(scope) not in dismissed_keys:
-        verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
+        verdict = {**verdict, "result": "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
         rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
     from lokay.check import apply_checks
 
@@ -283,8 +278,7 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
     }]
     state_update(
         picked["repo"], picked["issue"], node="check", sha=sha,
-        check_rounds=rounds, result=verdict["result"], verdict=verdict, last_check=verdict, test_log=log,
-        run_rounds=state_read(picked["repo"], picked["issue"]).get("run_rounds", 0) + 1,
+        check_rounds=rounds, result=verdict["result"], verdict=verdict, last_check=verdict,
         check_notes=check_notes, check_history=check_history,
         **store.round_fields(state_read(picked["repo"], picked["issue"]),
                              diff_fingerprint=diff_fingerprint, checks=verdict.get("checks"),
@@ -328,7 +322,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     uwagi = verdict["uwagi"]
     if not uwagi:
         state_update(picked["repo"], picked["issue"], node="check", verdict=None,
-                     local_ci=None, test_log=None, fix_fingerprint=None, fix_reason=None,
+                     local_ci=None, fix_fingerprint=None, fix_reason=None,
                      result="check")
         return "return", {"result": "check", "sha": sha}
     findings = {
@@ -344,7 +338,6 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     counts = (saved.get("fix_counts", []) + [len(uwagi)])[-3:]
     history = saved.get("fix_history", []) + [uwagi]
     state_update(picked["repo"], picked["issue"], fix_counts=counts, fix_history=history,
-                 run_rounds=saved.get("run_rounds", 0) + 1,
                  **store.round_fields(saved, diff_fingerprint=diff_fingerprint, completed=False))
     rounds_append(picked["repo"], picked["issue"],
                   f"Fix progress: findings={fingerprint}, hunk={hunk_fingerprint}, "
@@ -353,7 +346,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         "diff_hash": diff_fingerprint, "fingerprint": fingerprint,
         "hunk_fingerprint": hunk_fingerprint, "counts": counts,
     })).no_progress
-    test_log = (saved.get("test_log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
+    test_log = ((saved.get("local_ci") or {}).get("log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     ci = saved.get("local_ci") or {}
     lens_kinds = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
@@ -493,7 +486,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     fixed = fix_step(picked, "fix_code", fix_action, sha)
     if fixed.get("dispute_recheck"):
         state_update(picked["repo"], picked["issue"], node="check", verdict=None,
-                     local_ci=None, test_log=None, fix_reason=None, result="check")
+                     local_ci=None, fix_reason=None, result="check")
         rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
         return "return", {"result": "check", "sha": sha}
     if fixed.get("dispute_rejected"):
@@ -562,7 +555,7 @@ def wait(picked, verdict, head):
         state_update(picked["repo"], picked["issue"], _event={"action": "replan"},
                      plan_prompt=prompt, wait_escape="plan", awaiting=None, retry_at=0,
                      node="plan", result="failed", verdict=None, plan_phase="write",
-                     plan_branches={}, plan_synthesis={}, plan_evaluations=0,
+                     plan_branches={}, plan_synthesis={},
                      plan_accepted_sha=None)
         return {"next": "plan"}
     state_update(picked["repo"], picked["issue"], node="check", result="wait", verdict=verdict,

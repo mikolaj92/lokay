@@ -193,10 +193,6 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
         return {"result": "failed", "error": str(exc)}
 
 
-def worktree_add(repo: Path, branch: str, path: Path) -> dict:
-    return ensure_worktree(repo, branch, path)
-
-
 def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None) -> dict:
     if safe:
         def checked(where, args):

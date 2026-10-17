@@ -9,7 +9,7 @@ from lokay.store import state_read, state_update, write_run
 from lokay.main_guard import check_main
 
 
-def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, held: dict | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
+def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
     if worktree is not None and clone_path is None:

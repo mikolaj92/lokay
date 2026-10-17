@@ -162,11 +162,11 @@ def escalation_fields(state: dict) -> dict:
     levels = ("easy", "medium", "hard", "too_big")
     difficulty = state.get("difficulty")
     if difficulty not in levels:
-        difficulty = "easy" if state.get("plan_mode") == "single" else "hard"
+        difficulty = "easy"
     return {
         "difficulty": levels[min(levels.index(difficulty) + 1, 3)],
         "node": "plan", "result": "pending", "retry_at": 0, "awaiting": None,
-        "run_rounds": 0, "no_progress": 0, "fix_history": [], "fix_counts": [],
+        "no_progress": 0, "fix_history": [], "fix_counts": [],
         "plan_prompt": None, "plan_branches": {}, "plan_synthesis": {},
         "plan_accepted_sha": None, "plan_phase": "write", "plan_notes": [],
         "wait_escape": None, "verdict": None, "failures": 0, "last_error": None,
@@ -199,8 +199,6 @@ def state_read(repo: str, issue: int) -> dict:
     if not path.exists():
         return {}
     state = json.loads(path.read_text())
-    if "plan_mode" not in state or state["plan_mode"] == "full":
-        state["plan_mode"] = "single"
     if (state.get("waiting_on") != derive_waiting_on(state)
             or (state.get("result") == "wait" and state.get("awaiting") == "human"
                 and not state.get("wait_escape"))):
@@ -323,17 +321,6 @@ def write_text_atomic(path: Path, text: str, *, temporary: Path | None = None) -
             temporary.replace(path)
         finally:
             temporary.unlink(missing_ok=True)
-
-
-def check_record(result: CheckResult) -> dict:
-    first = next(iter(result.findings), None)
-    record = {"name": result.name, "pass": None if result.status == "unknown" else result.status == "pass",
-              "reason": result.reason,
-              "location": f"{first.plik}:{first.linia_od}" if first else None,
-              "fix_hint": "; ".join(item.zmiana for item in result.findings) if result.status == "fail" else ""}
-    if result.status == "unknown":
-        record["status"] = "unknown"
-    return record
 
 
 def json_default(value: object) -> dict | str:

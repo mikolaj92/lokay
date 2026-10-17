@@ -1,4 +1,3 @@
-"""Read-only factory dashboard; GitHub reads happen only in the refresh thread."""
 from __future__ import annotations
 
 from lokay.store import write_json
@@ -121,7 +120,6 @@ def models() -> dict:
                 for line in stream:
                     match = re.match(r"^\s*export\s+(LOKAY2_PROVIDER|LOKAY2_MODEL)=(.*)$", line)
                     if match and match[1] not in values:
-                        # Parse literals, never source the shell file or expand variables.
                         try:
                             parts = shlex.split(match[2], comments=True)
                             if len(parts) == 1:
@@ -347,7 +345,6 @@ def eta(issues, rate: float, now: float) -> dict:
 
 def buckets(merged: list, opened: list, now: float, hourly: bool) -> list[dict]:
     local = datetime.fromtimestamp(now, WARSAW)
-    # Hour windows use real elapsed hours, including both occurrences at DST fall-back.
     end = local.replace(minute=0, second=0, microsecond=0) if hourly else local.replace(hour=0, minute=0, second=0, microsecond=0)
     output = []
     for offset in reversed(range(24 if hourly else 14)):
@@ -501,7 +498,6 @@ def handler(dashboard: Dashboard):
             self.wfile.write(content)
 
         def log_message(self, format, *args):
-            # Request paths may contain secrets; omit access logging.
             pass
     return Handler
 
