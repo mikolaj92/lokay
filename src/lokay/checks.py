@@ -73,6 +73,30 @@ def local_tests(x: CheckInput) -> CheckResult:
                     "" if passed else x.ci.get("log", ""), "run and fix the complete local test suite")
 
 
+def merge_clean(x: CheckInput) -> CheckResult:
+    from lokay.effects.git import merge_conflicts
+
+    paths = merge_conflicts(x.worktree, x.sha)
+    findings = tuple(Finding(path, 1, 1, "resolve merge conflict", "merge_clean") for path in paths)
+    return CheckResult("merge_clean", "fail" if findings else "pass",
+                       "merge conflicts found" if findings else "merge is clean", findings)
+
+
+def secrets(x: CheckInput) -> CheckResult:
+    pattern = re.compile(
+        r"AKIA[A-Z0-9]{16}|(?:ghp_|gho_|github_pat_)[A-Za-z0-9_]+"
+        r"|-----BEGIN (?:[^\r\n]* )?PRIVATE KEY-----|xox[abp]-[A-Za-z0-9-]+"
+        r"|(?i:api[_-]?key\s*[:=]\s*['\"][A-Za-z0-9_\-]{20,})"
+    )
+    findings = tuple(
+        Finding(path, number, number, "possible secret", "secrets")
+        for path, number, kind, text in diff_lines(x.diff)
+        if kind == "+" and pattern.search(text)
+    )
+    return CheckResult("secrets", "fail" if findings else "pass",
+                       "possible secret" if findings else "no secrets found", findings)
+
+
 def no_new_comments(x: CheckInput) -> CheckResult:
     ignored = {".md", ".rst", ".txt", ".json", ".yaml", ".yml", ".toml", ".lock"}
     markers = {
@@ -229,9 +253,8 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
-CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", lockfile, "secrets", junk,
-          no_new_comments, no_unit_tests, "issue_goal", "scope", "correctness", "tests_cover", "regression",
-          "architecture", "security_review", docs, "style"]
+CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
+          no_new_comments, no_unit_tests, docs]
 
 
 def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
@@ -245,9 +268,6 @@ def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
     results = []
     for check in CHECKS:
-        if isinstance(check, str):
-            results.append(CheckResult(check, "pass", "stub", ()))
-            continue
         try:
             results.append(check(x))
         except Exception as exc:
