@@ -21,7 +21,8 @@ from lokay.effects.git import git, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, tick_budget
-from lokay.effects.gh import _gh, auth_status, open_issues, open_pr_for
+from lokay.effects.gh import gh_json, gh_ok, auth_status, open_issues, open_pr_for
+from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
 from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
                        process_groups, retry_sleep, run_process, tick_deadline)
@@ -217,13 +218,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
 
     def list_prs(name):
         if name not in pr_lists:
-            code, out, err = _gh([
+            pr_lists[name] = tuple(gh_json([
                 "pr", "list", "--repo", name, "--state", "all", "--limit", "1000000",
                 "--json", "number,headRefName,headRefOid,labels,state",
-            ])
-            if code != 0:
-                raise RuntimeError(err.strip() or "pr list failed")
-            pr_lists[name] = tuple(json.loads(out or "[]"))
+            ], error="pr list failed", default="[]"))
         return pr_lists[name]
 
     def list_issues(name):
@@ -375,12 +373,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             branch = pr["headRefName"]
                             labelled = any(label["name"] == "lokay-parked" for label in pr.get("labels", []))
                             if labelled:
-                                code, out, err = _gh([
+                                gh_ok([
                                     "pr", "edit", str(pr["number"]), "--repo", name,
                                     "--remove-label", "lokay-parked",
-                                ])
-                                if code != 0:
-                                    raise RuntimeError(err.strip() or out.strip() or "park label removal failed")
+                                ], error="park label removal failed", include_stdout=True)
                             if labelled or saved.get("result") == "parked":
                                 resumed = store.escalation_fields(saved)
                                 resumed.pop("node")
@@ -761,10 +757,8 @@ def _prepare(picked: dict) -> tuple | dict:
 
     saved = state_read(picked["repo"], picked["issue"])
     if "issue_title" not in saved or "issue_body" not in saved:
-        code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
-        if code != 0:
-            raise RuntimeError(err.strip() or "issue view failed")
-        loaded = json.loads(raw)
+        loaded = gh_json(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"],
+                         error="issue view failed")
         if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
             raise RuntimeError("issue title is missing or invalid")
         body = loaded.get("body")
@@ -1013,14 +1007,13 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
 
 
 def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
-    for attempt in range(6):
+    def lookup():
         check_deadline()
         pr = open_pr_for(repo, branch)
-        if pr and pr.get("headRefOid") == sha:
-            return pr
-        if attempt < 5:
-            retry_sleep(5)
-    return None
+        return pr if pr and pr.get("headRefOid") == sha else None
+
+    return retry(lookup, 6, lambda result: "sha mismatch" if result is None else None,
+                 delay=lambda attempt: 5)
 
 
 def _resume(picked: dict) -> tuple | dict:

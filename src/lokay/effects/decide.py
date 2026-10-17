@@ -254,8 +254,8 @@ def decide(internal: Mapping) -> dict:
 
 
 def _decide(internal: Mapping) -> dict:
-    from lokay.effects.pi import retry_sleep, run_process
-    from lokay.store import log_event
+    from lokay.effects.pi import run_process
+    from lokay.effects.retry import retry
 
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
@@ -275,34 +275,36 @@ def _decide(internal: Mapping) -> dict:
     cmd.append(base + path)
     size = len(body.encode("utf-8"))
     print(f"decide: request bytes={size} approx_tokens={size // 3}", file=sys.stderr)
-    for attempt in range(4):
+    def transient(proc):
+        if isinstance(proc, subprocess.TimeoutExpired):
+            return "decision request timed out"
+        if isinstance(proc, Exception):
+            return None
+        if proc.returncode != 0:
+            return (proc.stderr.strip() or "curl failed") if proc.returncode in (52, 56, 28) else None
+        status = proc.stdout.rpartition("\n")[2].strip()
+        if status in ("408", "429") or (len(status) == 3 and status.isdecimal() and 500 <= int(status) <= 599):
+            return f"http {status}"
+        return None
+
+    def request():
         try:
-            proc = run_process(cmd, timeout=float(timeout) + 2,
+            return run_process(cmd, timeout=float(timeout) + 2,
                                input=f"authorization: Bearer {key}\n" if key else None)
-        except subprocess.TimeoutExpired:
-            if attempt == 3:
-                raise DecisionError("decision request failed or timed out") from None
-            reason = "decision request timed out"
         except OSError:
             raise DecisionError("decision request failed or timed out") from None
-        else:
-            if proc.returncode != 0:
-                reason = proc.stderr.strip() or "curl failed"
-                if proc.returncode not in (52, 56, 28) or attempt == 3:
-                    raise DecisionError(reason)
-            else:
-                raw, _, status = proc.stdout.rpartition("\n")
-                status = status.strip()
-                if status == "200":
-                    return from_wire(api, model, json.loads(raw), internal)
-                reason = f"http {status}"
-                if status not in ("408", "429") and not (len(status) == 3 and status.isdecimal() and 500 <= int(status) <= 599):
-                    raise DecisionError(reason)
-                if attempt == 3:
-                    raise DecisionError(reason)
-        log_event("retry", call="decide", attempt=attempt + 1, reason=reason)
-        retry_sleep(3 ** attempt)
-    raise AssertionError("unreachable")
+
+    try:
+        proc = retry(request, 4, transient, call="decide")
+    except subprocess.TimeoutExpired:
+        raise DecisionError("decision request failed or timed out") from None
+    if proc.returncode != 0:
+        raise DecisionError(proc.stderr.strip() or "curl failed")
+    raw, _, status = proc.stdout.rpartition("\n")
+    status = status.strip()
+    if status != "200":
+        raise DecisionError(f"http {status}")
+    return from_wire(api, model, json.loads(raw), internal)
 
 
 def main() -> int:

@@ -12,7 +12,7 @@ from pathlib import Path
 from threading import Event, Thread
 import sys
 
-from lokay.effects.gh import _gh
+from lokay.effects.gh import gh_json, gh_ok
 from lokay.store import RUNS, main_status
 
 CURRENT: dict = {}
@@ -89,13 +89,11 @@ def monitor() -> dict:
     if not reasons:
         return {"result": "ok"}
     repo = os.environ.get("LOKAY_ALARM_REPO", "mikolaj92/lokay")
-    code, out, err = _gh(["issue", "list", "--repo", repo, "--state", "open",
-                          "--search", "lokay-stalled in:title", "--json", "number,title"])
-    if code != 0:
-        raise RuntimeError(err or "alarm lookup failed")
-    if not any(row["title"] == "lokay-stalled" for row in json.loads(out or "[]")):
+    rows = gh_json(["issue", "list", "--repo", repo, "--state", "open",
+                    "--search", "lokay-stalled in:title", "--json", "number,title"],
+                   error="alarm lookup failed", strip=False, default="[]")
+    if not any(row["title"] == "lokay-stalled" for row in rows):
         body = "\n".join(reasons) + "\n\n```json\n" + dumps(beat, indent=2) + "\n```"
-        code, _, err = _gh(["issue", "create", "--repo", repo, "--title", "lokay-stalled", "--body", body])
-        if code != 0:
-            raise RuntimeError(err or "alarm creation failed")
+        gh_ok(["issue", "create", "--repo", repo, "--title", "lokay-stalled", "--body", body],
+              error="alarm creation failed", strip=False)
     return {"result": "stalled", "reasons": reasons}

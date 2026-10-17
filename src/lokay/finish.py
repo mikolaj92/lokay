@@ -305,7 +305,7 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
 
 def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
         clone_path, base, read_diff, sync_head):
-    from lokay.tick import (escalate, dumps, finding_fingerprint, fix_to_build, _gh,
+    from lokay.tick import (escalate, dumps, finding_fingerprint, fix_to_build, gh_json,
                             _retry, replan_prompt, dismissed_key, fix_step, pushed_pr,
                             needs_help, refresh_body)
     from lokay import graph
@@ -365,11 +365,9 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         title, body = saved.get("issue_title"), saved.get("issue_body")
         if not title:
             def read_issue():
-                code, raw, err = _gh(["issue", "view", str(picked["issue"]),
-                                      "--repo", picked["repo"], "--json", "title,body"])
-                if code != 0:
-                    raise RuntimeError(err or "issue view failed")
-                return json.loads(raw)
+                return gh_json(["issue", "view", str(picked["issue"]),
+                                "--repo", picked["repo"], "--json", "title,body"],
+                               error="issue view failed", strip=False)
             issue = _retry(picked, "plan", read_issue)
             title, body = issue["title"], issue.get("body")
         state_update(picked["repo"], picked["issue"], issue_title=title, issue_body=body,
