@@ -83,18 +83,100 @@ def merge_files(repo: Path, sha: str) -> list[dict] | None:
     return [{"path": path} for path in dict.fromkeys(out.split("\0")) if path]
 
 
+def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
+    def checked(where, args):
+        code, out, err = _git(where, args)
+        if code:
+            raise RuntimeError(err.strip() or out.strip() or f"git {args} failed ({code})")
+        return out
+
+    def registrations():
+        records = []
+        record = {}
+        for field in checked(repo, ["worktree", "list", "--porcelain", "-z"]).split("\0"):
+            if not field:
+                if record:
+                    records.append(record)
+                    record = {}
+            else:
+                key, _, value = field.partition(" ")
+                record[key] = value
+        if record:
+            records.append(record)
+        return records
+
+    def registration():
+        records = registrations()
+        matches = [row for row in records if row.get("worktree") == str(path)]
+        if len(matches) != 1:
+            raise ValueError("expected exactly one worktree registration")
+        row = matches[0]
+        if (row is records[0] or row.get("branch") != f"refs/heads/{branch}" or "bare" in row
+                or "detached" in row or Path(row["worktree"]).resolve() == repo):
+            raise ValueError("worktree registration or branch mismatch")
+        if any(row.get("branch") == f"refs/heads/{branch}" and row.get("worktree") != str(path)
+               for row in records):
+            raise ValueError("branch registered at another worktree")
+        return row
+
+    def verify():
+        registration()
+        if path.is_symlink() or not path.is_dir() or not (path / ".git").is_file() or (path / ".git").is_symlink():
+            raise ValueError("expected a registered linked worktree directory")
+        top = checked(path, ["rev-parse", "--show-toplevel"]).strip()
+        common = checked(path, ["rev-parse", "--git-common-dir"]).strip()
+        git_dir = (path / checked(path, ["rev-parse", "--git-dir"]).strip()).resolve()
+        head = checked(path, ["symbolic-ref", "HEAD"]).strip()
+        if (Path(top).resolve() != path or (path / common).resolve() != common_dir
+                or git_dir.parent != common_dir / "worktrees" or head != f"refs/heads/{branch}"):
+            raise ValueError("worktree top-level, common directory or branch mismatch")
+
+    try:
+        checked(repo, ["check-ref-format", "--branch", branch])
+        match = re.fullmatch(r"lokay/([1-9][0-9]*)", branch)
+        if not match:
+            raise ValueError("expected lokay/<positive decimal issue>")
+        repo = repo.resolve()
+        path = path.parent.resolve() / path.name
+        expected = repo.parent / f"{repo.name}-wt-{match[1]}"
+        if path.is_symlink() or path != expected or path == repo:
+            raise ValueError(f"expected non-symlink sibling worktree path {expected}")
+        if Path(checked(repo, ["rev-parse", "--show-toplevel"]).strip()).resolve() != repo:
+            raise ValueError("repository top-level mismatch")
+        common_dir = (repo / checked(repo, ["rev-parse", "--git-common-dir"]).strip()).resolve()
+        if path.exists():
+            verify()
+            return {"result": "added", "path": str(path), "branch": branch}
+        records = registrations()
+        if any(row.get("worktree") == str(path) for row in records):
+            row = registration()
+            if "locked" in row or path.exists() or path.is_symlink():
+                raise ValueError("cannot recover locked or existing worktree")
+            checked(repo, ["worktree", "remove", "--force", str(path)])
+        if any(row.get("branch") == f"refs/heads/{branch}" for row in registrations()):
+            raise ValueError("branch already registered at another worktree")
+        code, out, err = _git(repo, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+        if code == 0:
+            args = ["worktree", "add", str(path), branch]
+        elif code == 1:
+            code, out, err = _git(repo, ["ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}"])
+            if code not in (0, 2):
+                raise RuntimeError(err.strip() or out.strip() or f"ls-remote failed ({code})")
+            base = branch if code == 0 else "main"
+            checked(repo, ["check-ref-format", "--branch", base])
+            checked(repo, ["fetch", "origin", f"refs/heads/{base}:refs/remotes/origin/{base}"])
+            args = ["worktree", "add", "-b", branch, str(path), f"origin/{base}"]
+        else:
+            raise RuntimeError(err.strip() or out.strip() or f"show-ref failed ({code})")
+        checked(repo, args)
+        verify()
+        return {"result": "added", "path": str(path), "branch": branch}
+    except (OSError, ValueError, RuntimeError) as exc:
+        return {"result": "failed", "error": str(exc)}
+
+
 def worktree_add(repo: Path, branch: str, path: Path) -> dict:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    base = base_branch(repo, branch=branch)
-    code, out, err = _git(repo, ["fetch", "origin", base])
-    if code != 0:
-        return {"result": "failed", "error": err.strip() or out.strip()}
-    code, out, err = _git(repo, ["worktree", "add", "-b", branch, str(path), f"origin/{base}"])
-    if code != 0 and "already exists" in (err + out):
-        code, out, err = _git(repo, ["worktree", "add", str(path), branch])
-    if code != 0:
-        return {"result": "failed", "error": err.strip() or out.strip()}
-    return {"result": "added", "path": str(path), "branch": branch}
+    return ensure_worktree(repo, branch, path)
 
 
 def worktree_remove(repo: Path, path: Path) -> dict:

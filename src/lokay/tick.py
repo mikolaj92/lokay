@@ -378,11 +378,24 @@ def _tick() -> dict:
         release(outcome["held"])
 
 
+def _ensure_worktree(picked: dict) -> Path:
+    from lokay.effects.git import ensure_worktree
+
+    config = next(row for row in load_repos() if row["name"] == picked["repo"])
+    root, worktree = _repo_paths(config, picked["issue"])
+    outcome = ensure_worktree(root, f"lokay/{picked['issue']}", worktree)
+    if outcome.get("result") != "added":
+        raise RuntimeError(outcome.get("error") or str(outcome))
+    return worktree
+
+
 def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | None = None, *, plan_branch: bool = False) -> T:
     repo, issue = picked["repo"], picked["issue"]
     state_update(repo, issue, node=node)
     try:
         check_deadline()
+        if node in {"plan", "build", "check", "fix", "merge"}:
+            _ensure_worktree(picked)
         outcome = action()
         if expected is None or (isinstance(outcome, dict) and outcome.get("result") == expected):
             state_update(repo, issue, _event={"action": "retry_succeeded",
@@ -595,7 +608,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
 
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
-    from lokay.effects.git import _git, worktree_add
 
     from lokay import plan
 
@@ -615,6 +627,7 @@ def _prepare(picked: dict) -> tuple | dict:
     title, body = saved["issue_title"], saved["issue_body"]
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
+    _ensure_worktree(picked)
 
     if saved.get("node", picked["node"]) == "plan" and worktree.exists() and not saved.get("previous_head"):
         state_update(picked["repo"], picked["issue"], previous_head=build_git(worktree, ["rev-parse", "HEAD"]))
@@ -630,24 +643,7 @@ def _prepare(picked: dict) -> tuple | dict:
     branch = f"lokay/{picked['issue']}"
     check_deadline()
     if saved.get("build_from_main"):
-        try:
-            base = base_branch(root)
-            build_git(root, ["fetch", "origin", base])
-            backup_branch = f"{branch}-recovery-{time.time_ns()}"
-            if worktree.exists():
-                backup = worktree.with_name(f"{worktree.name}-recovery-{time.time_ns()}")
-                build_git(root, ["worktree", "move", str(worktree), str(backup)])
-            code, out, err = _git(root, ["show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
-            if code == 0:
-                build_git(root, ["branch", "-m", branch, backup_branch])
-            elif code != 1:
-                raise RuntimeError(err.strip() or out.strip())
-            _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
-            state_update(picked["repo"], picked["issue"], build_from_main=False, previous_head=None)
-        except RuntimeError as exc:
-            return needs_help(picked, f"build from main: {exc}")
-    if not worktree.exists():
-        _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
+        state_update(picked["repo"], picked["issue"], build_from_main=False)
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
     base = base_branch(worktree)
@@ -658,12 +654,6 @@ def _prepare(picked: dict) -> tuple | dict:
     try:
         build_git(worktree, ["merge", "--no-edit", f"origin/{base}"])
     except RuntimeError as exc:
-        try:
-            code, _, _ = _git(worktree, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"])
-            if code == 0:
-                build_git(worktree, ["merge", "--abort"])
-        except RuntimeError as recovery:
-            return needs_help(picked, f"build merge: {exc}; recovery: {recovery}")
         return needs_help(picked, f"build merge: {exc}")
     from lokay.setup import prepare_dependencies
 
@@ -829,6 +819,7 @@ def fix_to_build(picked: dict, worktree: Path) -> dict | None:
 def fix_step(picked: dict, node: str, action, sha: str) -> dict:
     try:
         check_deadline()
+        _ensure_worktree(picked)
         outcome = action()
     except Exception as exc:
         return needs_help(picked, f"{node}: {type(exc).__name__}: {exc}", sha)
@@ -879,24 +870,26 @@ def _resume(picked: dict) -> tuple | dict:
     state_update(picked["repo"], picked["issue"], pr=pr["number"])
     if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):
         return needs_help(picked, "PR branch or number mismatch", sha)
-    code, out, err = _git(worktree, ["branch", "--show-current"]) if worktree.is_dir() else (1, "", "missing worktree")
-    if code != 0 or out.strip() != branch:
-        def restore():
-            commands = [["fetch", "origin", branch]]
-            if worktree.exists():
-                backup = worktree.with_name(f"{worktree.name}-recovery-{time.time_ns()}")
-                commands.append(["worktree", "move", str(worktree), str(backup)])
-            else:
-                commands.append(["worktree", "prune"])
-            for args in commands:
-                build_git(root, args)
-            exists, _, _ = _git(root, ["show-ref", "--verify", f"refs/heads/{branch}"])
-            args = (["worktree", "add", str(worktree), branch] if exists == 0 else
-                    ["worktree", "add", "-b", branch, str(worktree), f"origin/{branch}"])
-            build_git(root, args)
-            state_update(picked["repo"], picked["issue"], node="check", verdict=None, local_ci=None)
-            rounds_append(picked["repo"], picked["issue"], "Worktree restored → Check")
-        _retry(picked, "check", restore)
+    try:
+        _ensure_worktree(picked)
+    except Exception as exc:
+        return needs_help(picked, f"resume worktree: {exc}", sha)
+    code, files, err = _git(worktree, ["diff", "--name-only", "--diff-filter=U", "-z"])
+    if code:
+        return needs_help(picked, f"resume index: {err.strip() or files.strip()}", sha)
+    merge_code, out, err = _git(worktree, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"])
+    if merge_code not in (0, 1):
+        return needs_help(picked, f"resume merge: {err.strip() or out.strip()}", sha)
+    if files or merge_code == 0:
+        saved = state_read(picked["repo"], picked["issue"])
+        verdict = saved.get("verdict") or {}
+        if not any(parse_finding(row).lens == "conflict" for row in verdict.get("uwagi", [])):
+            verdict = {"result": "fix", "sha": sha, "uwagi": [
+                {"pytanie": "conflict", "plik": name, "log": "Resolve the interrupted merge; preserve local changes."}
+                for name in filter(None, files.split("\0"))
+            ] or [{"pytanie": "conflict", "plik": "", "log": "Complete the pending merge (MERGE_HEAD exists)."}]}
+        state_update(picked["repo"], picked["issue"], node="fix", result="fix", sha=sha, verdict=verdict)
+        return worktree, branch, sha, repo.get("test") or [], 1
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 
@@ -1023,14 +1016,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         build_git(worktree, ["fetch", "origin", base])
         out = build_git(worktree, ["diff", "--name-only", "--diff-filter=U"])
         if out:
-            files = out.splitlines()
-            build_git(worktree, ["merge", "--abort"])
-            return files
+            return out.splitlines()
         code, out, err = _git(worktree, ["merge", "--no-edit", f"origin/{base}"])
         if code != 0:
             conflict_code, files, conflict_err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
             if conflict_code == 0 and files.strip():
-                build_git(worktree, ["merge", "--abort"])
                 return files.splitlines()
             raise RuntimeError(conflict_err or err or out)
         return []
@@ -1094,7 +1084,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
             if not pr:
                 raise RuntimeError("PR missing after merge conflict")
-            verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr["number"])),
+            pr_number = pr["number"]
+            verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr_number)),
                                    "Merge conflict on GitHub; change the PR before checking again.")
         state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
         if pending != "fix":
@@ -1129,7 +1120,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     pr = _retry(picked, "fix", lambda: open_pr_for(picked["repo"], branch))
                     if not pr:
                         raise RuntimeError("PR missing after merge conflict")
-                    verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr["number"])),
+                    pr_number = pr["number"]
+                    verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr_number)),
                                            "Merge conflict on GitHub; change the PR before checking again.")
                     pending = "fix"
         def read_diff():

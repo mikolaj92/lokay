@@ -50,7 +50,7 @@ def auth_status(env: Mapping[str, str]):
 
 def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | None = None) -> tuple[int, str, str]:
     validate_argv(["gh", *args])
-    proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": cwd} if cwd is not None else {}))
+    proc = run_process([gh_bin(), *args], env=env, timeout=60, **({"cwd": str(cwd)} if cwd is not None else {}))
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
