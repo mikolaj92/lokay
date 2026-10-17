@@ -334,15 +334,22 @@ def write_heartbeat(result: str | None = None, **fields) -> dict:
 def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
     previous = json.loads(path.read_text()) if path.exists() else {}
     worker = worker_index()
-    workers = previous.get("workers", {})
+    keys = ("time", "version", "result", "repo", "issue", "node", "node_since",
+            "failures", "last_error", "idle_reason", "issue_since", "queue_since",
+            "last_merge", "worker", "main_status")
+    snapshots = previous.get("workers", {})
+    workers = {index: {key: snapshot[key] for key in keys if key in snapshot}
+               for index in ("0", "1", "2")
+               if isinstance(snapshots, dict) and isinstance(snapshot := snapshots.get(index), dict)}
+    previous = workers.get(worker, {}) if worker is not None else previous
+    previous = {key: previous[key] for key in keys if key in previous}
     if worker is not None:
-        previous = dict(workers.get(worker, {}))
         previous["worker"] = worker
     previous.setdefault("failures", 0)
     previous.setdefault("last_error", None)
     previous.setdefault("idle_reason", None)
     previous.setdefault("issue_since", None)
-    previous.update(fields)
+    previous.update({key: fields[key] for key in keys if key in fields})
     if fields.get("failures") == 0:
         previous["last_error"] = None
     if result is not None:
@@ -363,6 +370,7 @@ def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
                     version=os.environ.get("LOKAY_VERSION", installed))
     if worker is not None:
         workers[worker] = dict(previous)
+    if workers:
         previous["workers"] = workers
     write_json(path, previous)
     return previous
