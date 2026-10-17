@@ -9,7 +9,7 @@ from pathlib import Path
 from lokay import store
 
 from lokay.effects.git import base_branch, command, commit_paths, push, guard, failure
-from lokay.effects.gh import pr_create
+from lokay.effects.gh import checks_table, pr_create
 from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
 from lokay.effects.tests import check_uv_lock
 from lokay.safety import untrusted_issue_block
@@ -171,7 +171,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     return committed, junk
 
 
-def pr_body(worktree: Path, plan_path: Path, pi_response: str = "") -> str:
+def pr_body(worktree: Path, plan_path: Path, issue: int, verdict: dict | None = None) -> str:
     try:
         plan = plan_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
@@ -179,12 +179,11 @@ def pr_body(worktree: Path, plan_path: Path, pi_response: str = "") -> str:
     goal = re.search(r"^## Cel[^\n]*\n.*?(?=^## |\Z)", plan, re.MULTILINE | re.DOTALL)
     base = f"origin/{base_branch(worktree)}"
     stat = _git(worktree, ["diff", "--stat", f"{base}...HEAD"])
-    subjects = _git(worktree, ["log", "--format=%s", f"{base}..HEAD"])
-    commits = "\n".join(f"- {subject}" for subject in subjects.splitlines())
-    files = _git(worktree, ["diff", "--name-only", "-z", f"{base}...HEAD"])
-    changed = "\n".join(f"- `{name}`" for name in files.split("\0") if name)
-    done = f"## Co zrobiono\n\n{pi_response[-1500:].strip()}\n\n### Zmienione pliki\n\n{changed}\n\n"
-    return done + f"## Zmiany\n\n```text\n{stat}\n```\n\n{commits}\n\n## Plan\n\n" + (goal.group().strip() if goal else "") + "\n"
+    body = f"Issue #{issue}\n\n" + (goal.group().strip() if goal else "## Cel")
+    body += f"\n\n## Zmienione pliki\n\n```text\n{stat}\n```\n"
+    if verdict and verdict.get("checks"):
+        body += f"\n## Checks\n\nSHA: `{verdict.get('sha', '')}`\n\n" + checks_table(verdict["checks"])
+    return body
 
 
 def build_code(
@@ -292,7 +291,8 @@ def build_code(
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
     from lokay.store import state_read
 
-    body = pr_body(worktree, plan_path, state_read(repo_name, issue).get("pi_response") or "")
+    saved = state_read(repo_name, issue)
+    body = pr_body(worktree, plan_path, issue, saved.get("last_check") or saved.get("verdict"))
     pushed = push(worktree, branch, expected)
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}

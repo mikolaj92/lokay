@@ -356,9 +356,9 @@ def refresh_body(repo: str, issue: int) -> dict:
     pr = open_pr_for(repo, f"lokay/{issue}")
     if not pr:
         raise RuntimeError(f"open PR missing for {repo} lokay/{issue}")
-    body = pr_body(worktree, run_dir(repo, issue) / "plan.md",
-                   state_read(repo, issue).get("pi_response") or "")
     saved = state_read(repo, issue)
+    body = pr_body(worktree, run_dir(repo, issue) / "plan.md", issue,
+                   saved.get("last_check") or saved.get("verdict"))
     notes = (saved.get("verdict") or {}).get("notes") or []
     lens_notes = [parsed for note in notes
                   if isinstance(parsed := parse_finding(note), Note) and parsed.pytanie]
@@ -1612,7 +1612,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         }]
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
-            check_rounds=rounds, result=verdict["result"], verdict=verdict, test_log=log,
+            check_rounds=rounds, result=verdict["result"], verdict=verdict, last_check=verdict, test_log=log,
             run_rounds=state_read(picked["repo"], picked["issue"]).get("run_rounds", 0) + 1,
             check_notes=check_notes, check_history=check_history,
         )

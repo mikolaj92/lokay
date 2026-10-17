@@ -154,25 +154,29 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
     return {"result": "green", "sha": sha, "failed": []}
 
 
+def checks_table(checks) -> str:
+    def cell(value):
+        return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")[:1000]
+
+    def check_cells(row):
+        if isinstance(row, CheckResult):
+            return row.name, row.status, row.reason
+        status = row.get("status") or ("unknown" if row["pass"] is None else "pass" if row["pass"] else "fail")
+        return row["name"], status, row["reason"]
+
+    return "| name | status | reason |\n| --- | --- | --- |\n" + "\n".join(
+        f"| {cell(name)} | {cell(status)} | {cell(reason)} |"
+        for name, status, reason in map(check_cells, checks)
+    ) + "\n\n"
+
+
 def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: dict) -> dict:
     body = (f"### Lokay Check {round_number}\n"
             f"SHA: `{verdict['sha']}`\n\n"
             f"Wynik: **{verdict['result']}** · CI: **{ci.get('ci', ci['result'])}** · "
             f"tests: **{ci['result']}** · tested={str(ci.get('tested', False)).lower()}\n\n")
     if verdict.get("checks"):
-        def cell(value):
-            return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")[:1000]
-
-        def check_cells(row):
-            if isinstance(row, CheckResult):
-                return row.name, row.status, row.reason
-            status = row.get("status") or ("unknown" if row["pass"] is None else "pass" if row["pass"] else "fail")
-            return row["name"], status, row["reason"]
-
-        body += "| name | status | reason |\n| --- | --- | --- |\n" + "\n".join(
-            f"| {cell(name)} | {cell(status)} | {cell(reason)} |"
-            for name, status, reason in map(check_cells, verdict["checks"])
-        ) + "\n\n"
+        body += checks_table(verdict["checks"])
     body += "Uwagi i CI:\n```json\n" + dumps({
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
                 "failed": ci.get("failed", []), "pending": ci.get("pending", []),
