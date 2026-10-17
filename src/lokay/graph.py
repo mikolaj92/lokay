@@ -156,7 +156,10 @@ def pick(snapshot: Snapshot) -> Pick | None:
                     and bool(pr.get("main_sha"))
                     and state["parked_main_sha"] != pr["main_sha"])
                 or (bool(state.get("plan_accepted_sha"))
-                    and state.get("plan_accepted_sha") != state.get("parked_plan_sha")))
+                    and state.get("plan_accepted_sha") != state.get("parked_plan_sha"))
+                or (state.get("result") == "parked"
+                    and "run_rounds reached" in (state.get("reason") or "")
+                    and not state.get("migrated_1955")))
             if (resume or (not parked
                            and state.get("waiting_on", "ready" if not state else None) == "ready")):
                 ready.append((state.get("last_attempt", 0), pr["number"], issue, pr))

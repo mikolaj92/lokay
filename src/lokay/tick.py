@@ -327,11 +327,15 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                     raise RuntimeError(err.strip() or out.strip() or "park label removal failed")
                             if labelled or saved.get("result") == "parked":
                                 resumed = {"failures": 0, "retry_at": 0, "awaiting": None,
-                                           "last_error": None, "run_rounds": 0, "fix_history": [],
+                                           "last_error": None, "run_rounds": 0, "no_progress": 0, "fix_history": [],
                                            "fix_counts": [], "diff_fingerprint": None,
                                            "fix_fingerprint": None, "fix_hunk_fingerprint": None,
                                            "verdict": None, "parked_at": None,
                                            "parked_main_sha": None, "parked_plan_sha": None}
+                                if (saved.get("result") == "parked"
+                                        and "run_rounds reached" in (saved.get("reason") or "")
+                                        and not saved.get("migrated_1955")):
+                                    resumed["migrated_1955"] = True
                                 node = "check"
                             node = node if node in ("plan", "build", "check", "fix", "merge") else "check"
                         else:
