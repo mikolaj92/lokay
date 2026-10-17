@@ -11,6 +11,7 @@ from lokay import store
 from lokay.effects.git import base_branch, command, commit_paths, push, guard, failure
 from lokay.effects.gh import pr_create
 from lokay.effects.pi import cleanup_worktree_caches, pi_env, run_process, sandboxed
+from lokay.effects.tests import check_uv_lock
 from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
 
@@ -99,14 +100,20 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
                  | names(["ls-files", "--others", "--exclude-standard", "-z"]))
     siblings = LOCKFILES
     branch_changes = names(["diff", "--name-only", "-z", f"{base}...HEAD"])
-    stale_locks = sorted(path for path in branch_changes if Path(path).name in siblings
+    valid_locks = {path for path in sorted(modified | branch_changes)
+                   if Path(path).name == "uv.lock"
+                   and str(Path(path).with_name("pyproject.toml")) not in manifests
+                   and (worktree / path).is_file()
+                   and (worktree / path).with_name("pyproject.toml").is_file()
+                   and check_uv_lock((worktree / path).parent)[0] == "pass"}
+    stale_locks = sorted(path for path in branch_changes - valid_locks if Path(path).name in siblings
                          and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     for path in stale_locks:
         if path in names(["ls-tree", "-r", "--name-only", "-z", base]):
             _git(worktree, ["checkout", base, "--", path])
         else:
             _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
-    junk = sorted(path for path in modified if path not in stale_locks and Path(path).name in siblings
+    junk = sorted(path for path in modified - valid_locks if path not in stale_locks and Path(path).name in siblings
                   and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     tracked = names(["ls-tree", "-r", "--name-only", "-z", "HEAD"])
     cache_paths = {path for path in modified | branch_changes if is_cache(path)}
