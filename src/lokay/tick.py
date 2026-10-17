@@ -193,7 +193,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if selected.kind == "prs":
             code, out, err = _gh([
                 "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                "--json", "number,headRefName,headRefOid",
+                "--json", "number,headRefName,headRefOid,labels",
             ])
             if code != 0:
                 raise RuntimeError(err.strip() or "pr list failed")
@@ -261,14 +261,28 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
                         node = saved.get("node")
+                        resumed = {}
                         if pr:
                             branch = pr["headRefName"]
+                            labelled = any(label["name"] == "lokay-parked" for label in pr.get("labels", []))
+                            if labelled:
+                                code, out, err = _gh([
+                                    "pr", "edit", str(pr["number"]), "--repo", name,
+                                    "--remove-label", "lokay-parked",
+                                ])
+                                if code != 0:
+                                    raise RuntimeError(err.strip() or out.strip() or "park label removal failed")
+                            if labelled or saved.get("result") == "parked":
+                                resumed = {"failures": 0, "retry_at": 0, "awaiting": None,
+                                           "last_error": None, "run_rounds": 0, "fix_history": [],
+                                           "verdict": None}
+                                node = "check"
                             node = node if node in ("plan", "build", "check", "fix", "merge") else "check"
                         else:
                             node = node or "plan"
                         state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=time.time(),
-                                     **({"plan_mode": "single"} if not saved else {}))
+                                     **resumed, **({"plan_mode": "single"} if not saved else {}))
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
