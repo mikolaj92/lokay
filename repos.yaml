@@ -28,11 +28,11 @@ repos:
   merge: 'on'
 - name: mikolaj92/reviewkit
   clone_path: ~/Developer/reviewkit/main
-  test: ["uv", "run", "--no-project", "python", "-c", "from pathlib import Path; files = list(Path('src/reviewkit').rglob('*.py')); assert files; [compile(p.read_bytes(), str(p), 'exec') for p in files]"]
+  test: ["uv", "run", "--locked", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/heimdall
   clone_path: ~/Developer/heimdall/main
-  test: ["uv", "run", "--no-project", "python", "-c", "from pathlib import Path; files = list(Path('src/heimdall').rglob('*.py')); assert files; [compile(p.read_bytes(), str(p), 'exec') for p in files]"]
+  test: ["uv", "run", "--locked", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/Docxtor
   clone_path: ~/Developer/Docxtor/main
@@ -86,7 +86,7 @@ repos:
   merge: 'on'
 - name: mikolaj92/my-auth
   clone_path: ~/Developer/my-auth/main
-  test: ["uv", "run", "--no-project", "python", "-c", "from pathlib import Path; files = list(Path('src/my_auth').rglob('*.py')); assert files; [compile(p.read_bytes(), str(p), 'exec') for p in files]"]
+  test: ["uv", "run", "--locked", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/datasource-kit
   clone_path: ~/Developer/datasource-kit/main
@@ -105,7 +105,7 @@ repos:
   merge: 'on'
 - name: mikolaj92/swift-openapi-dynamic
   clone_path: ~/Developer/swift-openapi-dynamic/main
-  test: ["swiftc", "-frontend", "-parse", "Sources/OpenAPIDynamic/OpenAPIDynamic.swift"]
+  test: ["sh", "-c", "swift test && uv run --locked --extra dev pytest -q"]
   merge: 'on'
 - name: mikolaj92/OpenAPITransportKit
   clone_path: ~/Developer/swift-openapi-transport-kit/main
@@ -139,13 +139,14 @@ repos:
   merge: 'on'
 - name: mikolaj92/VibeFront
   clone_path: ~/Developer/VibeFront/main
+  syntax_only: true
   test: ["bash", "-c", "set -e; for file in install.sh scripts/*.sh; do bash -n \"$file\"; done"]
   merge: 'on'
 - name: mikolaj92/hermetic-alchemy
   clone_path: ~/Developer/hermetic-alchemy/main
-  test: ["uv", "run", "--no-project", "--with", "pyyaml", "python", "-c", "from pathlib import Path; import yaml; root = Path('skills/hermetic-alchemy'); data = yaml.safe_load((root / 'skill.yaml').read_text()); assert data['name'] == root.name; assert isinstance(data['version'], str); assert (root / 'SKILL.md').read_text().startswith('---\\n')"]
+  test: ["uv", "run", "--locked", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/dotfiles
   clone_path: ~/Developer/dotfiles/main
-  test: ["find", ".", "-name", "*.sh", "-not", "-path", "./.git/*", "-exec", "bash", "-c", "for file; do bash -n \"$file\" || exit; if command -v shellcheck >/dev/null; then shellcheck \"$file\" || exit; fi; done", "_", "{}", "+"]
+  test: ["sh", "-c", "uv run --no-project --with pytest pytest -q tests"]
   merge: 'on'
