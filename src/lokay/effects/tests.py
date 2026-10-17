@@ -5,6 +5,19 @@ import re
 import tempfile
 from pathlib import Path
 
+def executed_tests(log: str) -> int:
+    patterns = (
+        r"(\d+) passed",
+        r"^Ran (\d+) tests?",
+        r"Executed (\d+) tests?",
+        r"Test run with (\d+) tests?",
+        r"(?:^#|ℹ) pass (\d+)",
+        r"Tests:\s+(\d+) passed",
+        r"replay: (\d+)/\d+ transitions ok",
+    )
+    return sum(int(match) for pattern in patterns for match in re.findall(pattern, log, re.MULTILINE))
+
+
 def check_uv_lock(cwd: Path) -> tuple[str, str]:
     from subprocess import TimeoutExpired
     from lokay.effects.pi import run_process
@@ -115,4 +128,5 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
         logs.append(log)
     return {"result": "red" if failed else "green", "sha": sha,
             "tested": bool(tested_cwds), "tested_cwds": sorted(tested_cwds),
-            "failed": failed, "notes": notes, "log": "\n".join(logs)}
+            "failed": failed, "notes": notes, "log": "\n".join(logs),
+            "executed": sum(executed_tests(log) for log in logs)}
