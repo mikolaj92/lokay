@@ -5,6 +5,13 @@ from typing import Literal, TypeAlias
 
 IssueKind: TypeAlias = Literal["code", "docs_change"]
 
+PLAN_RESET = {
+    "plan_phase": "write",
+    "plan_branches": {},
+    "plan_synthesis": {},
+    "plan_accepted_sha": None,
+}
+
 
 @dataclass(frozen=True)
 class Run:
@@ -198,6 +205,41 @@ def parse_finding(raw: dict) -> Finding | Note:
         return Finding(text("plik"), line("linia_od"), line("linia_do"), text("zmiana"), lens,
                        tuple(raw.get("lenses") or ()), _raw=dict(raw))
     return Note(lens, text("pytanie"), text("note"), _raw=dict(raw))
+
+
+def finding_summary(raw: dict) -> dict:
+    item = parse_finding(raw)
+    return {"pytanie": item.lens if "pytanie" in raw else raw.get("warstwa", ""),
+            "plik": item.plik if isinstance(item, Finding) else "",
+            "linie": [item.linia_od if isinstance(item, Finding) and "linia_od" in raw else None,
+                      item.linia_do if isinstance(item, Finding) and "linia_do" in raw else None],
+            "zmiana": item.zmiana if isinstance(item, Finding) else "",
+            "uzasadnienie": (raw.get("uzasadnienie") or raw.get("log") or "")[:300]}
+
+
+def finding_fingerprint(raw: dict) -> list:
+    item = parse_finding(raw)
+    return [item.plik if isinstance(item, Finding) else None,
+            item.lens if "pytanie" in raw else raw.get("warstwa"),
+            item.zmiana if isinstance(item, Finding) and "zmiana" in raw else None]
+
+
+def finding_key(raw: dict) -> tuple:
+    item = parse_finding(raw)
+    if not isinstance(item, Finding):
+        return ("", "", "", "")
+    return (item.plik, item.linia_od if "linia_od" in raw else "",
+            item.linia_do if "linia_do" in raw else "", item.zmiana)
+
+
+def dismissed_key(row: dict) -> list:
+    item = parse_finding(row)
+    if not isinstance(item, Finding) and not item.pytanie:
+        return [row.get("warstwa"), row.get("log")]
+    return [item.plik if isinstance(item, Finding) else None,
+            item.linia_od if isinstance(item, Finding) and "linia_od" in row else None,
+            item.linia_do if isinstance(item, Finding) and "linia_do" in row else None,
+            item.lens if "pytanie" in row else None]
 
 
 def to_dict(item: Finding | Note) -> dict:

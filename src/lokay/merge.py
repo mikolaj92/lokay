@@ -9,6 +9,10 @@ from lokay.store import state_read, state_update
 from lokay.main_guard import check_main
 
 
+def merge_blocked(state: dict, sha: str) -> bool:
+    return state.get("merge_conflict_sha") == sha or state.get("merge_attempts", {}).get(sha, 0) >= 2
+
+
 def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}

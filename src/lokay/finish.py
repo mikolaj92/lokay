@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 import json
 import time
 from pathlib import Path
 
 from lokay import store
 from lokay.store import rounds_append, run_dir, state_read, state_update
-from lokay.types import Finding, parse_finding, to_dict
+from lokay.types import (PLAN_RESET, Finding, parse_finding, to_dict, finding_summary,
+                         finding_fingerprint, finding_key, dismissed_key)
+from lokay.merge import merge_blocked
 
 
 def sync_head(worktree, branch):
@@ -141,7 +145,7 @@ def remote_checks(picked, branch, sha):
 
 
 def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
-    from lokay.tick import _retry, dumps, finding_key, finding_fingerprint, dismissed_key
+    from lokay.tick import _retry, dumps
     from lokay.effects.git import git_try
     from lokay.check import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
     from lokay.checks import CheckInput, run_checks
@@ -239,7 +243,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
 
 def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
-    from lokay.tick import _retry, dumps, dismissed_key, finding_summary, refresh_body
+    from lokay.tick import _retry, dumps, refresh_body
     from lokay.check import aggregate
     from lokay.effects.git import git_try
     from lokay.effects.gh import pr_files, check_comment
@@ -265,10 +269,7 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
     if checks_failed:
         verdict = {**verdict, "result": "fix"}
     saved_merge = state_read(picked["repo"], picked["issue"])
-    if verdict["result"] == "merge" and (
-        saved_merge.get("merge_conflict_sha") == sha
-        or saved_merge.get("merge_attempts", {}).get(sha, 0) >= 2
-    ):
+    if verdict["result"] == "merge" and merge_blocked(saved_merge, sha):
         verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr_number)),
                                "Merge conflict on GitHub; change the PR before checking again.")
     rounds += 1
@@ -305,8 +306,8 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
 
 def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
         clone_path, base, read_diff, sync_head):
-    from lokay.tick import (escalate, dumps, finding_fingerprint, fix_to_build, gh_json,
-                            _retry, replan_prompt, dismissed_key, fix_step, pushed_pr,
+    from lokay.tick import (escalate, dumps, fix_to_build, gh_json,
+                            _retry, replan_prompt, fix_step, pushed_pr,
                             needs_help, refresh_body)
     from lokay import graph
     from lokay.types import Run, Progress
@@ -553,9 +554,7 @@ def wait(picked, verdict, head):
                                json.loads(dumps(findings, default=store.json_default)), head)
         state_update(picked["repo"], picked["issue"], _event={"action": "replan"},
                      plan_prompt=prompt, wait_escape="plan", awaiting=None, retry_at=0,
-                     node="plan", result="failed", verdict=None, plan_phase="write",
-                     plan_branches={}, plan_synthesis={},
-                     plan_accepted_sha=None)
+                     node="plan", result="failed", verdict=None, **deepcopy(PLAN_RESET))
         return {"next": "plan"}
     state_update(picked["repo"], picked["issue"], node="check", result="wait", verdict=verdict,
                  retry_at=time.time() + 300, awaiting=None, wait_escape="retry")
