@@ -1619,13 +1619,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                      issue_body=(saved.get("issue_body") or "")[:4000],
                                      history=saved.get("check_history", [])[-5:])
         decisions = []
-<<<<<<< Updated upstream
-        kinds = ("docs",) if docs_only(diff.stdout or "") else tuple(
+        kinds = () if checks_failed else ("docs",) if docs_only(diff.stdout or "") else tuple(
             p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))
             if p.stem != "check_docs")
-=======
-        kinds = () if checks_failed else tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
->>>>>>> Stashed changes
         for kind in kinds:
             decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
                                       lambda request: _retry(picked, "check", lambda: decide(request)))
