@@ -54,16 +54,14 @@ def ci_green(x: CheckInput) -> CheckResult:
 
 
 def local_tests(x: CheckInput) -> CheckResult:
+    if any(item.get("log") in ("no tests configured", "no checks configured")
+           for item in (*x.ci.get("notes", []), *x.ci.get("failed", []))):
+        return CheckResult("local_tests", "fail", "no checks configured", ())
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") != "GitHub CI"]
     github_failed = any(item.get("warstwa") == "GitHub CI" for item in x.ci.get("failed", []))
     green = x.ci.get("result") == "green" or (x.ci.get("result") == "red" and github_failed)
     passed = x.ci.get("sha") == x.sha and x.ci.get("tested") is True and green and not failures
     if not x.ci.get("tested") and not failures:
-        notes = [item for item in x.ci.get("notes", []) if item.get("warstwa") == "tests"]
-        if (x.ci.get("sha") == x.sha and x.ci.get("result") == "green"
-                and x.ci.get("tested") is False and notes
-                and all(item.get("log") == "no tests configured" for item in notes)):
-            return CheckResult("local_tests", "pass", "not applicable: no tests configured", ())
         return CheckResult("local_tests", "unknown", "local tests not run", ())
     reason = "local tests green" if passed else "local tests not green or not run"
     timeout = next((item["timeout"] for item in failures if item.get("timeout") is not None), None)

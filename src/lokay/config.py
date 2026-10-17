@@ -28,6 +28,7 @@ def load_repos(path: Path | None = None) -> list[dict]:
         path = Path(os.environ.get("LOKAY2_REPOS_FILE") or ROOT / "repos.yaml")
     raw = yaml.safe_load(path.read_text()) or {}
     repos = raw.get("repos") or []
+    configured = []
     for repo in repos:
         keys = set(repo)
         if keys - {"setup", "test_timeout"} != {"name", "clone_path", "test", "merge"}:
@@ -45,4 +46,10 @@ def load_repos(path: Path | None = None) -> list[dict]:
             raise ValueError("merge must be on or off")
         if not isinstance(repo["test"], list):
             raise ValueError("test must be a list")
-    return repos
+        if not repo["test"]:
+            from lokay.store import log_event
+
+            log_event("config", repo=repo["name"], reason="repo has no checks configured")
+            continue
+        configured.append(repo)
+    return configured
