@@ -155,7 +155,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     exclude_caches(worktree)
     after = worktree_status(worktree)
     selected = sorted(path for path in after if path != ".lokay" and not path.startswith(".lokay/")
-                      and (path in cache_paths or path in stale_locks
+                      and (path in cache_paths or path in stale_locks or path in valid_locks
                            or before is None or before.get(path) != after[path]))
     index_paths = names(["ls-files", "-z"])
     stage = [path for path in selected if ".local" not in Path(path).parts[:-1]
