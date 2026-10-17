@@ -384,10 +384,6 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         + "\n\nSHA:\n" + sha
         + "\n\nIssue:\n" + (saved.get("issue_title") or "")
         + "\n" + (saved.get("issue_body") or "")[:6000]
-        + ("\n\nCI is red. Making CI green takes precedence over scope/alignment notes: "
-           "changes needed for CI to pass are in scope and must not be reverted."
-           if saved.get("ci") == "red" or (saved.get("local_ci") or {}).get("result") == "red"
-           else "")
         + "\n\nUwagi:\n" + dumps(uwagi)
         + "\n\nDiff:\n" + (diff or "")[:20000]
         + "\n\nTest log:\n" + test_log
