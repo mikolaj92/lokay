@@ -194,6 +194,38 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     return run_dir(repo, issue) / "state.json"
 
 
+def round_fields(state: dict, *, diff_fingerprint: str | None = None,
+                 checks=None, accepted_plan: bool = False, completed: bool = True) -> dict:
+    previous_diff = state.get("progress_diff_fingerprint")
+    previous_checks = state.get("progress_checks") or {}
+    current_checks = {}
+    for check in checks or ():
+        if isinstance(check, CheckResult):
+            name, status = check.name, check.status
+        else:
+            name = check.get("name")
+            status = check.get("status")
+            if status is None:
+                status = "pass" if check.get("pass") is True else "fail" if check.get("pass") is False else "unknown"
+        if name:
+            current_checks[name] = status
+    progressed = (diff_fingerprint is not None and previous_diff is not None
+                  and diff_fingerprint != previous_diff) or any(
+        status == "pass" and previous_checks.get(name) == "fail"
+        for name, status in current_checks.items())
+    progressed = progressed or (completed and checks is not None and state.get("progress_pending", False))
+    fields = {"no_progress": 0 if accepted_plan or progressed else state.get("no_progress", 0) + int(completed)}
+    if (completed and checks is not None) or accepted_plan:
+        fields["progress_pending"] = False
+    elif progressed:
+        fields["progress_pending"] = True
+    if diff_fingerprint is not None:
+        fields["progress_diff_fingerprint"] = diff_fingerprint
+    if current_checks:
+        fields["progress_checks"] = {**previous_checks, **current_checks}
+    return fields
+
+
 def load(repo: str, issue: int) -> Run:
     return Run.from_state({key: value for key, value in state_read(repo, issue).items()
                            if key != "updated_at"})
