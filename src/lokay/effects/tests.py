@@ -8,18 +8,29 @@ from pathlib import Path
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.effects.pi import run_process
+    from lokay.effects.git import command
     from lokay.build import generated_cleanup
 
     cache = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
     env = {**os.environ, "UV_CACHE_DIR": str(cache)}
 
     def execute(argv):
-        if cache.is_relative_to(Path(cwd).resolve()):
-            return CompletedProcess(argv, 1, "", f"UV_CACHE_DIR must be outside cwd: {cache}"), False
         if any(re.search(r"(?:^|[\s;|&])(?:--cache-dir(?:=|\s|$)|UV_CACHE_DIR=)", arg)
                for arg in argv):
             return CompletedProcess(argv, 1, "", "configured command must not override UV_CACHE_DIR or --cache-dir"), False
         try:
+            root = Path(cwd).resolve()
+            if any((path / ".git").exists() or (path / ".git").is_symlink()
+                   for path in (root, *root.parents)):
+                proc = command(root, ["rev-parse", "--show-toplevel"])
+                if proc.returncode:
+                    return CompletedProcess(argv, 1, "", proc.stderr or proc.stdout or "git rev-parse failed"), False
+                top = proc.stdout.strip()
+                if not top or not Path(top).is_absolute():
+                    return CompletedProcess(argv, 1, "", "git returned an invalid repository top-level"), False
+                root = Path(top).resolve()
+            if cache.is_relative_to(root):
+                return CompletedProcess(argv, 1, "", f"UV_CACHE_DIR must be outside repository or cwd: {cache}"), False
             with generated_cleanup(Path(cwd)):
                 return run_process(argv, cwd=cwd, timeout=timeout, env=env), False
         except TimeoutExpired:

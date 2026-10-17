@@ -162,7 +162,7 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
             code, out, err = _git(repo, ["ls-remote", "--exit-code", "--heads", "origin", f"refs/heads/{branch}"])
             if code not in (0, 2):
                 raise RuntimeError(err.strip() or out.strip() or f"ls-remote failed ({code})")
-            base = branch if code == 0 else base_branch(repo, branch=branch)
+            base = branch if code == 0 else "main"
             checked(repo, ["check-ref-format", "--branch", base])
             checked(repo, ["fetch", "origin", f"refs/heads/{base}:refs/remotes/origin/{base}"])
             args = ["worktree", "add", "-b", branch, str(path), f"origin/{base}"]
