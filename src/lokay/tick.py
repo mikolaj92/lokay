@@ -16,7 +16,7 @@ from lokay import graph, store
 from dataclasses import replace
 from lokay.types import Event, Run, Progress, Snapshot, RepoSnapshot, Updated, parse_event
 from lokay.effects import maintenance
-from lokay.effects.git import base_branch, command
+from lokay.effects.git import base_branch, command, worktree_remove
 from lokay.build import _git as build_git
 
 from lokay.types import Finding, Note, parse_finding, to_dict
@@ -212,6 +212,25 @@ def pick(env: dict[str, str] | None = None) -> dict:
             break
     statuses = main_status()
     snapshots = []
+    pr_lists = {}
+    issue_lists = {}
+
+    def list_prs(name):
+        if name not in pr_lists:
+            code, out, err = _gh([
+                "pr", "list", "--repo", name, "--state", "all", "--limit", "1000000",
+                "--json", "number,headRefName,headRefOid,labels,state",
+            ])
+            if code != 0:
+                raise RuntimeError(err.strip() or "pr list failed")
+            pr_lists[name] = tuple(json.loads(out or "[]"))
+        return pr_lists[name]
+
+    def list_issues(name):
+        if name not in issue_lists:
+            issue_lists[name] = tuple(open_issues(name))
+        return issue_lists[name]
+
     for repo in repos:
         name = repo["name"]
         states = {}
@@ -237,9 +256,41 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             saved = state_read(name, issue)
                     finally:
                         release(held)
-            if saved and saved.get("result") != "merged":
+            if saved:
                 states[issue] = saved
-        snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}), states=states))
+        busy = False
+        active = {issue: saved for issue, saved in states.items()
+                  if saved.get("result") not in ("merged", "closed")
+                  and (only_issue is None or issue == only_issue)}
+        if active:
+            prs = list_prs(name)
+            issues = list_issues(name)
+            closed_issues = {row["number"] for row in issues if row.get("state") == "CLOSED"}
+            closed_prs = [row for row in prs if row.get("state") == "CLOSED"]
+            closing = [issue for issue, saved in active.items()
+                       if issue in closed_issues or any(
+                           (row["number"] == saved["pr"] if saved.get("pr") else
+                            row["headRefName"] == (saved.get("branch") or f"lokay/{issue}"))
+                           for row in closed_prs)]
+            if closing:
+                held = acquire(name.split("/")[0], name)
+                busy = held["result"] != "held"
+                if not busy:
+                    try:
+                        for issue in closing:
+                            saved = state_read(name, issue)
+                            if not saved or saved.get("result") in ("merged", "closed"):
+                                states[issue] = saved
+                                continue
+                            state_update(name, issue, _event={"action": "closed"})
+                            states[issue] = state_read(name, issue)
+                            root, worktree = _repo_paths(repo, issue)
+                            cleanup = worktree_remove(root, worktree, safe=True, branch=f"lokay/{issue}")
+                            store.log_event("closed_cleanup", repo=name, issue=issue, outcome=cleanup)
+                    finally:
+                        release(held)
+        snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}),
+                                      states=states, busy=busy))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
     while True:
         check_deadline()
@@ -250,13 +301,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         name, number = selected.repo, selected.issue
         repo = next(row for row in snapshot.repos if row.name == name)
         if selected.kind == "prs":
-            code, out, err = _gh([
-                "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                "--json", "number,headRefName,headRefOid,labels",
-            ])
-            if code != 0:
-                raise RuntimeError(err.strip() or "pr list failed")
-            prs = tuple(json.loads(out or "[]"))
+            prs = tuple(row for row in list_prs(name) if row.get("state", "OPEN") == "OPEN")
             states = {}
             for row in prs:
                 branch = row["headRefName"]
@@ -266,19 +311,24 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if only_issue is not None and issue != only_issue:
                     continue
                 saved = state_read(name, issue)
+                if saved.get("result") in ("closed", "merged"):
+                    states[issue] = saved
+                    continue
                 states[issue] = saved
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
             repo = replace(repo, prs=prs, states={**repo.states, **states})
         elif selected.kind == "issues":
-            issues = tuple(row for row in open_issues(name)
-                           if only_issue is None or int(row["number"]) == only_issue)
+            issues = tuple(row for row in list_issues(name)
+                           if row.get("state", "OPEN") == "OPEN"
+                           and (only_issue is None or int(row["number"]) == only_issue))
             states = {}
             open_prs = set()
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
-                if saved.get("waiting_on") in ("children", "ci"):
+                if (saved.get("result") in ("merged", "closed")
+                        or saved.get("waiting_on") in ("children", "ci")):
                     continue
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)

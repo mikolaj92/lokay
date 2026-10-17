@@ -174,7 +174,9 @@ def escalation_fields(state: dict) -> dict:
     }
 
 
-def derive_waiting_on(state: dict, now: float | None = None) -> str:
+def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
+    if state.get("result") == "closed":
+        return None
     now = time.time() if now is None else now
     if state.get("awaiting") == "children":
         return "children"

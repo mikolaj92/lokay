@@ -197,7 +197,53 @@ def worktree_add(repo: Path, branch: str, path: Path) -> dict:
     return ensure_worktree(repo, branch, path)
 
 
-def worktree_remove(repo: Path, path: Path) -> dict:
+def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None) -> dict:
+    if safe:
+        def checked(where, args):
+            code, out, err = _git(where, args)
+            if code:
+                raise RuntimeError(err.strip() or out.strip() or "cleanup lookup failed")
+            return out.strip()
+
+        try:
+            match = re.fullmatch(r"lokay/([1-9][0-9]*)", branch or "")
+            if not match:
+                raise ValueError("expected lokay/<positive decimal issue>")
+            repo = repo.resolve()
+            path = path.parent.resolve() / path.name
+            expected = repo.parent / f"{repo.name}-wt-{match[1]}"
+            if path != expected or path.is_symlink() or path == repo:
+                raise ValueError("expected non-symlink sibling worktree path")
+            if not path.exists():
+                return {"result": "kept", "path": str(path)}
+            ref = f"refs/heads/{branch}"
+            if (Path(checked(repo, ["rev-parse", "--show-toplevel"])).resolve() != repo
+                    or not (path / ".git").is_file() or (path / ".git").is_symlink()
+                    or Path(checked(path, ["rev-parse", "--show-toplevel"])).resolve() != path
+                    or checked(path, ["symbolic-ref", "HEAD"]) != ref):
+                raise ValueError("worktree top-level or branch mismatch")
+            common = (repo / checked(repo, ["rev-parse", "--git-common-dir"])).resolve()
+            if (path / checked(path, ["rev-parse", "--git-common-dir"])).resolve() != common:
+                raise ValueError("worktree repository mismatch")
+            records = checked(repo, ["worktree", "list", "--porcelain", "-z"]).split("\0\0")
+            matches = [record.split("\0") for record in records
+                       if f"worktree {path}" in record.split("\0")]
+            if (len(matches) != 1 or f"branch {ref}" not in matches[0]
+                    or any(field.startswith("locked") for field in matches[0])):
+                raise ValueError("worktree registration mismatch or locked")
+            if checked(path, ["status", "--porcelain", "--untracked-files=all", "--ignored"]):
+                return {"result": "kept", "path": str(path), "reason": "dirty"}
+            head = checked(repo, ["rev-parse", "--verify", ref])
+            if checked(path, ["rev-parse", "HEAD"]) != head:
+                raise ValueError("worktree HEAD mismatch")
+            reachable = checked(repo, ["for-each-ref", f"--contains={head}",
+                                       "--format=%(refname)", "refs/remotes/origin/"])
+            checked(repo, ["worktree", "remove", str(path)])
+            if reachable:
+                checked(repo, ["update-ref", "-d", ref, head])
+            return {"result": "removed", "path": str(path)}
+        except (OSError, ValueError, RuntimeError) as exc:
+            return {"result": "failed", "error": str(exc)}
     code, out, err = _git(repo, ["worktree", "remove", "--force", str(path)])
     if code != 0 and path.exists():
         return {"result": "failed", "error": err.strip() or out.strip()}

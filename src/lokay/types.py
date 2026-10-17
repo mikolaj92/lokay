@@ -50,6 +50,11 @@ class Merged(Updated):
 
 
 @dataclass(frozen=True)
+class Closed(Updated):
+    pass
+
+
+@dataclass(frozen=True)
 class Conflict(Updated):
     pass
 
@@ -89,7 +94,7 @@ class Progress(Updated):
     pass
 
 
-Event: TypeAlias = Planned | Synthesized | Built | Checked | Merged | Conflict | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Updated
+Event: TypeAlias = Planned | Synthesized | Built | Checked | Merged | Closed | Conflict | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Updated
 
 
 def parse_event(raw: dict) -> Event:
@@ -97,7 +102,7 @@ def parse_event(raw: dict) -> Event:
         "needs_help": Failed, "replan": Planned, "build_complete": Built,
         "retry_succeeded": Retried, "fix_to_build": FixToBuild, "synthesis": Synthesized,
         "published": Published, "verdict": Checked, "fix_complete": Fixed,
-        "merge_complete": Merged, "red_main": RedMain,
+        "merge_complete": Merged, "closed": Closed, "red_main": RedMain,
     }
     action = raw.get("action")
     if action is not None and action not in variants:
@@ -114,7 +119,7 @@ def event_record(event: Event) -> dict:
         Planned: "replan", Synthesized: "synthesis", Built: "build_complete",
         Checked: "verdict", Conflict: "verdict", Merged: "merge_complete",
         Failed: "needs_help", Retried: "retry_succeeded", FixToBuild: "fix_to_build",
-        Published: "published", Fixed: "fix_complete", RedMain: "red_main",
+        Published: "published", Fixed: "fix_complete", RedMain: "red_main", Closed: "closed",
     }
     raw = {"ts": event.ts, "fields": event.fields}
     if type(event) in actions:
