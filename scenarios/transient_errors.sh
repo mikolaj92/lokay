@@ -34,6 +34,23 @@ if mode == 'curl':
     print('{}')
     sys.stdout.write(os.environ['TRANSIENT_STATUS'] if n <= int(os.environ['TRANSIENT_FAILURES']) else '200')
     sys.exit(0)
+if mode == 'json':
+    if n <= int(os.environ['TRANSIENT_FAILURES']):
+        print(json.dumps({'type': 'message_end', 'message': {'role': 'assistant',
+              'errorMessage': os.environ['TRANSIENT_ERROR'], 'content': []}}))
+    else:
+        print(json.dumps({'type': 'message_end', 'message': {'role': 'assistant',
+              'content': [{'type': 'text', 'text': 'done'}]}}))
+    sys.exit(0)
+if mode == 'create':
+    if args[:2] == ['pr', 'list']:
+        print(json.dumps([{'number': 7, 'headRefName': 'branch'}]))
+        sys.exit(0)
+    print('HTTP 503', file=sys.stderr)
+    sys.exit(1)
+if mode == 'checks':
+    print(json.dumps({'headRefOid': 'abc', 'statusCheckRollup': []}))
+    sys.exit(0)
 if mode == 'comment':
     if args[0] == 'api':
         print(json.dumps([[{'body': (root / 'body').read_text(), 'html_url': 'https://example/comment'}]]))
@@ -103,10 +120,59 @@ os.environ.update(TRANSIENT_MODE='error', TRANSIENT_ERROR='HTTP 503', TRANSIENT_
 pi._pi_admission = lambda *args: nullcontext()
 proc = pi.run_process([str(executable), '-p', 'local scenario'], cwd=Path.cwd(), retry='pi')
 assert proc.returncode == 0 and count.read_text() == '2' and delays == [1]
-for path in ('src/lokay/build.py', 'src/lokay/fix.py', 'src/lokay/effects/pi.py'):
-    assert 'retry="pi"' in Path(path).read_text()
+for error, failures, attempts, pauses in (
+    ('HTTP 503', 1, 2, [1]),
+    ('HTTP 429', 8, 4, [1, 2, 4]),
+    ('HTTP 401', 8, 1, []),
+    ('HTTP 403', 8, 1, []),
+    ('semantic failure at line 503', 8, 1, []),
+):
+    count.unlink(missing_ok=True)
+    delays.clear()
+    os.environ.update(TRANSIENT_MODE='json', TRANSIENT_ERROR=error, TRANSIENT_FAILURES=str(failures))
+    proc = pi.run_process([str(executable), '-p', 'local scenario'], cwd=Path.cwd(), retry='pi')
+    assert int(count.read_text()) == attempts and delays == pauses, (error, proc, delays)
+count.unlink()
+delays.clear()
+os.environ.update(TRANSIENT_MODE='json', TRANSIENT_ERROR='HTTP 503', TRANSIENT_FAILURES='1',
+                  LOKAY2_PROVIDER='local', LOKAY2_MODEL='local')
+artifact = root / 'missing.json'
+pi.sandboxed = lambda argv, *args: [str(root / 'pi'), *argv[1:]]
+result = pi.pi_step('local scenario', artifact, cwd=Path.cwd())
+assert result['result'] == 'failed' and count.read_text() == '2' and delays == [1]
+count.unlink()
+delays.clear()
+os.environ['TRANSIENT_FAILURES'] = '0'
+result = pi.pi_step('local scenario', artifact, cwd=Path.cwd())
+assert result['result'] == 'failed' and count.read_text() == '1' and not delays
+from lokay import build, fix
+
+for module in (build, fix):
+    module.worktree_status = lambda worktree: {}
+    module.pi_env = lambda env, worktree: dict(env)
+    module.sandboxed = pi.sandboxed
+    module.guard = lambda paths: nullcontext({'changed': False})
+    module.cleanup_worktree_caches = lambda worktree: None
+    module.tidy_and_commit = lambda *args: None
+build.exclude_caches = lambda worktree: None
+build._git = lambda *args: 'previous'
+for module in (build, fix):
+    count.unlink(missing_ok=True)
+    delays.clear()
+    os.environ.update(TRANSIENT_MODE='json', TRANSIENT_ERROR='HTTP 503', TRANSIENT_FAILURES='8')
+    if module is build:
+        result = build.build_code(Path.cwd(), 'plan', 'title', '', dict(os.environ))
+    else:
+        result = fix.fix_code(Path.cwd(), 'previous', 'prompt', dict(os.environ))
+    assert result['result'] == 'failed' and count.read_text() == '4' and delays == [1, 2, 4]
 wire = decide._trim_wire({'state': {'log': '\"\\😀' * 10000}, 'questions': []})
 assert len(json.dumps(wire)) < 6000
+internal = {'state': {'log': '\"\\\\😀' * 10000}, 'questions': [
+    {'id': 'q', 'type': 'choice', 'instructions': 'choose', 'options': {'yes': 'yes', 'no': 'no'}}]}
+for api in ('mini', 'systemone', 'tensorfold', 'openai-decisions', 'chat'):
+    wire = decide.to_wire(api, 'model', internal)
+    assert len(json.dumps(wire)) < 6000, (api, len(json.dumps(wire)))
+    assert wire == decide.to_wire(api, 'model', internal)
 count.unlink()
 delays.clear()
 os.environ['TRANSIENT_MODE'] = 'comment'
@@ -123,6 +189,16 @@ suffix = '\n\nCloses #1924\n\nOpened by lokay.\n'
 text = gh.fit_body('😀\\\"' * 30000, 60000 - len(suffix)) + suffix
 assert len(text) <= 60000 and text.endswith(suffix)
 assert json.loads(json.dumps(text)) == text
+count.unlink()
+delays.clear()
+os.environ['TRANSIENT_MODE'] = 'create'
+result = gh.pr_create('owner/repo', 'branch', 'title' * 100, '😀' * 70000, 1924)
+assert result['url'] == 'https://github.com/owner/repo/pull/7'
+assert count.read_text() == '2' and not delays
+count.unlink()
+os.environ['TRANSIENT_MODE'] = 'checks'
+result = gh.pr_checks('owner/repo', 7, 'abc')
+assert result['result'] == 'no_ci' and count.read_text() == '1'
 pi.retry_sleep = original_sleep
 print('transient_errors: transport retries, exhaustion, backoff, permanent errors, Decision, comment reconciliation and Unicode OK')
 PY

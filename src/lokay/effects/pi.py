@@ -184,9 +184,8 @@ def transient_error(proc: subprocess.CompletedProcess[str], transport: str) -> b
         if proc.returncode == 52:
             messages.append("curl: (52) Empty reply")
     else:
-        if proc.returncode == 0:
-            return False
-        messages.extend(proc.stderr.splitlines())
+        if proc.returncode != 0:
+            messages.extend(proc.stderr.splitlines())
         if transport == "pi":
             for line in proc.stdout.splitlines():
                 try:
@@ -196,7 +195,10 @@ def transient_error(proc: subprocess.CompletedProcess[str], transport: str) -> b
                 if not isinstance(event, dict):
                     continue
                 message = event.get("message", event)
-                if isinstance(message, dict) and message.get("role", "assistant") == "assistant":
+                if (event.get("type") == "message_end" and isinstance(message, dict)
+                        and message.get("role") == "assistant"):
+                    statuses.clear()
+                    messages = proc.stderr.splitlines() if proc.returncode != 0 else []
                     error = message.get("errorMessage")
                     if isinstance(error, str):
                         messages.extend(error.splitlines())
@@ -204,6 +206,8 @@ def transient_error(proc: subprocess.CompletedProcess[str], transport: str) -> b
                         value = message.get(key)
                         if type(value) is int:
                             statuses.append(value)
+        if transport != "pi" and proc.returncode == 0:
+            return False
         for message in messages:
             statuses.extend(int(match) for match in re.findall(
                 r"(?i)\b(?:HTTP(?:/\d(?:\.\d)?)?|status(?:\s+code)?)[\s:=]+([1-5]\d\d)\b", message))
@@ -230,6 +234,21 @@ def run_process(
 ) -> subprocess.CompletedProcess[str]:
     for attempt in range(4):
         proc = _logged_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+        if retry == "pi" and proc.returncode == 0:
+            terminal = None
+            for line in proc.stdout.splitlines():
+                try:
+                    event = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(event, dict) and event.get("type") == "message_end":
+                    message = event.get("message")
+                    if isinstance(message, dict) and message.get("role") == "assistant":
+                        terminal = message
+            if terminal and (terminal.get("errorMessage") or terminal.get("stopReason") in ("error", "aborted")):
+                proc.returncode = 1
+                if not proc.stderr:
+                    proc.stderr = terminal.get("errorMessage") or "pi assistant failed"
         if retry is None or not transient_error(proc, retry):
             if pi_command(argv) is not None:
                 proc.stdout = pi_assistant_text(proc.stdout)

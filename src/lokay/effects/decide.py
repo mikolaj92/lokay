@@ -106,7 +106,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 },
                 "required": ["probabilities", "choice", "reason"], "additionalProperties": False,
             }
-        return {
+        wire = {
             "model": model,
             "messages": [
                 {"role": "system", "content": "You are a careful code reviewer. Answer each question "
@@ -124,6 +124,11 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                            "required": list(properties), "additionalProperties": False},
             }},
         }
+        while len(dumps(wire)) >= 6000:
+            previous = len(dumps(user))
+            user = _trim_wire(user, limit=max(1, previous - max(1, (len(dumps(wire)) - 5999) // 2)))
+            wire["messages"][1]["content"] = dumps(user)
+        return wire
     if api == "tensorfold":
         questions = [{
             "id": question["id"],

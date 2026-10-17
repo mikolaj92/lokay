@@ -54,9 +54,14 @@ def _reconcile(args: list[str], env: Mapping[str, str] | None, cwd: Path | None)
     operation = args[:2]
     if operation == ["pr", "create"]:
         branch = args[args.index("--head") + 1]
-        pr = open_pr_for(repo, branch)
-        if pr:
-            return subprocess.CompletedProcess(args, 0, f"https://github.com/{repo}/pull/{pr['number']}", "")
+        code, out, err = _gh(
+            ["pr", "list", "--repo", repo, "--head", branch, "--state", "all",
+             "--json", "number,headRefName"], env, cwd=cwd)
+        if code:
+            raise RuntimeError(err or "PR reconciliation failed")
+        prs = [pr for pr in json.loads(out) if pr.get("headRefName") == branch]
+        if prs:
+            return subprocess.CompletedProcess(args, 0, f"https://github.com/{repo}/pull/{prs[0]['number']}", "")
         return None
     number = args[2]
     if operation == ["pr", "comment"]:
@@ -150,13 +155,6 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
         return {"result": "sha_moved", "sha": view.get("headRefOid") or ""}
     rollup = view.get("statusCheckRollup") or []
     if not rollup:
-        code, out, err = _gh(["api", f"repos/{repo}/contents/.github/workflows?ref={sha}"])
-        if code and "404" not in err:
-            raise RuntimeError(err.strip() or "workflow lookup failed")
-        workflows = [] if code else json.loads(out)
-        if any(item.get("type") == "file" and Path(item["path"]).suffix in (".yml", ".yaml")
-               for item in workflows):
-            return {"result": "pending", "sha": sha, "failed": [], "pending": ["GitHub workflows"]}
         return {"result": "no_ci", "sha": sha, "failed": [],
                 "notes": [{"warstwa": "GitHub CI", "log": "no GitHub checks configured"}]}
     failed = []
