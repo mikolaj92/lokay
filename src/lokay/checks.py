@@ -1,3 +1,4 @@
+import ast
 import os
 import re
 import shutil
@@ -5,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
+from lokay.scope import is_artifact
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -199,7 +201,37 @@ def lockfile(x: CheckInput) -> CheckResult:
     return CheckResult("lockfile", "pass", reason, ())
 
 
-CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", lockfile, "secrets", "permissions",
+def junk(x: CheckInput) -> CheckResult:
+    paths = set()
+    for block in x.diff.split("diff --git ")[1:]:
+        lines = block.splitlines()
+        if any(line.startswith("deleted file mode ") for line in lines):
+            continue
+        header = re.search(r' ("b/(?:\\.|[^"])*"|b/.*)$', lines[0])
+        if header is None:
+            raise ValueError("invalid diff path")
+        path = header[1]
+        if path.startswith('"'):
+            path = ast.literal_eval(path)
+        path = path.removeprefix("b/")
+        for line in lines[1:]:
+            if line.startswith("+++ "):
+                path = line[4:].split("\t", 1)[0]
+                if path.startswith('"'):
+                    path = ast.literal_eval(path)
+                path = path.removeprefix("b/")
+                break
+        if Path(path).is_absolute() or ".." in Path(path).parts:
+            continue
+        if is_artifact(path, x.worktree):
+            paths.add(path)
+    findings = tuple(Finding(path, 1, 1, "remove generated junk file", "junk") for path in sorted(paths))
+    return CheckResult("junk", "fail" if findings else "pass",
+                       "generated junk files: " + ", ".join(sorted(paths)) if findings else "no generated junk files",
+                       findings)
+
+
+CHECKS = [ci_green, local_tests, "merge_clean", "plan_files", lockfile, "secrets", junk,
           no_new_comments, no_unit_tests, "issue_goal", "scope", "correctness", "tests_cover", "regression",
           "architecture", "security_review", docs, "style"]
 

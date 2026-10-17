@@ -246,6 +246,10 @@ def remove_file(path: Path) -> None:
     path.unlink(missing_ok=True)
 
 
+def remove_directory(path: Path) -> None:
+    shutil.rmtree(path)
+
+
 def append_text(path: Path, text: str) -> None:
     ensure_directory(path.parent)
     with path.open("a") as stream:
@@ -304,7 +308,8 @@ def worker_index() -> str | None:
 
 def process_groups_path() -> Path:
     worker = worker_index()
-    return Path.home() / ".lokay" / ("procs.json" if worker is None else f"procs-{worker}.json")
+    directory = Path(os.environ["LOKAY_STATE_DIR"]) if os.environ.get("LOKAY_STATE_DIR") else Path.home() / ".lokay"
+    return directory / ("procs.json" if worker is None else f"procs-{worker}.json")
 
 
 def save_process_groups(pgids: list[int]) -> None:
