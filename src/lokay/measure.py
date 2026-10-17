@@ -152,7 +152,7 @@ def main(argv: list[str]) -> int:
         end_b = boundary(args.until) if args.until else datetime.now(timezone.utc)
         window(args.baseline, start_a, end_a, [])
         window(args.since, start_b, end_b, [])
-        records = merges(Path.home() / ".lokay")
+        records = merges(config.HOME)
         a = window(args.baseline, start_a, end_a, records)
         b = window(args.since, start_b, end_b, records)
         verdict = "keep" if b["code/h"] >= a["code/h"] else "revert"

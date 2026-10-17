@@ -19,6 +19,7 @@ from subprocess import TimeoutExpired
 from typing import Any, BinaryIO, cast
 
 from lokay import store
+from lokay.config import HOME
 from lokay.effects.retry import retry
 
 
@@ -287,7 +288,7 @@ def _pi_admission(argv, env, expires, expired):
         reason = "disk"
         if shutil.disk_usage(Path.home()).free >= 5000000000:
             reason = "pi_capacity"
-            held = store.acquire_lock(Path.home() / ".lokay" / "pi-admission.lock")
+            held = store.acquire_lock(HOME / "pi-admission.lock")
             if held["result"] == "held":
                 try:
                     admitted = len(_pi_pids(expires)) < int(workers)

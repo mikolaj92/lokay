@@ -17,10 +17,11 @@ from threading import RLock
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lokay.config import HOME
 from lokay.types import CheckResult, Event, Run, event_record, parse_event
 
-RUNS = Path.home() / ".lokay" / "runs"
-LOCKS = Path.home() / ".lokay" / "locks"
+RUNS = HOME / "runs"
+LOCKS = HOME / "locks"
 TICK = str(uuid.uuid4())
 SEQ = 0
 CONTEXT: dict = {}
@@ -348,7 +349,7 @@ def worker_index() -> str | None:
 
 def process_groups_path() -> Path:
     worker = worker_index()
-    directory = Path(os.environ["LOKAY_STATE_DIR"]) if os.environ.get("LOKAY_STATE_DIR") else Path.home() / ".lokay"
+    directory = Path(os.environ["LOKAY_STATE_DIR"]) if os.environ.get("LOKAY_STATE_DIR") else HOME
     return directory / ("procs.json" if worker is None else f"procs-{worker}.json")
 
 
@@ -371,7 +372,7 @@ def shared_file_lock(path: Path):
 
 
 def write_heartbeat(result: str | None = None, **fields) -> dict:
-    path = Path.home() / ".lokay" / "heartbeat.json"
+    path = HOME / "heartbeat.json"
     with shared_file_lock(path.with_suffix(".lock")):
         return _write_heartbeat(path, result, **fields)
 

@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from pathlib import Path
 
 from lokay import store
-from lokay.config import load_repos
+from lokay.config import HOME, load_repos
 from lokay.effects.git import git_try
 from lokay.effects.pi import run_process
 
@@ -20,7 +20,7 @@ ENV: ContextVar[dict[str, str] | None] = ContextVar("maintenance_env", default=N
 
 def sweep(aggressive: bool) -> None:
     home = Path.home()
-    directory = home / ".lokay"
+    directory = HOME
     timestamp = directory / "sweep.json"
     errors = []
     worktrees = branches = 0
