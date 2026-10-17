@@ -86,7 +86,8 @@ def step(run: Run, event: Event) -> Run:
 
 
 def pick(snapshot: Snapshot) -> Pick | None:
-    for repo in sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name)):
+    repos = sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name))
+    for repo in repos:
         if repo.busy:
             continue
         number = repo.status.get("issue")
@@ -94,6 +95,9 @@ def pick(snapshot: Snapshot) -> Pick | None:
                 and repo.states.get(number, {}).get("result") != "parked"
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
+    for repo in repos:
+        if repo.busy:
+            continue
         if repo.prs is None:
             return Pick(repo.name, 0, "prs")
         ready = []

@@ -191,6 +191,8 @@ def lockfile(x: CheckInput) -> CheckResult:
                                  "lockfile drift during setup or tests: review and commit the lockfile",
                                  "lockfile") for name in sorted(drifted))
         return CheckResult("lockfile", "fail", "; ".join(sorted(drifted)) + ": " + message, findings)
+    if locks and not available:
+        errors.append("uv lock checks unavailable: uv not found")
     if errors:
         return CheckResult("lockfile", "unknown", "; ".join(map(str, errors)), ())
     reason = "uv unavailable" if not available else "uv lock checks passed" if locks else "no applicable uv locks"

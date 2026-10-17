@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from json import dumps
 
 import json
@@ -11,9 +12,11 @@ from lokay.config import load_repos
 from lokay.effects.gh import _gh, fit_body
 from lokay.effects.git import _git, base_branch
 from lokay.store import main_status, save_main_status
+from lokay.types import Finding, parse_finding
 
 TITLE = "lokay: main czerwony"
 MARKER = "lokay-main-red"
+GUARD_VERSION = 1
 
 
 def run_repo_tests(repo: dict, sha: str, worktree: Path) -> dict:
@@ -49,8 +52,11 @@ def guard_issue(repo: str, body: str) -> int:
     return int(out.strip().rstrip("/").rsplit("/", 1)[1])
 
 
-def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None, *, base: str | None = None) -> dict:
-    config = next(row for row in load_repos() if row["name"] == repo)
+def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None, *, base: str | None = None, config: dict | None = None) -> dict:
+    from lokay.checks import CheckInput, lockfile
+
+    if config is None:
+        config = next(row for row in load_repos() if row["name"] == repo)
 
     def git(path, args):
         code, out, err = _git(path, args)
@@ -65,6 +71,8 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     baseline = previous.get("baseline", {})
     argv = config.get("test") or []
     if (baseline.get("sha") != sha or baseline.get("argv") != argv
+            or baseline.get("guard_version") != GUARD_VERSION
+            or baseline.get("lockfile", {}).get("status") not in ("pass", "fail")
             or baseline.get("ci", {}).get("tested") is not True):
         with tempfile.TemporaryDirectory(prefix="lokay-main-") as temporary:
             worktree = Path(temporary) / "checkout"
@@ -78,23 +86,32 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 ci["log"] = setup.get("log", "") + "\n" + ci["log"]
                 if setup.get("failed"):
                     ci.update(result="red", tested=False, failed=[*setup["failed"], *ci["failed"]])
-                baseline = {"sha": sha, "argv": argv, "ci": ci}
+                lock = lockfile(CheckInput(repo, pr or 0, sha, "", "", "", "", [], ci, worktree))
+                baseline = {"sha": sha, "argv": argv, "guard_version": GUARD_VERSION,
+                            "ci": ci, "lockfile": asdict(lock)}
             finally:
                 git(clone_path, ["worktree", "remove", "--force", str(worktree)])
     ci = baseline["ci"]
     tested = ci.get("tested") is True
-    green = tested and ci["result"] == "green"
-    status = ("green" if green else "red") if tested else "unknown"
-    culprit = {"sha": merge_sha or sha, "pr": pr} if tested else None
+    lock = baseline["lockfile"]
+    status = ("red" if lock["status"] == "fail" or (tested and ci["result"] != "green")
+              else "green" if tested and lock["status"] == "pass" else "unknown")
+    culprit = {"sha": merge_sha or sha, "pr": pr} if tested or status == "red" else None
     result = {"status": status,
               "since": previous.get("since", time.time()) if previous.get("status") == status else time.time(),
-              "culprit": culprit, "issue": previous.get("issue"), "baseline": baseline}
+              "culprit": culprit, "issue": previous.get("issue"), "baseline": baseline,
+              "checked_at": time.time()}
     if status == "red":
+        save_main_status(repo, result)
         diff = git(clone_path, ["show", "--format=fuller", "--first-parent", merge_sha]) if merge_sha else ""
+        lock_log = "\n".join(
+            f"{item.plik}:{item.linia_od}: {item.zmiana}" for raw in lock["findings"]
+            if isinstance(item := parse_finding(raw), Finding))
         body = (f"Main czerwony. Napraw przez Plan → Build → Check → Fix → Merge.\n"
                 f"Culprit: {dumps(culprit)} · tested SHA: `{sha}`\n\n"
                 f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
-                f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```")
+                f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```\n\n"
+                f"Lock checks ({lock['status']}):\n```\n{lock['reason']}\n{lock_log}\n```")
         result["issue"] = guard_issue(repo, body)
     save_main_status(repo, result)
     return result
@@ -104,7 +121,8 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
     from lokay.check import test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
-    if ci.get("tested") is not True or main["ci"].get("tested") is not True or main["ci"]["result"] != "red" or any(
+    if (main["lockfile"]["status"] != "pass" or ci.get("tested") is not True
+            or main["ci"].get("tested") is not True or main["ci"]["result"] != "red") or any(
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):
         return ci
