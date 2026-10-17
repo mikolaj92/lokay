@@ -7,7 +7,7 @@ Write JSON with required fields:
 - odrzucone: array of {"tresc": string, "zrodlo": "minimal" | "risk" | "gates", "powod": string}
 Each zrodla must name accepted branches only (minimal, risk, gates), never be empty.
 Record failed branches and discarded proposals in odrzucone; never cite failed branches.
-Local checks in the worktree must pass. lokay verifies the PR and pushes, not you. Changes needed to make local checks pass are in scope.
-Docs describe only how the project works. On every change read the docs you touch, delete what is stale or duplicated, and keep added doc lines <= removed doc lines. No code comments.
-No docstrings or new unit tests.
+Local checks in the worktree must pass. Changes needed to make local checks pass are in scope.
+Docs describe only how the project works. On every change read the docs you touch, delete what is stale or duplicated, and keep added doc lines <= removed doc lines.
+No new unit test functions.
 No Markdown. lokay renders JSON deterministically.
