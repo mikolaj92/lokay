@@ -95,6 +95,29 @@ def step(run: Run, event: Event) -> Run:
     return Run(current, current.get("diff_fingerprint"))
 
 
+def _kind(row: dict, pr: bool = False) -> int:
+    if (row.get("title", "").startswith("[docs-audit]")
+            or any((label.get("name") if isinstance(label, dict) else label) == "docs"
+                   for label in row.get("labels", []))):
+        return 1
+    if not pr:
+        return 0
+    files = row.get("files")
+    if not files:
+        diff = row.get("diff") or ""
+        files = [path for pair in re.findall(r"^diff --git a/(.*?) b/(.*?)$", diff, re.MULTILINE)
+                 for path in pair]
+        files.extend(path.removeprefix("a/").removeprefix("b/")
+                     for path in re.findall(r"^(?:---|\+\+\+) ([^\t\n]+)", diff, re.MULTILINE)
+                     if path != "/dev/null")
+    paths = [file.get("path") or file.get("filename") if isinstance(file, dict) else file
+             for file in files]
+    return int(bool(paths) and all(isinstance(path, str) and bool(path)
+                                  and (path.startswith("docs/")
+                                       or path.endswith((".md", ".yml", ".yaml", ".toml")))
+                                  for path in paths))
+
+
 def pick(snapshot: Snapshot) -> Pick | None:
     repos = sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name))
     for repo in repos:
@@ -162,13 +185,13 @@ def pick(snapshot: Snapshot) -> Pick | None:
                     and not state.get("migrated_1955")))
             if (resume or (not parked
                            and state.get("waiting_on", "ready" if not state else None) == "ready")):
-                ready.append((state.get("last_attempt", 0), pr["number"], issue, pr))
+                ready.append((_kind(pr, pr=True), state.get("last_attempt", 0), pr["number"], issue, pr))
         if ready:
-            _, _, issue, target = min(ready, key=lambda row: row[:3])
+            _, _, _, issue, target = min(ready, key=lambda row: row[:4])
             return Pick(repo.name, issue, "pr", target)
         if repo.issues is None:
             return Pick(repo.name, 0, "issues")
-        for issue in repo.issues:
+        for issue in sorted(repo.issues, key=lambda row: (_kind(row), row.get("createdAt") or "", row["number"])):
             number = issue["number"]
             if ((snapshot.only_issue is None or snapshot.only_issue == number)
                     and repo.states[number].get("result") != "parked"
