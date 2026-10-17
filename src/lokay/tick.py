@@ -15,6 +15,7 @@ from pathlib import Path
 from lokay import graph, store
 from dataclasses import replace
 from lokay.types import Event, Run, Progress, Snapshot, RepoSnapshot, Updated, parse_event
+from lokay.effects import maintenance
 from lokay.effects.git import base_branch, command
 from lokay.build import _git as build_git
 
@@ -144,6 +145,12 @@ def host_ready(report: dict[str, str]) -> bool:
 
 
 def pick(env: dict[str, str] | None = None) -> dict:
+    free = shutil.disk_usage(Path.home()).free
+    token = maintenance.ENV.set(env)
+    try:
+        maintenance.sweep(aggressive=free < 10000000000)
+    finally:
+        maintenance.ENV.reset(token)
     if shutil.disk_usage(Path.home()).free < 5000000000:
         return {"result": "idle", "reason": "disk"}
     report = probes(env)
