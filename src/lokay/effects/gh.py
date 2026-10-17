@@ -117,7 +117,7 @@ def children_merged(repo: str, children: list[int]) -> bool:
 
 def open_issues(repo: str) -> list[dict]:
     code, out, err = _gh(
-        ["issue", "list", "--repo", repo, "--state", "open", "--limit", "1000000", "--json", "number,createdAt,title,labels"]
+        ["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000", "--json", "number,createdAt,title,labels,state"]
     )
     if code != 0:
         raise RuntimeError(err.strip() or "issue list failed")

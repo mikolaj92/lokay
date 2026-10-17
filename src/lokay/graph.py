@@ -3,13 +3,15 @@ import re
 from typing import assert_never
 
 from lokay.types import (
-    Run, Event, Planned, Synthesized, Built, Checked, Merged, Conflict, Failed,
+    Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Conflict, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick,
 )
 
 
 def step(run: Run, event: Event) -> Run:
     current = dict(run.state)
+    if current.get("result") == "closed":
+        return run
     fields = dict(event.fields)
     outcome = event.outcome
     match event:
@@ -67,6 +69,9 @@ def step(run: Run, event: Event) -> Run:
                     fields.update(node="check", verdict=None, dispute_rechecks=rechecks + [sha])
             else:
                 fields.update(node="check", verdict=None)
+        case Closed():
+            fields.update(result="closed", waiting_on=None, awaiting=None, retry_at=0,
+                          issue_since=None, failures=0, reason=None, last_error=None)
         case Merged():
             fields["result"] = outcome["result"]
         case RedMain():
@@ -126,6 +131,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
                 and repo.states.get(number, {}).get("waiting_on") != "children"
+                and repo.states.get(number, {}).get("result") not in ("merged", "closed")
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
     due = []
@@ -133,7 +139,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if repo.busy:
             continue
         for issue, state in repo.states.items():
-            if (state.get("result") == "merged"
+            if (state.get("result") in ("merged", "closed")
                     or (state.get("result") != "parked"
                         and (state.get("waiting_on") == "human" or state.get("awaiting") == "human"))
                     or state.get("waiting_on") == "children"
@@ -165,6 +171,8 @@ def pick(snapshot: Snapshot) -> Pick | None:
             return Pick(repo.name, 0, "prs")
         ready = []
         for pr in repo.prs:
+            if pr.get("state", "OPEN") != "OPEN":
+                continue
             branch = pr["headRefName"]
             if not branch.startswith("lokay/") or not branch[6:].isdecimal():
                 continue
@@ -172,6 +180,8 @@ def pick(snapshot: Snapshot) -> Pick | None:
             if snapshot.only_issue is not None and snapshot.only_issue != issue:
                 continue
             state = repo.states[issue]
+            if state.get("result") in ("closed", "merged"):
+                continue
             parked = (state.get("result") == "parked"
                       or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
@@ -183,7 +193,9 @@ def pick(snapshot: Snapshot) -> Pick | None:
             return Pick(repo.name, 0, "issues")
         for issue in sorted(repo.issues, key=lambda row: (_kind(row), row.get("createdAt") or "", row["number"])):
             number = issue["number"]
-            if ((snapshot.only_issue is None or snapshot.only_issue == number)
+            if (issue.get("state", "OPEN") == "OPEN"
+                    and (snapshot.only_issue is None or snapshot.only_issue == number)
+                    and repo.states[number].get("result") not in ("merged", "closed")
                     and (repo.states[number].get("result") == "parked"
                          or repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready")
                     and number not in repo.open_prs):
