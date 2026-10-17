@@ -10,10 +10,6 @@ from lokay.main_guard import check_main
 
 
 def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, held: dict | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
-    history = state_read(repo_name, issue).get("check_history", [])
-    if not history or history[-1].get("sha") != sha or history[-1].get("result") != "merge":
-        state_update(repo_name, issue, node="check", verdict=None, result="check")
-        return {"result": "check", "sha": sha}
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
     if worktree is not None and clone_path is None:

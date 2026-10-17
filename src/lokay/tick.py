@@ -1493,8 +1493,14 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
                 return {"result": "check", "sha": sha}
             if fixed.get("dispute_rejected"):
-                state_update(picked["repo"], picked["issue"], node="check", verdict=None, result="check")
-                return {"result": "check", "sha": sha}
+                if verdict.get("unknown") or verdict.get("unlocated_fail") or verdict.get("unlocated_findings"):
+                    state_update(picked["repo"], picked["issue"], node="check", verdict=None, result="check")
+                    return {"result": "check", "sha": sha}
+                verdict = {**verdict, "result": "merge", "uwagi": []}
+                pending = "merge"
+                state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
+                             result="merge", verdict=verdict)
+                continue
             if fixed.get("next") in ("build", "plan"):
                 return fixed
             if fixed["result"] == "failed":
@@ -1712,7 +1718,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                    "Merge conflict on GitHub; change the PR before checking again.")
         rounds += 1
         check_history = state_read(picked["repo"], picked["issue"]).get("check_history", []) + [{
-            "round": rounds, "sha": sha, "result": verdict["result"],
+            "round": rounds, "sha": sha,
             "findings": [finding_summary(row) for row in verdict.get("uwagi", [])],
             "fix_commit_subject": "", "dispute": {},
         }]
