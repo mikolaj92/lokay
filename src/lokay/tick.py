@@ -1151,7 +1151,7 @@ def dismissed_key(row: dict) -> list:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import QUESTIONS, aggregate, check_state, classify_multilens, decide_batches, hunks, hunk_finding
+    from lokay.check import QUESTIONS, aggregate, check_state, classify_multilens, decide_batches, docs_only, hunks, hunk_finding
     from lokay.main_guard import local_baseline, run_repo_tests
     from lokay.checks import CheckInput, run_checks
     from lokay.effects.decide import decide
@@ -1610,7 +1610,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                      issue_body=(saved.get("issue_body") or "")[:4000],
                                      history=saved.get("check_history", [])[-5:])
         decisions = []
-        kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
+        kinds = ("docs",) if docs_only(diff.stdout or "") else tuple(
+            p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))
+            if p.stem != "check_docs")
         for kind in kinds:
             decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
                                       lambda request: _retry(picked, "check", lambda: decide(request)))

@@ -7,6 +7,7 @@ from math import isfinite
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 
 from lokay import store
@@ -92,6 +93,26 @@ def hunks(diff: str) -> list[dict]:
     return [{"plik": row["path"], "linia_od": row["start"] if row["start"] is not None else 1,
              "linia_do": row["end"], "added": row["added"], "deleted": row["deleted"], "body": row["body"]}
             for row in rows.values()]
+
+
+def docs_only(diff: str) -> bool:
+    paths = []
+    for line in diff.splitlines():
+        if not line.startswith("diff --git "):
+            continue
+        try:
+            tokens = shlex.split(line)
+        except ValueError:
+            return False
+        if (len(tokens) != 4 or tokens[:2] != ["diff", "--git"]
+                or not tokens[2].startswith("a/") or not tokens[3].startswith("b/")):
+            return False
+        paths.extend(token[2:] for token in tokens[2:])
+    return bool(paths) and all(
+        path and not Path(path).is_absolute() and ".." not in Path(path).parts
+        and (path.startswith("docs/") or Path(path).suffix in {".md", ".rst", ".txt"})
+        for path in paths
+    )
 
 
 def lens(kind: str) -> str:

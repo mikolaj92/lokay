@@ -1,0 +1,6 @@
+{
+  "id": "docs",
+  "type": "bool",
+  "question": "Is this hunk inaccurate against the code or issue, or does it grow documentation on net without need? True means a problem. Allow useful, necessary additions. Prefer editing or deleting existing documentation over adding redundant new material.",
+  "veto": 0.85
+}
