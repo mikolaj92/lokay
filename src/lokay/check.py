@@ -263,15 +263,16 @@ def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | Non
     from lokay.checks import verdict
 
     checked = verdict(results, ci)
+    checks_red = ci is not None and ci.get("result") == "red"
     located = []
     unlocated = []
     for finding in outcome.get("uwagi") or []:
-        (located if isinstance(parse_finding(finding), Finding) else unlocated).append(finding)
+        (located if checks_red or isinstance(parse_finding(finding), Finding) else unlocated).append(finding)
     findings = [to_dict(finding) for result in checked["failed"] for finding in result.findings]
     notes = [*(outcome.get("notes") or []), *(outcome.get("replan") or []), *unlocated,
              *({"warstwa": result.name, "log": result.reason, "status": result.status}
                for result in (*checked["unknown"], *checked["unlocated_fail"]))]
-    result = checked["result"]
+    result = "fix" if checks_red else checked["result"]
     if result == "merge":
         result = "fix" if located else "wait" if unlocated or outcome.get("result") in ("fix", "wait") else "merge"
     return {**outcome, **checked, "result": result, "uwagi": [*located, *findings],

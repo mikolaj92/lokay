@@ -1423,29 +1423,31 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
             "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
-        def read_stat():
-            stat = command(worktree, ["diff", "--stat", f"origin/{base}...HEAD"])
-            if stat.returncode != 0:
-                raise RuntimeError(stat.stderr or "diff stat failed")
-            return stat.stdout or ""
-
-        directory = run_dir(picked["repo"], picked["issue"])
-        decision_state = check_state(directory, rounds + 1, diff.stdout or "",
-                                     _retry(picked, "check", read_stat), ci,
-                                     sha=sha, repo=picked["repo"], issue=picked["issue"],
-                                     issue_title=(saved.get("issue_title") or "")[:4000],
-                                     issue_body=(saved.get("issue_body") or "")[:4000],
-                                     history=saved.get("check_history", [])[-5:])
         decisions = []
-        kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
-        for kind in kinds:
-            decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
-                                      lambda request: _retry(picked, "check", lambda: decide(request)))
-            decision["sha"] = sha
-            decisions.append(decision)
-            rounds_append(picked["repo"], picked["issue"],
-                          f"Check lens {kind}, round={rounds + 1}: next={decision['next']}, "
-                          f"p={dumps(decision.get('probabilities', []))}")
+        kinds = ()
+        if ci["result"] == "green":
+            def read_stat():
+                stat = command(worktree, ["diff", "--stat", f"origin/{base}...HEAD"])
+                if stat.returncode != 0:
+                    raise RuntimeError(stat.stderr or "diff stat failed")
+                return stat.stdout or ""
+
+            directory = run_dir(picked["repo"], picked["issue"])
+            decision_state = check_state(directory, rounds + 1, diff.stdout or "",
+                                         _retry(picked, "check", read_stat), ci,
+                                         sha=sha, repo=picked["repo"], issue=picked["issue"],
+                                         issue_title=(saved.get("issue_title") or "")[:4000],
+                                         issue_body=(saved.get("issue_body") or "")[:4000],
+                                         history=saved.get("check_history", [])[-5:])
+            kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
+            for kind in kinds:
+                decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
+                                          lambda request: _retry(picked, "check", lambda: decide(request)))
+                decision["sha"] = sha
+                decisions.append(decision)
+                rounds_append(picked["repo"], picked["issue"],
+                              f"Check lens {kind}, round={rounds + 1}: next={decision['next']}, "
+                              f"p={dumps(decision.get('probabilities', []))}")
         groups = {}
         for decision in decisions:
             for finding in decision["uwagi"]:
