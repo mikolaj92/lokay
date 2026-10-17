@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shutil
 import os
 import selectors
@@ -211,7 +212,20 @@ def run_process(
         from lokay.effects.git import pi_git_guard
 
         with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()) if call == "pi" else nullcontext():
-            proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+            for attempt in range(4):
+                proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input)
+                if pi_command(argv) is None or proc.returncode == 0 or attempt == 3:
+                    break
+                match = re.search(
+                    r"\b(?:401|429|5\d{2})\b|overloaded|rate[ _-]limit|ECONNRESET|Empty reply",
+                    (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
+                )
+                if match is None:
+                    break
+                log_event("retry", call="pi", attempt=attempt + 1, reason=match[0])
+                retry_sleep(3 ** attempt)
+            else:
+                raise AssertionError("unreachable")
         if pi_command(argv) is not None:
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout, "stderr": proc.stderr, "returncode": proc.returncode}
