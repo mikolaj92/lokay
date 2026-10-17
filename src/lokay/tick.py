@@ -883,7 +883,7 @@ def _resume(picked: dict) -> tuple | dict:
     if files or merge_code == 0:
         saved = state_read(picked["repo"], picked["issue"])
         verdict = saved.get("verdict") or {}
-        if not any(row.get("pytanie") == "conflict" for row in verdict.get("uwagi", [])):
+        if not any(parse_finding(row).lens == "conflict" for row in verdict.get("uwagi", [])):
             verdict = {"result": "fix", "sha": sha, "uwagi": [
                 {"pytanie": "conflict", "plik": name, "log": "Resolve the interrupted merge; preserve local changes."}
                 for name in filter(None, files.split("\0"))
