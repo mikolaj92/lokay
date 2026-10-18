@@ -27,12 +27,16 @@ def run_repo_tests(repo: dict, sha: str, worktree: Path) -> dict:
     return result
 
 
-def guard_issue(repo: str, body: str) -> int:
-    rows = gh_json(["issue", "list", "--repo", repo, "--state", "all",
+def guard_issues(repo: str, state: str = "all") -> list[dict]:
+    rows = gh_json(["issue", "list", "--repo", repo, "--state", state,
                     "--limit", "1000000", "--json", "number,title,body,state"],
                    error="main issue lookup failed", strip=False, default="[]")
-    matches = [row for row in rows
-               if row["title"] == TITLE or MARKER in (row.get("body") or "")]
+    return [row for row in rows
+            if row["title"] == TITLE or MARKER in (row.get("body") or "")]
+
+
+def guard_issue(repo: str, body: str) -> int:
+    matches = guard_issues(repo)
     text = fit_body(f"<!-- {MARKER} -->\n{body}")
     if matches:
         issue = min(matches, key=lambda row: int(row["number"]))
@@ -109,6 +113,17 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```\n\n"
                 f"Lock checks ({lock['status']}):\n```\n{lock['reason']}\n{lock_log}\n```")
         result["issue"] = guard_issue(repo, body)
+    elif status == "green":
+        matches = [issue for issue in guard_issues(repo, "open") if issue.get("state") == "OPEN"]
+        if matches:
+            number = int(min(matches, key=lambda row: int(row["number"]))["number"])
+            body = (f"Main zielony. Tested SHA: `{baseline['sha']}`\n"
+                    f"argv: `{dumps(baseline['argv'])}`\n"
+                    f"Executed tests: {ci.get('executed', 0)}\n"
+                    f"Lock checks: {lock['status']}")
+            gh_ok(["issue", "close", str(number), "--repo", repo, "--comment", body],
+                  error="main issue close failed", strip=False)
+            result["issue"] = number
     save_main_status(repo, result)
     return result
 
