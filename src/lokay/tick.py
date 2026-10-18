@@ -55,7 +55,7 @@ def act(run: Run) -> Event:
         if saved.get("result") == "wait":
             if store.derive_waiting_on(saved) != "ready":
                 return saved.get("verdict") or {"result": "wait"}
-            state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
+            state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="check", verdict=None,
                          retry_at=0, awaiting=None)
             node = "check"
         try:
@@ -257,7 +257,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             fields.update(difficulty="hard", children=[], split_tasks=None,
                                           split_generation=saved.get("split_generation", 0) + 1,
                                           previous_head=None)
-                            state_update(name, issue, **fields)
+                            state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": fields.pop("node")}}, **fields)
                             saved = state_read(name, issue)
                     finally:
                         release_lock(held)
@@ -399,7 +399,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 resumed.pop("result")
                                 resumed.pop("reason")
                                 node = "plan"
-                        state_update(name, number, node=node, branch=branch, pr=pr["number"] if pr else None,
+                        state_update(name, number, _event={"action": "enter_node", "outcome": {"node": node}}, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=time.time(),
                                      **resumed)
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
@@ -524,7 +524,7 @@ def _ensure_worktree(picked: dict) -> Path:
 
 def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | None = None, *, plan_branch: bool = False) -> T:
     repo, issue = picked["repo"], picked["issue"]
-    state_update(repo, issue, node=node)
+    state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": node}})
     try:
         check_deadline()
         if node in {"plan", "build", "check", "fix", "merge"}:
@@ -607,7 +607,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         difficulty = saved["difficulty"]
         if difficulty == "easy":
             phase = saved.get("plan_phase") or "write"
-            state_update(repo, issue, node="plan", plan_phase=phase, plan_prompt=context)
+            state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase=phase, plan_prompt=context)
 
             def single_written():
                 nonlocal rounds, phase
@@ -653,7 +653,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             while True:
                 if escalated := escalate(picked):
                     raise Escalated(escalated)
-                state_update(repo, issue, node="plan", plan_phase="write", plan_prompt=context,
+                state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase="write", plan_prompt=context,
                              plan_branches=branches, plan_synthesis=synthesis)
                 check_deadline()
                 def written():
@@ -714,7 +714,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         while True:
             if escalated := escalate(picked):
                 raise Escalated(escalated)
-            state_update(repo, issue, node="plan", plan_phase="write", plan_synthesis=synthesis)
+            state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase="write", plan_synthesis=synthesis)
             check_deadline()
             if synthesis["phase"] == "write" or not plan.valid_plan(art):
                 failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
@@ -801,7 +801,7 @@ def _prepare(picked: dict) -> tuple | dict:
                                         saved.get("split_generation", 0))
             children.append(number)
             state_update(picked["repo"], picked["issue"], children=children)
-        state_update(picked["repo"], picked["issue"], awaiting="children", node="plan",
+        state_update(picked["repo"], picked["issue"], awaiting="children", _event={"action": "enter_node", "outcome": {"node": "plan"}},
                      result="pending", retry_at=0, failures=0, reason=None)
         return {"result": "pending", "children": children}
 
@@ -821,7 +821,7 @@ def _prepare(picked: dict) -> tuple | dict:
     if saved.get("build_from_main"):
         state_update(picked["repo"], picked["issue"], build_from_main=False)
     plan_text = art.read_text()
-    state_update(picked["repo"], picked["issue"], node="build", branch=branch)
+    state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "build"}}, branch=branch)
     base = base_branch(worktree)
     try:
         git(worktree, "fetch", "origin", base)
@@ -924,7 +924,8 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
                            uwagi or (saved.get("verdict") or {}).get("uwagi", []),
                            saved.get("sha") or "")
     fields = store.escalation_fields(saved)
-    state_update(repo, issue, **{**fields, "plan_prompt": prompt})
+    state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": fields.pop("node")}},
+                 **{**fields, "plan_prompt": prompt})
     rounds_append(repo, issue, f"Difficulty → {fields['difficulty']}")
     return {"result": "pending", "next": "plan"}
 
@@ -1038,7 +1039,7 @@ def _resume(picked: dict) -> tuple | dict:
     except Exception as exc:
         return needs_help(picked, f"resume PR: {type(exc).__name__}: {exc}")
     if not pr or not pr.get("headRefOid"):
-        state_update(picked["repo"], picked["issue"], node="build", result="running",
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "build"}}, result="running",
                      pr=None, sha=None, verdict=None, local_ci=None, fix_fingerprint=None,
                      reason=None, last_error=None, failures=0, retry_at=0, awaiting=None,
                      build_from_main=True)
@@ -1066,7 +1067,7 @@ def _resume(picked: dict) -> tuple | dict:
                 {"pytanie": "conflict", "plik": name, "log": "Resolve the interrupted merge; preserve local changes."}
                 for name in filter(None, files.split("\0"))
             ] or [{"pytanie": "conflict", "plik": "", "log": "Complete the pending merge (MERGE_HEAD exists)."}]}
-        state_update(picked["repo"], picked["issue"], node="fix", result="fix", sha=sha, verdict=verdict)
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "fix"}}, result="fix", sha=sha, verdict=verdict)
         return worktree, branch, sha, repo.get("test") or [], 1
     from lokay.build import fix_publish, tidy_and_commit
 
@@ -1108,7 +1109,7 @@ def _resume(picked: dict) -> tuple | dict:
         return needs_help(picked, f"sha mismatch: {err.strip() or out.strip()}", sha)
     saved = state_read(picked["repo"], picked["issue"])
     if saved.get("sha") != sha or (saved.get("verdict") or {}).get("sha") != sha:
-        state_update(picked["repo"], picked["issue"], node="check", verdict=None, fix_fingerprint=None)
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, fix_fingerprint=None)
     state_update(picked["repo"], picked["issue"], sha=sha)
     return worktree, branch, sha, repo.get("test") or [], 1
 
@@ -1129,7 +1130,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     if saved.get("result") == "wait" or (verdict or {}).get("result") == "wait":
         if store.derive_waiting_on({**saved, "result": "wait"}) != "ready":
             return verdict or {"result": "wait", "sha": sha}
-        state_update(picked["repo"], picked["issue"], node="check", result="check", verdict=None,
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="check", verdict=None,
                      retry_at=0, awaiting=None)
         verdict = None
         pending = "check"
@@ -1176,7 +1177,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pr_number = pr["number"]
             verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr_number)),
                                    "Merge conflict on GitHub; change the PR before checking again.")
-        state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "fix" if pending == "fix" else "check"}}, sha=sha)
         if pending != "fix":
             conflicts = _retry(picked, "check", sync_main)
             if conflicts:
@@ -1245,7 +1246,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pending = "check"
             continue
         if remote["result"] == "pending":
-            state_update(picked["repo"], picked["issue"], node="check", result="pending", verdict=None)
+            state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="pending", verdict=None)
             rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, GitHub CI pending")
             _retry(picked, "check", lambda: check_comment(picked["repo"], pr_number, rounds + 1,
                    {"result": "pending", "sha": sha, "uwagi": []}, remote))

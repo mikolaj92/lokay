@@ -60,7 +60,7 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
         BASE_BRANCHES[(worktree.resolve(), None)] = base
         BASE_BRANCHES[(worktree.resolve(), branch)] = base
     if pr and pr.get("headRefOid") == sha:
-        state_update(picked["repo"], picked["issue"], node="merge", pr=pr["number"])
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "merge"}}, pr=pr["number"])
         try:
             merged = merge_sha(
                 picked["repo"], pr["number"], sha, verdict, worktree,
@@ -85,8 +85,8 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
             pending = "check"
             verdict = None
         else:
-            state_update(picked["repo"], picked["issue"], node="check", verdict=None)
-    state_update(picked["repo"], picked["issue"], node="check", verdict=None)
+            state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None)
+    state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None)
     if pr and pr.get("headRefOid") and pr["headRefOid"] != sha:
         _retry(picked, "check", sync_head)
         sha = pr["headRefOid"]
@@ -281,7 +281,7 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
         "fix_commit_subject": "", "dispute": {},
     }]
     state_update(
-        picked["repo"], picked["issue"], node="check", sha=sha,
+        picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, sha=sha,
         check_rounds=rounds, result=verdict["result"], verdict=verdict, last_check=verdict,
         check_notes=check_notes, check_history=check_history,
         **store.round_fields(state_read(picked["repo"], picked["issue"]),
@@ -325,7 +325,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         return "return", escalated
     uwagi = verdict["uwagi"]
     if not uwagi:
-        state_update(picked["repo"], picked["issue"], node="check", verdict=None,
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None,
                      local_ci=None, fix_fingerprint=None, fix_reason=None,
                      result="check")
         return "return", {"result": "check", "sha": sha}
@@ -483,13 +483,13 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         return outcome
     fixed = fix_step(picked, "fix_code", fix_action, sha)
     if fixed.get("dispute_recheck"):
-        state_update(picked["repo"], picked["issue"], node="check", verdict=None,
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None,
                      local_ci=None, fix_reason=None, result="check")
         rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
         return "return", {"result": "check", "sha": sha}
     if fixed.get("dispute_rejected"):
         if verdict.get("unknown") or verdict.get("unlocated_fail") or verdict.get("unlocated_findings"):
-            state_update(picked["repo"], picked["issue"], node="check", verdict=None, result="check")
+            state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, result="check")
             return "return", {"result": "check", "sha": sha}
         verdict = {**verdict, "result": "merge", "uwagi": []}
         pending = "merge"
@@ -552,8 +552,8 @@ def wait(picked, verdict, head):
                                json.loads(dumps(findings, default=store.json_default)), head)
         state_update(picked["repo"], picked["issue"], _event={"action": "replan"},
                      plan_prompt=prompt, wait_escape="plan", awaiting=None, retry_at=0,
-                     node="plan", result="failed", verdict=None, **deepcopy(PLAN_RESET))
+                     result="failed", verdict=None, **deepcopy(PLAN_RESET))
         return {"next": "plan"}
-    state_update(picked["repo"], picked["issue"], node="check", result="wait", verdict=verdict,
+    state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="wait", verdict=verdict,
                  retry_at=time.time() + 300, awaiting=None, wait_escape="retry")
     return verdict
