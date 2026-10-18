@@ -67,6 +67,10 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
                     repair_venvs(worktree)
                     proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
                     log += f"\nRetry:\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
+                if proc.returncode == 0 and (venv / "bin" / "playwright").exists():
+                    proc = run_process([str(venv / "bin" / "playwright"), "install", "chromium"],
+                                       cwd=cwd, env=env, timeout=3600)
+                    log += f"\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
                 ok = proc.returncode == 0
             except (OSError, TimeoutExpired) as exc:
                 log = f"failed: {exc}"
