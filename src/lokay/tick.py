@@ -267,14 +267,14 @@ def pick(env: dict[str, str] | None = None) -> dict:
             issue = int(path.name)
             saved = state_read(name, issue)
             if saved.get("awaiting") == "children":
-                from lokay.effects.gh import children_merged
+                from lokay.effects.gh import children_done
 
                 held = acquire_lock(lock_path(name.split("/")[0], name))
                 if held["result"] == "held":
                     try:
                         saved = state_read(name, issue)
                         if (saved.get("awaiting") == "children"
-                                and children_merged(name, saved.get("children") or [])):
+                                and children_done(name, saved.get("children") or [])):
                             fields = store.escalation_fields(saved)
                             fields.update(difficulty="hard", children=[], split_tasks=None,
                                           split_generation=saved.get("split_generation", 0) + 1,
