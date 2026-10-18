@@ -319,9 +319,51 @@ def validate_sha(sha: str, ci: dict, decisions: list[dict]) -> None:
         raise DecisionError("sha mismatch")
 
 
+def dismissed_verdict(verdict: dict) -> dict:
+    return {**verdict, "result": "merge", "uwagi": []}
+
+
+def recompute_verdict(sha: str, saved: dict, fallback: dict) -> dict:
+    inputs = saved.get("check_inputs")
+    if (not inputs or inputs.get("sha") != sha
+            or not {"sha", "ci", "decisions", "results", "scope", "dismissed_keys"} <= inputs.keys()):
+        return fallback
+    results = tuple(
+        result if isinstance(result, CheckResult) else CheckResult(
+            **{**result, "findings": tuple(
+                finding if isinstance(finding, Finding) else Finding(
+                    **{**finding, "lenses": tuple(finding.get("lenses") or ())})
+                for finding in result["findings"])})
+        for result in inputs["results"])
+    dismissed = saved.get("dispute_dismissed") or {}
+    keys = [*inputs["dismissed_keys"],
+            *(dismissed.get("keys", []) if dismissed.get("sha") == sha else [])]
+    return verdict(sha, inputs["ci"], inputs["decisions"], results, inputs["scope"], keys)
+
+
 def verdict(sha: str, ci: dict, decisions: list[dict], results: tuple[CheckResult, ...],
             scope=None, dismissed_keys=()) -> dict:
     validate_sha(sha, ci, decisions)
+    if dismissed_keys:
+        original_failed = ci.get("failed") or []
+        remaining_failed = [row for row in original_failed if dismissed_key(row) not in dismissed_keys]
+        ci = {**ci, "failed": remaining_failed}
+        if ci.get("result") == "red" and original_failed and not remaining_failed:
+            ci = {**ci, "result": "green"}
+        results = tuple(
+            replace(result, findings=remaining, status=result.status if remaining else "pass")
+            if result.status == "fail" and result.findings else result
+            for result in results
+            for remaining in [tuple(finding for finding in result.findings
+                                    if dismissed_key(to_dict(finding)) not in dismissed_keys)])
+    filtered = []
+    for decision in decisions:
+        original = decision.get("uwagi") or []
+        remaining = [finding for finding in original if dismissed_key(finding) not in dismissed_keys]
+        filtered.append({**decision, "uwagi": remaining,
+                         "next": "ok" if original and not remaining and not decision.get("replan")
+                         else decision.get("next")})
+    decisions = filtered
     uwagi = list(ci.get("failed") or [])
     for item in decisions:
         uwagi.extend(item.get("uwagi") or [])
