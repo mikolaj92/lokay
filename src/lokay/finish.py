@@ -53,7 +53,7 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
     from lokay.tick import _retry, open_pr_for
     from lokay.effects.git import BASE_BRANCHES
     from lokay.merge import merge_sha
-    from lokay.check import recompute_verdict
+    from lokay.review import recompute_verdict
 
     verdict = recompute_verdict(sha, state_read(picked["repo"], picked["issue"]), verdict)
     pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
@@ -99,7 +99,7 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
 def local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows):
     from lokay.tick import _retry, dumps
     from lokay.main_guard import local_baseline, run_repo_tests
-    from lokay.check import hunk_finding
+    from lokay.review import hunk_finding
     from lokay.setup import prepare_dependencies
 
     state_update(picked["repo"], picked["issue"], local_ci=None, tested=False)
@@ -151,7 +151,7 @@ def remote_checks(picked, branch, sha):
 def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     from lokay.tick import _retry, dumps
     from lokay.effects.git import git_try
-    from lokay.check import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
+    from lokay.review import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
     from lokay.checks import CheckInput, run_checks
     from lokay.effects.decide import decide
 
@@ -248,7 +248,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
 def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
                    check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
     from lokay.tick import _retry, dumps, refresh_body
-    from lokay.check import validate_sha, verdict as check_verdict
+    from lokay.review import validate_sha, verdict as check_verdict
     from lokay.effects.git import git_try
     from lokay.effects.gh import pr_files, check_comment
 
@@ -312,7 +312,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
                             needs_help, refresh_body)
     from lokay import graph
     from lokay.types import Run, Progress
-    from lokay.check import QUESTIONS
+    from lokay.review import QUESTIONS
     from lokay.effects.decide import decide
     from lokay.build import fix_code, fix_publish
     from lokay.effects.git import git_try
@@ -490,7 +490,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         if verdict.get("unknown") or verdict.get("unlocated_fail") or verdict.get("unlocated_findings"):
             state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, result="check")
             return "return", {"result": "check", "sha": sha}
-        from lokay.check import dismissed_verdict, recompute_verdict
+        from lokay.review import dismissed_verdict, recompute_verdict
 
         current = state_read(picked["repo"], picked["issue"])
         if not current.get("check_inputs") or current["check_inputs"].get("sha") != sha:

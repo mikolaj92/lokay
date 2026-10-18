@@ -14,7 +14,7 @@ def merge_blocked(state: dict, sha: str) -> bool:
 
 
 def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
-    from lokay.check import recompute_verdict
+    from lokay.review import recompute_verdict
 
     verdict = recompute_verdict(sha, state_read(repo_name, issue), verdict)
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:

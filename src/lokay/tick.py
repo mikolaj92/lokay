@@ -1115,7 +1115,7 @@ def _resume(picked: dict) -> tuple | dict:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import hunks
+    from lokay.review import hunks
     from lokay.build import fix_publish
     from lokay.effects.git import git_try
     from lokay.effects.gh import check_comment, pr_files

@@ -225,7 +225,7 @@ def segment(path: Path, rows: list[dict]) -> None:
             stack.enter_context(patch.object(git, "BASE_BRANCHES", {}))
             git.BASE_BRANCHES[(worktree.resolve(), None)] = manifest["base"]
             finish = import_module("lokay.finish")
-            check = import_module("lokay.check")
+            check = import_module("lokay.review")
             setup = import_module("lokay.setup")
             stack.enter_context(patch.object(setup, "prepare_dependencies",
                                             lambda *args, **kwargs: relocate(manifest["setup"])))
