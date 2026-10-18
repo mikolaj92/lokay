@@ -10,7 +10,7 @@ from lokay.types import (
 )
 
 
-CHECK_ROUND_LIMIT = 15
+FIX_ROUND_LIMIT = 8
 
 
 def merge_allowed(state: dict, sha: str) -> bool:
@@ -65,12 +65,18 @@ def step(run: Run, event: Event) -> Run:
             if outcome.get("result") == "pr_open":
                 fields.update(node="check", verdict=None)
         case Checked():
-            rounds = fields.get("check_rounds", current.get("check_rounds", 0))
-            if outcome["result"] != "merge" and rounds >= CHECK_ROUND_LIMIT:
-                fields.update(node="check", result="needs_help", awaiting="human", retry_at=0,
-                              reason=f"check round limit: {rounds} rounds without merge")
-            else:
-                fields["node"] = outcome["result"]
+            fields["node"] = outcome["result"]
+            if outcome["result"] == "fix":
+                rounds = current.get("fix_rounds", 0) + 1
+                fields["fix_rounds"] = rounds
+                if rounds >= FIX_ROUND_LIMIT:
+                    if current.get("fix_limit_hits", 0) == 0:
+                        fields.update(node="plan", **deepcopy(PLAN_RESET), fix_rounds=0,
+                                      fix_limit_hits=1, result="pending",
+                                      reason=f"fix round limit: {FIX_ROUND_LIMIT} Check→Fix rounds")
+                    else:
+                        fields.update(node="check", result="infeasible", fix_rounds=0,
+                                      reason="fix round limit reached twice")
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
             rechecks = current.get("dispute_rechecks", [])
