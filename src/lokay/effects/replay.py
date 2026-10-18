@@ -33,6 +33,13 @@ def stable(value):
     return value
 
 
+def compatible_state(actual: dict, expected: dict) -> dict:
+    actual = actual.copy()
+    if "check_inputs" not in expected:
+        actual.pop("check_inputs", None)
+    return actual
+
+
 def segment(path: Path, rows: list[dict]) -> None:
     tick = import_module("lokay.tick")
     pi = import_module("lokay.effects.pi")
@@ -155,8 +162,13 @@ def segment(path: Path, rows: list[dict]) -> None:
             if position < len(effects) and effects[position]["seq"] < expected["seq"]:
                 raise Mismatch(f"seq={effects[position]['seq']} expected call before transition")
             for key in ("before", "event", "after"):
-                if stable(fields[key]) != stable(expected[key]):
-                    raise Mismatch(f"seq={expected['seq']} transition {key} mismatch: expected {stable(expected[key])!r}, got {stable(fields[key])!r}")
+                actual = fields[key]
+                if key != "event":
+                    actual = compatible_state(actual, expected[key])
+                elif "fields" in actual and "fields" in expected[key]:
+                    actual = {**actual, "fields": compatible_state(actual["fields"], expected[key]["fields"])}
+                if stable(actual) != stable(expected[key]):
+                    raise Mismatch(f"seq={expected['seq']} transition {key} mismatch: expected {stable(expected[key])!r}, got {stable(actual)!r}")
             transition_position += 1
             if (entry == "check" and transition_position == len(transitions)
                     and fields["event"].get("action") == "verdict"):
@@ -256,7 +268,7 @@ def segment(path: Path, rows: list[dict]) -> None:
             outcome = event.outcome
             detail = event_record(event)
         after = store.load(repo, issue).state
-        if stable(after) != stable(transitions[-1]["after"]):
+        if stable(compatible_state(after, transitions[-1]["after"])) != stable(transitions[-1]["after"]):
             raise Mismatch("final state mismatch")
         if stable(outcome) != stable(relocate(manifest["outcome"])):
             raise Mismatch(f"final outcome mismatch: {detail!r}")

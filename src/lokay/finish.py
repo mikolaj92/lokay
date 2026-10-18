@@ -53,7 +53,9 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
     from lokay.tick import _retry, open_pr_for
     from lokay.effects.git import BASE_BRANCHES
     from lokay.merge import merge_sha
+    from lokay.check import recompute_verdict
 
+    verdict = recompute_verdict(sha, state_read(picked["repo"], picked["issue"]), verdict)
     pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
     if pr and pr.get("baseRefName"):
         base = pr["baseRefName"]
@@ -279,6 +281,8 @@ def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks
         picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, sha=sha,
         check_rounds=rounds, result=verdict["result"], verdict=verdict, last_check=verdict,
         check_notes=check_notes, check_history=check_history,
+        check_inputs={"sha": sha, "ci": ci, "decisions": decisions, "results": check_results,
+                      "scope": scope, "dismissed_keys": dismissed_keys},
         **store.round_fields(state_read(picked["repo"], picked["issue"]),
                              diff_fingerprint=diff_fingerprint, checks=verdict.get("checks"),
                              completed=verdict["result"] not in ("wait", "pending")),
@@ -486,10 +490,16 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         if verdict.get("unknown") or verdict.get("unlocated_fail") or verdict.get("unlocated_findings"):
             state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, result="check")
             return "return", {"result": "check", "sha": sha}
-        verdict = {**verdict, "result": "merge", "uwagi": []}
-        pending = "merge"
+        from lokay.check import dismissed_verdict, recompute_verdict
+
+        current = state_read(picked["repo"], picked["issue"])
+        if not current.get("check_inputs") or current["check_inputs"].get("sha") != sha:
+            verdict = dismissed_verdict(verdict)
+        else:
+            verdict = recompute_verdict(sha, current, verdict)
+        pending = verdict["result"]
         state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
-                     result="merge", verdict=verdict)
+                     result=pending, verdict=verdict)
         return "continue", (sha, pending, verdict)
     if fixed.get("next") in ("build", "plan"):
         return "return", fixed
