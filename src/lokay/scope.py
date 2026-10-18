@@ -49,11 +49,20 @@ def is_artifact(path: str, worktree: Path | None = None) -> bool:
             or parts[-2:] == ("bin", "gh"))
 
 
-def is_test(path: str) -> bool:
+def is_test(path: str, added_lines: Sequence[str] = ()) -> bool:
     parts = PurePosixPath(path).parts
     name = parts[-1] if parts else ""
-    return "tests" in parts or any(fnmatch.fnmatchcase(name, pattern) for pattern in
-                                   ("test_*.py", "*_test.py", "*.test.*", "*.spec.*"))
+    return ("tests" in parts
+            or any(part in {"test", "spec", "specs", "smoke", "e2e", "__tests__", "testing", "integration_tests"}
+                   for part in parts[:-1])
+            or any(fnmatch.fnmatchcase(name, pattern) for pattern in
+                   ("test_*.*", "*_test.*", "*.test.*", "*.spec.*", "*Test.*", "*Tests.*", "*_spec.*", "conftest.py"))
+            or (kind([path]) != "docs"
+                and any(part in {"scenarios", "fixtures", "validation", "checks"} for part in parts[:-1])
+                and any(re.match(
+                    r"^\s*(?:assert\s+|(?:[A-Za-z_]\w*\.)*(?:assert|expect|XCTAssert\w*|#expect|_check|require)\s*\()",
+                    line,
+                ) for line in added_lines)))
 
 
 def matches_path(path: str, planned: str) -> bool:

@@ -46,7 +46,10 @@ def diff_lines(diff: str):
 def unit_test_files(diff: str) -> list[str]:
     paths = []
     changes = {}
+    added_lines = {}
     for path, _, kind, text in diff_lines(diff):
+        if kind == "+":
+            added_lines.setdefault(path, []).append(text)
         if text.strip() and kind in {"+", "-"}:
             changes[path] = changes.get(path, 0) + (1 if kind == "+" else -1)
     paths.extend(path for path, net in changes.items() if net > 0)
@@ -63,7 +66,7 @@ def unit_test_files(diff: str) -> list[str]:
                 path = path.removeprefix("b/")
                 break
         paths.append(path)
-    return sorted({path for path in paths if is_test(path)
+    return sorted({path for path in paths if is_test(path, added_lines.get(path, ()))
                    and not Path(path).is_absolute() and ".." not in Path(path).parts
                    and not any(Path(path).parts[i:i + 2] == ("fixtures", "replay")
                                for i in range(len(Path(path).parts) - 1))})
