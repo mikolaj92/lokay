@@ -49,7 +49,7 @@ def unpack(value, home: Path, *, source: Path | None = None):
 
 def main(argv: list[str]) -> int:
     replay = argparse.ArgumentParser(prog="lokay replay")
-    replay.add_argument("path", type=Path)
+    replay.add_argument("path", type=Path, nargs="?", default=Path("fixtures"))
     replay.add_argument("--repo")
     replay.add_argument("--issue", type=int)
     filters = replay.parse_args(argv)
@@ -57,6 +57,7 @@ def main(argv: list[str]) -> int:
     paths = sorted(path for path in source.rglob("*")
                    if path.name.endswith((".jsonl", ".jsonl.gz"))) if source.is_dir() else [source]
     count = 0
+    ticks = 0
     row = {}
     try:
         if not paths:
@@ -64,6 +65,20 @@ def main(argv: list[str]) -> int:
         for path in paths:
             if not path.name.endswith((".jsonl", ".jsonl.gz")):
                 raise ValueError("expected .jsonl or .jsonl.gz")
+            if path.with_suffix(".json").is_file():
+                from lokay.effects.replay import Mismatch, segment
+
+                with path.open() as stream:
+                    rows = [json.loads(line) for line in stream]
+                if any(value is not None and rows[0].get(key) != value for key, value in
+                       (("repo", filters.repo), ("issue", filters.issue))):
+                    continue
+                try:
+                    segment(path, rows)
+                except Mismatch as exc:
+                    raise ValueError(f"{path}: {exc}") from None
+                ticks += 1
+                continue
             opener = gzip.open if path.suffix == ".gz" else open
             with opener(path, "rt") as stream:
                 for line in stream:
@@ -97,4 +112,6 @@ def main(argv: list[str]) -> int:
               f"event={row.get('event')} error={exc}", file=sys.stderr)
         return 1
     print(f"replay: {count}/{count} transitions ok")
+    if ticks:
+        print(f"replay: {ticks}/{ticks} tick segments ok")
     return 0
