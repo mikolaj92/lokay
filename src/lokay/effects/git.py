@@ -324,6 +324,14 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
     return retry(push_once, attempts, transient, delay=lambda attempt: 0.2 * (attempt + 1))
 
 
+def abort_conflicted_merge(repo: Path) -> bool:
+    merge_head = repo / git(repo, "rev-parse", "--git-path", "MERGE_HEAD")
+    if merge_head.exists() and git(repo, "ls-files", "-u"):
+        git(repo, "merge", "--abort")
+        return True
+    return False
+
+
 def changes_before_merge(repo: Path) -> list[str]:
     code, out, err = git_try(repo, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
     if code == 0:
