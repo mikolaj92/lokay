@@ -184,6 +184,13 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         lists = plan_file_lists(x.plan)
         planned = lists["Wymagane"] if lists is not None else set()
         changed = {path for path in changed if not any(matches_path(path, target) for target in planned)}
+        conditional = lists.get("Warunkowe", set()) if lists is not None else set()
+        outside = sorted(path for path in changed
+                         if not any(matches_path(path, target) for target in conditional))
+        if outside:
+            reason = "existing test changed outside the plan: " + ", ".join(outside) + "; revert the test change (scope creep) unless the issue's acceptance criteria require it"
+            findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in outside)
+            return CheckResult("weakened_tests", "fail", reason, findings)
     else:
         planned = planned_files(x.plan, [], sorted(deleted))
         changed = {path for path in changed
@@ -200,6 +207,8 @@ def weakened_tests(x: CheckInput) -> CheckResult:
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
     if result.get("result") == "red" and result.get("executed", 0) > 0:
         reason = "base version of this test fails on the new code"
+        if x.plan_schema == 2:
+            reason = "base version of this test fails on the new code; unless the issue's acceptance criteria require this behaviour, revert the production change that breaks it (scope creep) and keep the base test"
         findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in paths)
         log = result.get("log", "")[-800:]
         return CheckResult("weakened_tests", "fail", reason + (": " + log if log else ""), findings)
