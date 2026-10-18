@@ -246,7 +246,7 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             if (len(matches) != 1 or f"branch {ref}" not in matches[0]
                     or any(field.startswith("locked") for field in matches[0])):
                 raise ValueError("worktree registration mismatch or locked")
-            if checked(path, ["status", "--porcelain", "--untracked-files=all", "--ignored"]):
+            if checked(path, ["status", "--porcelain", "--untracked-files=all"]):
                 return {"result": "kept", "path": str(path), "reason": "dirty"}
             head = checked(repo, ["rev-parse", "--verify", ref])
             if checked(path, ["rev-parse", "HEAD"]) != head:
