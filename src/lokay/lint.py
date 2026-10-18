@@ -74,6 +74,16 @@ def unit_test_files(diff: str) -> list[str]:
 
 def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
     errors = []
+    if lokay_rules:
+        for block in diff.split("diff --git ")[1:]:
+            lines = block.splitlines()
+            if any(line.startswith("new file mode ") for line in lines):
+                continue
+            paths = lines[0].split(" b/", 1)
+            paths[0] = paths[0].removeprefix("a/")
+            for path in paths:
+                if path.startswith("fixtures/ticks/"):
+                    errors.append(f"{path}: recorded tick fixture changed -> never edit recordings; adjust replay matching in src/lokay/effects/replay.py")
     added = {}
     for path, number, kind, text in diff_lines(diff):
         if kind != "+" or not path.endswith(".py"):
