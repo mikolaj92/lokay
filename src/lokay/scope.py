@@ -88,14 +88,20 @@ def required_files(plan_text: str, repo_files: list[str], diff_files: list[str])
 NEW_FILE_MARKER = " (nowy plik)"
 
 
+def _valid_plan_path(path: str) -> bool:
+    return (bool(re.fullmatch(r"[^`\s:]+", path))
+            and not PurePosixPath(path).is_absolute()
+            and all(part and part != ".." for part in path.removesuffix("/").split("/"))
+            and ("/" in path or bool(PurePosixPath(path).suffix)
+                 or PurePosixPath(path).name.startswith(".")
+                 or bool(re.fullmatch(r"[A-Z][A-Za-z]*file|LICENSE|NOTICE|CODEOWNERS", PurePosixPath(path).name))))
+
+
 def required_path_errors(rows: Sequence[tuple[str, bool]], existing: set[str] | None = None) -> list[str]:
     bad = []
     for path, new in rows:
         try:
-            target = Path(path)
-            valid = (bool(re.fullmatch(r"[^`\s:]+", path))
-                     and not target.is_absolute() and ".." not in target.parts
-                     and bool("/" in path or target.suffix))
+            valid = _valid_plan_path(path)
             if existing is not None:
                 valid = valid and ((path not in existing) if new else (path in existing))
         except (OSError, ValueError, RuntimeError):
@@ -134,8 +140,7 @@ def _plan_file_rows(plan_text: str) -> dict[str, set[tuple[str, bool]]] | None:
         if current is None or item is None:
             return None
         path = item[1].removeprefix("./")
-        if (not ("/" in path or PurePosixPath(path).suffix)
-                or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts):
+        if not _valid_plan_path(path):
             return None
         if current == "Warunkowe":
             condition = item[3].partition("warunek:")[2].split("[źródła:", 1)[0].strip()
