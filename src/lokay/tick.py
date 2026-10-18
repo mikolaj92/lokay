@@ -1220,7 +1220,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                            "Merge conflict on GitHub; change the PR before checking again.")
                     pending = "fix"
         def read_diff():
-            code, out, err = git_try(worktree, "diff", f"origin/{base}...HEAD", timeout=30)
+            code, out, err = git_try(worktree, "diff", "--no-ext-diff", "--no-textconv", f"origin/{base}...{sha}", timeout=30)
             if code != 0:
                 raise RuntimeError(err or "diff failed")
             return out
@@ -1241,6 +1241,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 return outcome
             sha, pending, verdict = outcome
             continue
+        if head != sha:
+            raise RuntimeError("Check SHA differs from worktree HEAD")
         rows = hunks(diff or "")
         saved = state_read(picked["repo"], picked["issue"])
         ci = finish.local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows)
@@ -1265,6 +1267,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(picked["repo"], picked["issue"], local_ci=ci)
         decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
+        if _retry(picked, "check", read_head) != sha:
+            raise RuntimeError("worktree HEAD changed during Check")
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)

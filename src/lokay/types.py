@@ -203,7 +203,7 @@ class Note:
 @dataclass(frozen=True)
 class CheckResult:
     name: str
-    status: Literal["pass", "fail", "unknown"]
+    status: Literal["pass", "fail", "unknown", "skip"]
     reason: str
     findings: tuple[Finding, ...]
 

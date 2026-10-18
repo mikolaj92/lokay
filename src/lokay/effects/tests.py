@@ -30,8 +30,8 @@ def check_uv_lock(cwd: Path) -> tuple[str, str]:
             env.pop("UV_OFFLINE", None)
         try:
             proc = run_process(["uv", "lock", "--check"], cwd=cwd, timeout=60, env=env, record=True)
-        except (OSError, TimeoutExpired) as exc:
-            return "unknown", f"uv lock checks unavailable: {exc}"
+        except (OSError, TimeoutExpired):
+            return "fail", "uv lock checks could not complete"
         if proc.returncode == 0:
             return "pass", "uv lock checks passed"
         log = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
@@ -44,8 +44,8 @@ def check_uv_lock(cwd: Path) -> tuple[str, str]:
             r"|connection (?:refused|reset)|dns error",
             log, re.IGNORECASE)
         if not offline or not unavailable:
-            return "unknown", "uv lock checks unavailable: " + log[-1000:]
-    return "unknown", "uv lock checks unavailable"
+            return "fail", "uv lock checks failed"
+    return "fail", "uv lock checks failed"
 
 
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:

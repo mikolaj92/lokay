@@ -2,6 +2,7 @@ import ast
 import os
 import re
 import shutil
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
@@ -88,17 +89,18 @@ def merge_clean(x: CheckInput) -> CheckResult:
 
 def secrets(x: CheckInput) -> CheckResult:
     pattern = re.compile(
-        r"AKIA[A-Z0-9]{16}|(?:ghp_|gho_|github_pat_)[A-Za-z0-9_]+"
-        r"|-----BEGIN (?:[^\r\n]* )?PRIVATE KEY-----|xox[abp]-[A-Za-z0-9-]+"
-        r"|(?i:api[_-]?key\s*[:=]\s*['\"][A-Za-z0-9_\-]{20,})"
+        r"(?<![A-Za-z0-9_])(?:AKIA[A-Z0-9]{16}|gh[pousr]_[A-Za-z0-9]{36}"
+        r"|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}"
+        r"|xox[bap]-[0-9]{10,13}-[0-9]{10,13}-[A-Za-z0-9]{24,32})(?![A-Za-z0-9_])"
+        r"|-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----"
     )
     findings = tuple(
-        Finding(path, number, number, "possible secret", "secrets")
+        Finding(path, number, number, f"secrets at {x.sha}: remove added secret", "secrets")
         for path, number, kind, text in diff_lines(x.diff)
         if kind == "+" and pattern.search(text)
     )
     return CheckResult("secrets", "fail" if findings else "pass",
-                       "possible secret" if findings else "no secrets found", findings)
+                       f"secrets at {x.sha}: possible secret" if findings else "no secrets found", findings)
 
 
 def no_new_comments(x: CheckInput) -> CheckResult:
@@ -250,28 +252,31 @@ def lockfile(x: CheckInput) -> CheckResult:
     for directory, dirs, files in os.walk(root, followlinks=False, onerror=errors.append):
         dirs[:] = sorted(name for name in dirs if name not in {".venv", "node_modules", ".git"}
                          and not (Path(directory) / name).is_symlink())
-        if "uv.lock" in files and "pyproject.toml" in files:
-            locks.append(Path(directory) / "uv.lock")
+        if "pyproject.toml" in files:
+            manifest = Path(directory) / "pyproject.toml"
+            try:
+                data = tomllib.loads(manifest.read_text())
+                if "uv.lock" in files or "project" in data or "uv" in data.get("tool", {}):
+                    locks.append(manifest.with_name("uv.lock"))
+            except (OSError, ValueError) as exc:
+                errors.append(f"{manifest.relative_to(root)}: {type(exc).__name__}")
     available = shutil.which("uv") is not None
-    if available:
-        for path in sorted(locks):
-            status, reason = check_uv_lock(path.parent)
-            if status == "fail":
-                drifted.add(path.relative_to(root).as_posix())
-            elif status == "unknown":
-                errors.append(f"{path.relative_to(root)}: {reason}")
+    for path in sorted(locks):
+        status, _ = check_uv_lock(path.parent) if available else ("fail", "uv unavailable")
+        if status != "pass":
+            drifted.add(path.relative_to(root).as_posix())
     if drifted:
-        message = "uv.lock is out of date with pyproject.toml: run `uv lock`"
+        message = f"lockfile at {x.sha}: uv lock --check failed; run `uv lock` or repair the tool"
         findings = tuple(Finding(name, 1, 1, message if Path(name).name == "uv.lock" else
                                  "lockfile drift during setup or tests: review and commit the lockfile",
                                  "lockfile") for name in sorted(drifted))
         return CheckResult("lockfile", "fail", "; ".join(sorted(drifted)) + ": " + message, findings)
-    if locks and not available:
-        errors.append("uv lock checks unavailable: uv not found")
     if errors:
-        return CheckResult("lockfile", "unknown", "; ".join(map(str, errors)), ())
-    reason = "uv unavailable" if not available else "uv lock checks passed" if locks else "no applicable uv locks"
-    return CheckResult("lockfile", "pass", reason, ())
+        message = f"lockfile at {x.sha}: cannot inspect manifests"
+        return CheckResult("lockfile", "fail", message, (
+            Finding("pyproject.toml", 1, 1, message, "lockfile"),))
+    return CheckResult("lockfile", "pass" if locks else "skip",
+                       "uv lock checks passed" if locks else "no applicable uv project", ())
 
 
 def junk(x: CheckInput) -> CheckResult:
