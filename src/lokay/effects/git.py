@@ -407,6 +407,10 @@ def restore_changes(snapshots: dict[Path, dict]) -> dict:
     for path, before in snapshots.items():
         after = _snapshot(path)
         moved = after["head"] != before["head"]
+        if moved and not after["status"] and path == (Path.home() / ".lokay/host").resolve():
+            code, _, _ = git_try(path, "merge-base", "--is-ancestor", after["head"], "origin/main")
+            if code == 0:
+                continue
         files = {
             name for name in before["patches"].keys() | after["patches"].keys()
             if before["patches"].get(name) != after["patches"].get(name)
