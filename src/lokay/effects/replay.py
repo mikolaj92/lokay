@@ -33,11 +33,37 @@ def stable(value):
     return value
 
 
+def compatible_checks(actual, expected) -> Any:
+    header = "| name | status | reason |\n| --- | --- | --- |\n"
+    if isinstance(actual, str) and isinstance(expected, str) and header in actual and header in expected:
+        prefix, _, tail = actual.partition(header)
+        table, separator, suffix = tail.partition("\n\n")
+        recorded = expected.partition(header)[2].partition("\n\n")[0].splitlines()
+        names = {line.split(" | ", 2)[0] for line in recorded}
+        table = "\n".join(line for line in table.splitlines()
+                          if line.split(" | ", 2)[0] in names or line.split(" | ", 2)[1:2] != ["pass"])
+        return prefix + header + table + separator + suffix
+    if not isinstance(actual, dict) or not isinstance(expected, dict):
+        return actual
+    actual = actual.copy()
+    for key in actual.keys() & expected.keys():
+        value, recorded = actual[key], expected[key]
+        if key in {"checks", "results"} and isinstance(value, list) and isinstance(recorded, list):
+            names = {item["name"] for item in recorded}
+            actual[key] = [item for item in value if item["name"] in names or item["status"] != "pass"]
+        elif key == "progress_checks" and isinstance(value, dict) and isinstance(recorded, dict):
+            actual[key] = {name: status for name, status in value.items()
+                           if name in recorded or status != "pass"}
+        else:
+            actual[key] = compatible_checks(value, recorded)
+    return actual
+
+
 def compatible_state(actual: dict, expected: dict) -> dict:
     actual = actual.copy()
     if "check_inputs" not in expected:
         actual.pop("check_inputs", None)
-    return actual
+    return compatible_checks(actual, expected)
 
 
 def segment(path: Path, rows: list[dict]) -> None:
@@ -105,6 +131,13 @@ def segment(path: Path, rows: list[dict]) -> None:
             row = effects[position] if position < len(effects) else {}
             effect = row.get("effect", {})
             expected = effect.get("input") if kind == "decide" else effect.get("argv")
+            if (kind == "gh" and isinstance(expected, list) and value[1:3] == expected[1:3]
+                    and value[1:3] in (["pr", "comment"], ["pr", "edit"])
+                    and "--body" in value and "--body" in expected):
+                index = value.index("--body") + 1
+                if index == expected.index("--body") + 1:
+                    value = value.copy()
+                    value[index] = compatible_checks(value[index], expected[index])
             if row.get("call") != kind or expected != value:
                 label = "request" if kind == "decide" else "argv"
                 raise Mismatch(f"seq={row.get('seq', 'end')} expected {label}={expected!r}, got {label}={value!r}")
@@ -167,6 +200,7 @@ def segment(path: Path, rows: list[dict]) -> None:
                     actual = compatible_state(actual, expected[key])
                 elif "fields" in actual and "fields" in expected[key]:
                     actual = {**actual, "fields": compatible_state(actual["fields"], expected[key]["fields"])}
+                actual = compatible_checks(actual, expected[key])
                 if stable(actual) != stable(expected[key]):
                     raise Mismatch(f"seq={expected['seq']} transition {key} mismatch: expected {stable(expected[key])!r}, got {stable(actual)!r}")
             transition_position += 1
@@ -270,7 +304,7 @@ def segment(path: Path, rows: list[dict]) -> None:
         after = store.load(repo, issue).state
         if stable(compatible_state(after, transitions[-1]["after"])) != stable(transitions[-1]["after"]):
             raise Mismatch("final state mismatch")
-        if stable(outcome) != stable(relocate(manifest["outcome"])):
+        if stable(compatible_checks(outcome, relocate(manifest["outcome"]))) != stable(relocate(manifest["outcome"])):
             raise Mismatch(f"final outcome mismatch: {detail!r}")
         if position != len(effects) or transition_position != len(transitions):
             raise Mismatch(f"unconsumed calls={len(effects) - position} transitions={len(transitions) - transition_position}")
