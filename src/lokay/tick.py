@@ -910,6 +910,8 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
     if not force and not timed_out:
         if saved.get("result") == "wait":
             return None
+        if saved.get("node") == "check" and saved.get("verdict") is None:
+            return None
         if (saved.get("wait_escape") in ("retry", "plan")
                 and saved.get("node") != "fix" and saved.get("result") != "fix"):
             return None

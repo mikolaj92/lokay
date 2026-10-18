@@ -1,9 +1,9 @@
 # lokay
 
-Plan, Build, Check, Fix, Merge. Merge is the only end.
-
-`lokay start` runs the graph in Python (`src/lokay/tick.py`), the only runtime.
-Plan revisions return to Plan checking; Fix returns to Check. Failed steps retry.
+`lokay start` runs Plan → Build → Check → Fix → Merge in `src/lokay/tick.py`, the only runtime.
+Merge is the only end. Plan revisions return to Plan checking; Fix returns to Check.
+Pending checks persist Check for the next process without consuming completed rounds.
+An incomplete Check ignores round counters; the time-based difficulty escalation still applies.
 
 Analiza przypiętej rewizji: [maszyna stanów](STATE_MACHINE.md),
 [ryzyka R1–R25](RISKS.md) i [weryfikacja incydentów](INCIDENTS.md).
@@ -104,14 +104,14 @@ Run the complete local suite (no package unit tests):
 bash scripts/check.sh
 ```
 
-The check first prepares this checkout with `uv sync --frozen` and verifies local
-`lokay` and `yaml` imports. Initial preparation may require network access;
-an unavailable dependency fails the check. It then isolates the home, temporary
-directory and uv cache inside the checkout and runs
-`uv run lokay replay fixtures/replay/` offline, without syncing dependencies.
-An unexpected GitHub CLI call fails without logging its arguments.
+The check prepares this checkout with `uv sync --locked --all-extras` and verifies
+local imports. Preparation may require network access; missing dependencies fail.
+It isolates home, temporary files and cache, then replays `fixtures/replay/` and
+`fixtures/ticks/` offline. Unexpected GitHub CLI calls fail without logging arguments.
 Replay checks recorded transitions and stops at the first mismatch.
-Blobs may be plain or gzip-compressed.
+`scripts/pending-check.sh` verifies persisted incomplete Check across processes,
+including eight waits before and after a changed SHA and legacy round fields.
+This state-boundary check does not prove CLI queue selection or a real Merge.
 
 ### Checkout configuration is not host configuration
 
