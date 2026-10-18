@@ -613,10 +613,13 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     rounds = directory / "rounds.md"
     prompt = prompt_for(saved.get("issue_title") or "", saved.get("issue_body")) + (
         "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
-        + "\n\nUwagi:\n" + dumps(history, ensure_ascii=False)
+        + "\n\nUwagi:\n" + dumps(history[-5:], ensure_ascii=False)[-20000:]
         + "\n\nLast state:\n" + dumps({key: value for key, value in saved.items()
-                                     if key not in ("plan_prompt", "plan_branches", "plan_synthesis")}, ensure_ascii=False)
-        + "\n\nFix history:\n" + dumps(saved.get("fix_history", []), ensure_ascii=False)
+                                     if key not in ("plan_prompt", "plan_branches", "plan_synthesis",
+                                                    "plan_history", "local_ci", "test_log",
+                                                    "last_check", "check_inputs")}, ensure_ascii=False)[:20000]
+        + "\n\nTest log (tail):\n" + (saved.get("test_log") or "")[-4000:]
+        + "\n\nFix history:\n" + dumps(saved.get("fix_history", []), ensure_ascii=False)[-20000:]
         + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
         + "\n\n" + reason + "\n"
     )
