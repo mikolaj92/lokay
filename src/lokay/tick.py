@@ -16,7 +16,7 @@ from pathlib import Path
 
 from lokay import graph, store
 from dataclasses import replace
-from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Updated, parse_event
+from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Updated, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, worktree_remove
@@ -1046,7 +1046,7 @@ def _resume(picked: dict) -> tuple | dict:
         return _prepare({**picked, "node": "build", "pr": None})
     sha = pr["headRefOid"]
     state_update(picked["repo"], picked["issue"], pr=pr["number"])
-    if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):
+    if pr.get("headRefName", branch) != branch or (picked.get("pr") and pr_number(picked["pr"]) != pr["number"]):
         return needs_help(picked, "PR branch or number mismatch", sha)
     try:
         _ensure_worktree(picked)

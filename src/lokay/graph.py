@@ -5,7 +5,7 @@ from typing import assert_never
 
 from lokay.types import (
     PLAN_RESET, Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
-    Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick,
+    Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick, pr_number,
 )
 
 
@@ -153,7 +153,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
     if due:
         _, _, repo, issue, state = min(due, key=lambda row: row[:4])
         if state.get("pr"):
-            target = {"number": state["pr"], "headRefName": state.get("branch") or f"lokay/{issue}"}
+            target = {"number": pr_number(state["pr"]), "headRefName": state.get("branch") or f"lokay/{issue}"}
             if state.get("sha"):
                 target["headRefOid"] = state["sha"]
             return Pick(repo, issue, "pr", target)
