@@ -41,6 +41,11 @@ class Updated:
 
 
 @dataclass(frozen=True)
+class Dispatched(Updated):
+    pass
+
+
+@dataclass(frozen=True)
 class EnteredNode(Updated):
     pass
 
@@ -110,12 +115,12 @@ class Progress(Updated):
     pass
 
 
-Event: TypeAlias = EnteredNode | Planned | Synthesized | Built | Checked | Merged | Closed | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Updated
+Event: TypeAlias = EnteredNode | Planned | Synthesized | Built | Checked | Merged | Closed | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Dispatched | Updated
 
 
 def parse_event(raw: dict) -> Event:
     variants: dict[str, type[Updated]] = {
-        "enter_node": EnteredNode,
+        "enter_node": EnteredNode, "dispatched": Dispatched,
         "needs_help": Failed, "replan": Planned, "build_complete": Built,
         "retry_succeeded": Retried, "fix_to_build": FixToBuild, "synthesis": Synthesized,
         "published": Published, "verdict": Checked, "fix_complete": Fixed,
@@ -133,7 +138,7 @@ def event_record(event: Event) -> dict:
     if event.raw is not None:
         return event.raw
     actions = {
-        EnteredNode: "enter_node",
+        EnteredNode: "enter_node", Dispatched: "dispatched",
         Planned: "replan", Synthesized: "synthesis", Built: "build_complete",
         Checked: "verdict", Merged: "merge_complete",
         Failed: "needs_help", Retried: "retry_succeeded", FixToBuild: "fix_to_build",

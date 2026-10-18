@@ -5,7 +5,7 @@ from typing import assert_never
 
 from lokay.types import (
     PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
-    Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick, pr_number,
+    Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, Snapshot, Pick, pr_number,
 )
 
 
@@ -80,7 +80,7 @@ def step(run: Run, event: Event) -> Run:
                            and current.get("fix_hunk_fingerprint") == outcome["hunk_fingerprint"])
                        or (len(counts) == 3 and min(counts[1:]) >= counts[0]))
             return replace(run, no_progress=stalled)
-        case Updated():
+        case Dispatched() | Updated():
             pass
         case _:
             assert_never(event)
@@ -120,6 +120,12 @@ def _kind(row: dict, pr: bool = False) -> int:
 
 
 def pick(snapshot: Snapshot) -> Pick | None:
+    from lokay.store import derive_waiting_on
+
+    snapshot = replace(snapshot, repos=tuple(
+        replace(repo, states={issue: {**state, "waiting_on": derive_waiting_on(state, snapshot.now)}
+                              for issue, state in repo.states.items()})
+        for repo in snapshot.repos))
     repos = sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name))
     for repo in repos:
         if repo.busy:

@@ -254,12 +254,8 @@ def state_read(repo: str, issue: int) -> dict:
     if not path.exists():
         return {}
     state = json.loads(path.read_text())
-    if "pr" in state:
-        state["pr"] = pr_number(state["pr"])
-    if (state.get("waiting_on") != derive_waiting_on(state)
-            or (state.get("result") == "wait" and state.get("awaiting") == "human"
-                and not state.get("wait_escape"))):
-        save_run(repo, issue, state)
+    normalize_state(state)
+    state["waiting_on"] = derive_waiting_on(state)
     return state
 
 
@@ -388,14 +384,19 @@ def write_json(path: Path, value: object, *, indent: int | None = None,
     write_text_atomic(path, json.dumps(value, indent=indent, ensure_ascii=ensure_ascii, default=json_default) + "\n")
 
 
-def save_run(repo: str, issue: int, state: dict) -> None:
+def normalize_state(state: dict) -> None:
     if "pr" in state:
         state["pr"] = pr_number(state["pr"])
     if (state.get("result") == "wait" and state.get("awaiting") == "human"
             and not state.get("wait_escape")):
         state.update(awaiting=None, retry_at=time.time(), wait_escape="retry")
+
+
+def save_run(repo: str, issue: int, state: dict) -> None:
+    normalize_state(state)
     state["waiting_on"] = derive_waiting_on(state)
-    write_json(run_dir(repo, issue) / "state.json", state, indent=2)
+    write_json(run_dir(repo, issue) / "state.json",
+               {key: value for key, value in state.items() if key != "waiting_on"}, indent=2)
 
 
 def worker_index() -> str | None:

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from lokay import graph, store
 from dataclasses import replace
-from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Updated, parse_event, pr_number
+from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Dispatched, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, worktree_remove
@@ -89,7 +89,7 @@ def act(run: Run) -> Event:
         return needs_help(picked, reason)
     try:
         outcome = dispatch()
-        return Updated(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
+        return Dispatched(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
     finally:
         if sys.exception() is None:
             published_cleanup(picked)
