@@ -179,7 +179,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
                                  issue_body=(saved.get("issue_body") or "")[:4000],
                                  history=saved.get("check_history", [])[-5:])
     decisions = []
-    kinds = () if checks_failed else ("docs",) if docs_only(diff or "") else tuple(
+    kinds = () if checks_failed else ("alignment", "docs") if docs_only(diff or "") else tuple(
         p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))
         if p.stem != "check_docs")
     for kind in kinds:
