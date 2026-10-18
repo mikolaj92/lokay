@@ -186,9 +186,16 @@ def pick(snapshot: Snapshot) -> Pick | None:
                       or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
                 ready.append((_kind(pr, pr=True), state.get("last_attempt", 0), pr["number"], issue, pr))
+        fallback = None
         if ready:
             _, _, _, issue, target = min(ready, key=lambda row: row[:4])
-            return Pick(repo.name, issue, "pr", target)
+            fallback = Pick(repo.name, issue, "pr", target)
+            pr_latest = max((state.get("last_attempt", 0) for state in repo.states.values()
+                             if state.get("pr")), default=0)
+            issue_latest = max((state.get("last_attempt", 0) for state in repo.states.values()
+                                if not state.get("pr")), default=0)
+            if pr_latest <= issue_latest:
+                return fallback
         if repo.issues is None:
             return Pick(repo.name, 0, "issues")
         for issue in sorted(repo.issues, key=lambda row: (_kind(row), row.get("createdAt") or "", row["number"])):
@@ -200,4 +207,6 @@ def pick(snapshot: Snapshot) -> Pick | None:
                          or repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready")
                     and number not in repo.open_prs):
                 return Pick(repo.name, number, "issue", issue)
+        if fallback is not None:
+            return fallback
     return None
