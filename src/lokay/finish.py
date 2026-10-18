@@ -167,6 +167,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
         repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
         issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
         plan=plan_text, diff=diff or "", hunks=rows, ci=ci, worktree=worktree,
+        plan_schema=saved.get("plan_schema"),
     )
     check_results = run_checks(check_input)
     checks_failed = any(result.status == "fail" for result in check_results)

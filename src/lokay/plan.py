@@ -8,6 +8,7 @@ from lokay import store
 
 from lokay.effects.pi import pi_step
 from lokay.safety import untrusted_issue_block
+from lokay.scope import plan_file_lists
 
 SECTIONS = ("## Cel", "## Pliki", "## Testy", "## Poza zakresem")
 CRITERIA = ("k_cel", "k_pliki", "k_testy", "k_zakres")
@@ -44,7 +45,7 @@ def plan_questions(plan: str = "") -> dict:
                 }
                 for name, text in {
                     "k_cel": "Does Cel name the outcome?",
-                    "k_pliki": "Does Pliki name the files to change?",
+                    "k_pliki": "Does Pliki separate Wymagane (must modify) from Warunkowe (each with a condition)?",
                     "k_testy": "Does Testy name a check that can fail?",
                     "k_zakres": "Does Poza zakresem name what stays out?",
                 }.items()
@@ -53,15 +54,16 @@ def plan_questions(plan: str = "") -> dict:
     }
 
 
-def valid_plan_text(text: str) -> bool:
-    return (all(section in text for section in SECTIONS)
+def valid_plan_text(text: str, plan_schema: int | None = None) -> bool:
+    return ((plan_schema != 2 or plan_file_lists(text) is not None)
+            and all(section in text for section in SECTIONS)
             and not re.search(r"git\s+(?:commit|push|reset|rebase)\b|\bgh[ \t]+", text, re.IGNORECASE))
 
 
-def valid_plan(path: Path) -> bool:
+def valid_plan(path: Path, plan_schema: int | None = None) -> bool:
     if not path.is_file() or path.stat().st_size == 0:
         return False
-    return valid_plan_text(path.read_text())
+    return valid_plan_text(path.read_text(), plan_schema)
 
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
@@ -72,27 +74,21 @@ def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dic
     return payload
 
 
-def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = None, phase: str = "write", on_written=None, single: bool = False) -> dict:
+def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = None, phase: str = "write", on_written=None, single: bool = False, plan_schema: int | None = None) -> dict:
     from lokay.effects.decide import decide
 
     if perspective not in PERSPECTIVES:
         raise ValueError("unknown plan perspective")
-    if phase == "write" or not valid_plan(art):
+    if phase == "write" or not valid_plan(art, plan_schema):
         prompt += "\n" + (PROMPTS / f"plan_perspective_{perspective}.md").read_text()
-        if single:
-            prompt += (
-                "\nWrite the final plan directly as Markdown in exactly this structure and order:\n"
-                "## Cel\nOutcome text\n\n### Kryteria\n- Criterion [źródła: minimal]\n\n"
-                "### Kroki\n- Step [źródła: minimal]\n\n## Pliki\n- path: change [źródła: minimal]\n\n"
-                "## Testy\n- Check [źródła: minimal]\n\n## Poza zakresem\n- Exclusion [źródła: minimal]\n\n"
-                "### Odrzucone\n- Rejected proposal [minimal]: reason\n"
-                "Replace placeholders with concrete content; leave Odrzucone empty if nothing was rejected.\n"
-            )
+        prompt += ("\n" + (PROMPTS / "plan_synthesis.md").read_text()
+                   + f"\nWrite one {'final' if single else 'branch'} plan from perspective {perspective}. "
+                   + f"Use only {perspective} in zrodla. No other branches exist.\n")
         prompt += "\nThe current directory is a read-only checkout of the repository at main, to be read but not modified.\n"
-        written = plan_write(prompt, art, cwd=cwd)
+        written = write_synthesis(prompt, art, {perspective}, cwd=cwd)
         if written["result"] != "done":
             return written
-        if not valid_plan(art):
+        if not valid_plan(art, 2):
             return {"result": "failed", "reason": "invalid plan"}
         if on_written is not None:
             on_written()
@@ -123,7 +119,19 @@ def validate_synthesis(data: object, accepted: set[str]) -> dict:
 
     data = obj(data, ("cel", "kryteria", "kroki", "pliki", "testy", "poza_zakresem", "odrzucone"))
     text(data["cel"])
-    for field in ("kryteria", "kroki", "pliki", "testy", "poza_zakresem", "odrzucone"):
+    files = obj(data["pliki"], ("wymagane", "warunkowe"))
+    for field in ("wymagane", "warunkowe"):
+        if not isinstance(files[field], list):
+            raise ValueError(f"{field} must be an array")
+        for row in files[field]:
+            fields = ("sciezka", "zmiana", "warunek") if field == "warunkowe" else ("sciezka", "zmiana")
+            row = obj(row, (*fields, "zrodla"))
+            for name in fields:
+                text(row[name])
+            if field == "warunkowe" and not row["warunek"].strip():
+                raise ValueError("conditional file requires a condition")
+            sources(row["zrodla"])
+    for field in ("kryteria", "kroki", "testy", "poza_zakresem", "odrzucone"):
         if not isinstance(data[field], list):
             raise ValueError(f"{field} must be an array")
         for row in data[field]:
@@ -134,7 +142,7 @@ def validate_synthesis(data: object, accepted: set[str]) -> dict:
                 if row["zrodlo"] not in PERSPECTIVES:
                     raise ValueError("unknown rejected source")
             else:
-                fields = ("sciezka", "zmiana") if field == "pliki" else ("tresc",)
+                fields = ("tresc",)
                 row = obj(row, (*fields, "zrodla"))
                 for name in fields:
                     text(row[name])
@@ -157,8 +165,14 @@ def render_synthesis(data: dict) -> str:
         return "\n".join(f"- {row['tresc']} [źródła: {', '.join(row['zrodla'])}]" for row in data[field])
 
     change_field = "zmiana"
-    files = "\n".join(f"- {row['sciezka']}: {row.get(change_field, '')} [źródła: {', '.join(row['zrodla'])}]"
-                      for row in data["pliki"])
+    sections = []
+    for field, title in (("wymagane", "Wymagane"), ("warunkowe", "Warunkowe")):
+        rows = []
+        for row in data["pliki"][field]:
+            condition = f" — warunek: {row['warunek']}" if field == "warunkowe" else ""
+            rows.append(f"- {row['sciezka']}: {row[change_field]}{condition} [źródła: {', '.join(row['zrodla'])}]")
+        sections.append(f"### {title}\n" + "\n".join(rows))
+    files = "\n\n".join(sections)
     rejected = "\n".join(f"- {row['tresc']} [{row['zrodlo']}]: {row['powod']}" for row in data["odrzucone"])
     return (f"## Cel\n{data['cel']}\n\n### Kryteria\n{items('kryteria')}\n\n"
             f"### Kroki\n{items('kroki')}\n\n## Pliki\n{files}\n\n"
@@ -167,23 +181,27 @@ def render_synthesis(data: dict) -> str:
 
 
 def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | None = None) -> dict:
-    artifact = art.parent / "synthesis.json"
     prompt = (PROMPTS / "plan_synthesis.md").read_text() + "\n" + issue
     for perspective, path in paths.items():
         if perspective not in PERSPECTIVES:
             raise ValueError("unknown synthesis input")
         prompt += f"\n\nAccepted branch: {perspective}\n{path.read_text()}"
-    prompt += f"\nWrite JSON only to {artifact}. Do not write plan.md.\n"
+    return write_synthesis(prompt, art, set(paths), cwd=cwd)
+
+
+def write_synthesis(prompt: str, art: Path, accepted: set[str], *, cwd: Path | None = None) -> dict:
+    artifact = art.with_suffix(".json")
+    prompt += f"\nWrite JSON only to {artifact}. Do not write Markdown.\n"
     store.remove_file(artifact)
     payload = pi_step(prompt, artifact, cwd=cwd)
     if payload["result"] != "done":
         return payload
     try:
-        data = validate_synthesis(json.loads(artifact.read_text()), set(paths))
+        data = validate_synthesis(json.loads(artifact.read_text()), accepted)
     except (ValueError, OSError) as exc:
         return {"result": "failed", "reason": f"invalid synthesis: {exc}"}
     text = render_synthesis(data)
-    if not valid_plan_text(text):
+    if not valid_plan_text(text, 2):
         return {"result": "failed", "reason": "invalid plan"}
     store.write_artifact(art, text)
     return {"result": "done", "artifact": str(art)}

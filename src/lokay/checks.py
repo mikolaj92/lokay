@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, matches_path, planned_files
+from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, planned_files, required_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -23,6 +23,7 @@ class CheckInput:
     hunks: list[dict]
     ci: dict
     worktree: Path
+    plan_schema: int | None = None
 
 
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
@@ -336,21 +337,31 @@ def plan_target(x: CheckInput) -> CheckResult:
         dirs[:] = sorted(name for name in dirs if name != ".git" and not is_cache(name)
                          and not (Path(directory) / name).is_symlink())
         repo_files.extend((Path(directory) / name).relative_to(x.worktree).as_posix() for name in files)
-    planned = planned_files(x.plan, repo_files, sorted(changed))
+    parser = planned_files if x.plan_schema == 2 else legacy_planned_files
+    planned = parser(x.plan, repo_files, sorted(changed))
     code = {path for path in planned if not is_test(path) and not path.startswith("docs/")
             and Path(path).suffix.lower() not in (".md", ".rst", ".txt")}
+    missing = sorted(target for target in required_files(x.plan, repo_files, sorted(changed))
+                     if not any(matches_path(path, target) for path in changed)) if x.plan_schema == 2 else []
     goal = re.search(r"^## Cel\s*\n(.*?)(?=^## |\Z)", x.plan, re.M | re.S)
     addition = re.search(r"\b(?:add(?:s|ed|ing)?|doda[cć]\w*|dodaj\w*|uzupełni\w*)\b",
                          goal[1] if goal else "", re.IGNORECASE)
     reasons = []
     if not changed:
         reasons.append("Empty diff")
-    if code and not any(matches_path(path, target) for path in changed for target in code):
+    if x.plan_schema == 2:
+        from lokay.plan import valid_plan_text
+
+        if not valid_plan_text(x.plan, x.plan_schema):
+            reasons.append("PLAN ERROR: invalid version-2 files list; redo Plan")
+        if missing:
+            reasons.append("Required planned files missing from the diff: " + ", ".join(missing))
+    elif code and not any(matches_path(path, target) for path in changed for target in code):
         reasons.append("Diff does not touch any planned code file: " + ", ".join(sorted(code)))
     if changed and deletions_only and addition:
         reasons.append("Deletions-only diff does not implement planned additions")
     reason = "; ".join(reasons) if reasons else "diff touches planned files"
-    path = next(iter(sorted(code) or sorted(planned) or sorted(changed)), "plan.md")
+    path = next(iter(missing or sorted(code) or sorted(planned) or sorted(changed)), "plan.md")
     findings = (Finding(path, 1, 1, reason, "plan_target"),) if reasons else ()
     return CheckResult("plan_target", "fail" if reasons else "pass", reason, findings)
 
