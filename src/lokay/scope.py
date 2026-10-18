@@ -89,5 +89,6 @@ def code_scope_issue(files: list[str], plan: str, repo_files: list[str] | None =
     if outside:
         reasons.append("Diff contains files outside ## Pliki: " + ", ".join(outside))
     if reasons:
-        return {"warstwa": "scope", "plik": "", "log": "; ".join(reasons)}
+        path = sorted(code)[0] if code and not code.intersection(files) else sorted(outside)[0]
+        return {"warstwa": "scope", "plik": path, "linia_od": 1, "linia_do": 1, "log": "; ".join(reasons)}
     return None

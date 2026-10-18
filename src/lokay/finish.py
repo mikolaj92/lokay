@@ -74,6 +74,8 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
                 f"{type(exc).__name__}: {exc}"
             ) from exc
         state_update(picked["repo"], picked["issue"], _event={"action": "merge_complete", "outcome": merged})
+        if merged["result"] == "closed":
+            return merged, base, sha, "merge", verdict
         if merged["result"] == "merged":
             state_update(picked["repo"], picked["issue"], sha=merged["merge_sha"])
             rounds_append(picked["repo"], picked["issue"], f"Merge: sha={merged['merge_sha']}")
