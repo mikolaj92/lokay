@@ -5,6 +5,7 @@ import tokenize
 from pathlib import Path
 
 from lokay.effects.git import git_try
+from lokay.scope import is_test
 
 
 def git_output(cwd: Path, args: list[str]) -> str:
@@ -44,6 +45,11 @@ def diff_lines(diff: str):
 
 def unit_test_files(diff: str) -> list[str]:
     paths = []
+    changes = {}
+    for path, _, kind, text in diff_lines(diff):
+        if text.strip() and kind in {"+", "-"}:
+            changes[path] = changes.get(path, 0) + (1 if kind == "+" else -1)
+    paths.extend(path for path, net in changes.items() if net > 0)
     for block in diff.split("diff --git ")[1:]:
         lines = block.splitlines()
         if not any(line.startswith("new file mode ") for line in lines):
@@ -56,14 +62,11 @@ def unit_test_files(diff: str) -> list[str]:
                     path = ast.literal_eval(path)
                 path = path.removeprefix("b/")
                 break
-        file = Path(path)
-        if file.suffix != ".py":
-            continue
-        if any(file.parts[i:i + 2] == ("fixtures", "replay") for i in range(len(file.parts) - 1)):
-            continue
-        if "tests" in file.parts[:-1] or file.name.startswith("test_"):
-            paths.append(path)
-    return sorted(set(paths))
+        paths.append(path)
+    return sorted({path for path in paths if is_test(path)
+                   and not Path(path).is_absolute() and ".." not in Path(path).parts
+                   and not any(Path(path).parts[i:i + 2] == ("fixtures", "replay")
+                               for i in range(len(Path(path).parts) - 1))})
 
 
 def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
