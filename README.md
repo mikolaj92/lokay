@@ -27,7 +27,7 @@ It parses the entire script before running, so an update cannot change a running
   `issue_since` (first pick until Merge), `failures` and `last_error`.
   The monitor alarms on blocked idle, at least three failures, an old issue,
   or queued work without a merge past the configured threshold.
-- Each Check round posts its result, findings and CI outcome on the PR.
+- pi edits files and runs local worktree checks; lokay commits, publishes, verifies PR/remote checks, and posts each Check result.
 - The separate `ai.mikolaj.lokay2.monitor` LaunchAgent runs `lokay monitor` every
   60 seconds, even when the factory stops. It opens one `lokay-stalled` issue while
   an alarm remains open. The factory excludes this issue from its queue.
@@ -104,11 +104,11 @@ Run the complete local suite (no package unit tests):
 bash scripts/check.sh
 ```
 
-The check first prepares this checkout with `uv sync --frozen` and verifies local
-`lokay` and `yaml` imports. Initial preparation may require network access;
+The check prepares this checkout with `uv sync --locked --all-extras`, compiles
+source files, and verifies local imports. Preparation may require network access;
 an unavailable dependency fails the check. It then isolates the home, temporary
-directory and uv cache inside the checkout and runs
-`uv run lokay replay fixtures/replay/` offline, without syncing dependencies.
+directory and uv cache under `${TMPDIR:-/tmp}` and replays `fixtures/replay/`
+and `fixtures/ticks/` offline, without syncing dependencies.
 An unexpected GitHub CLI call fails without logging its arguments.
 Replay checks recorded transitions and stops at the first mismatch.
 Blobs may be plain or gzip-compressed.
