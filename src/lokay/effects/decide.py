@@ -138,28 +138,15 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
             "chat_template_kwargs": {"enable_thinking": False},
             "prompt_format_version": 1,
         })
-    if api == "openai-decisions":
-        questions = []
-        for question in internal["questions"]:
-            kind = {"choice": "choice", "bool": "predicate", "score": "score"}[question["type"]]
-            item = {"type": kind, "name": question["id"], "instructions": question["instructions"]}
-            if kind == "score":
-                item["levels"] = [{"label": k} for k in question["options"]]
-            else:
-                item["choices"] = [{"value": k, "description": v} for k, v in question["options"].items()]
-            questions.append(item)
-        return _trim_wire({"model": model, "input": internal.get("state") or {}, "questions": questions})
-    if api in ("mini", "systemone"):
+    if api == "mini":
         questions = {}
         for question in internal["questions"]:
             kind = "noul" if question["type"] == "bool" else question["type"]
             item = {"type": kind, "instructions": question["instructions"]}
-            if api != "mini" or kind != "noul":
+            if kind != "noul":
                 item["criteria"] = question["options"]
             questions[question["id"]] = item
         wire = {"state": internal.get("state") or {}, "questions": questions}
-        if api != "mini":
-            wire["model"] = model
         return _trim_wire(wire)
     raise DecisionError(f"unknown api {api}")
 
@@ -212,24 +199,6 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
             if choice not in probs:
                 raise DecisionError(f"choice {qid}")
             mapped[qid] = {"choice": choice, "probabilities": probs, "confidence": float(probs[choice])}
-    elif api == "openai-decisions":
-        for answer in payload.get("answers") or []:
-            probs = {row["value"]: row["probability"] for row in answer.get("probabilities") or []}
-            choice = answer["choice"]
-            if answer.get("type") == "predicate":
-                p = float(answer.get("probability", probs.get("true", 0)))
-                probs = {"true": p, "false": 1 - p}
-                choice = "true" if p >= 0.5 else "false"
-            mapped[answer["name"]] = {"choice": choice, "probabilities": probs, "confidence": answer.get("confidence")}
-    elif api == "systemone":
-        for qid, answer in (payload.get("answers") or {}).items():
-            probs = dict(answer.get("probabilities") or {})
-            choice = answer["choice"]
-            if "noul" in probs:
-                noul = float(probs["noul"])
-                probs = {"true": 1 - noul, "false": noul}
-                choice = "false" if choice == "noul" else "true"
-            mapped[qid] = {"choice": choice, "probabilities": probs, "confidence": answer.get("confidence")}
     else:
         raise DecisionError(f"unknown api {api}")
     return _check(internal, mapped)
@@ -262,7 +231,7 @@ def _decide(internal: Mapping, recorder: list | None = None) -> dict:
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
     model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
-    path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone", "chat": "/chat/completions"}[api]
+    path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "chat": "/chat/completions"}[api]
     body = dumps(to_wire(api, model, internal))
     timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or (180 if api == "chat" else 30))))
     cmd = [
