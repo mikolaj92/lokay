@@ -97,7 +97,7 @@ def act(run: Run) -> Event:
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "check", "wait"):
+        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
@@ -861,6 +861,31 @@ def _prepare(picked: dict) -> tuple | dict:
     if saved.get("build_from_main"):
         state_update(picked["repo"], picked["issue"], build_from_main=False)
     plan_text = art.read_text()
+    saved = state_read(picked["repo"], picked["issue"])
+    if saved.get("plan_schema") == 2 and not saved.get("pr"):
+        from lokay.scope import plan_file_lists
+
+        files = plan_file_lists(plan_text)
+        if files is not None and not files["Wymagane"]:
+            from lokay.main_guard import check_main
+            from lokay.effects.gh import fit_body
+
+            main = check_main(picked["repo"], root, base=base_branch(worktree), config=repo)
+            if main["status"] == "green":
+                baseline = main["baseline"]
+                conclusion = "\n\n".join(re.findall(
+                    r"^## (?:Cel|Pliki)\s*\n.*?(?=^## |\Z)", plan_text, re.M | re.S)).strip()
+                evidence = (f"{conclusion}\n\nMain zielony. Tested SHA: `{baseline['sha']}`\n"
+                            f"argv: `{dumps(baseline['argv'])}`\n"
+                            f"Executed tests: {baseline['ci'].get('executed', 0)}\n"
+                            f"Lock checks: {baseline['lockfile']['status']}")
+                gh_ok(["issue", "close", str(picked["issue"]), "--repo", picked["repo"],
+                       "--comment", fit_body(evidence)], error="issue close failed", strip=False)
+                rounds_append(picked["repo"], picked["issue"], "Plan → closed: no required files, main green")
+                state_update(picked["repo"], picked["issue"], _event={"action": "closed"})
+                return {"result": "closed", "reason": "plan: no required files, main green"}
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Plan → Build: no required files, main {main['status']}")
     state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "build"}}, branch=branch)
     base = base_branch(worktree)
     try:
