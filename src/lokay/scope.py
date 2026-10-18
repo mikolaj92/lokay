@@ -85,11 +85,41 @@ def required_files(plan_text: str, repo_files: list[str], diff_files: list[str])
     return lists["Wymagane"] if lists is not None else set()
 
 
+NEW_FILE_MARKER = " (nowy plik)"
+
+
+def required_path_errors(rows: Sequence[tuple[str, bool]], existing: set[str] | None = None) -> list[str]:
+    bad = []
+    for path, new in rows:
+        try:
+            target = Path(path)
+            valid = (bool(re.fullmatch(r"[^`\s:]+", path))
+                     and not target.is_absolute() and ".." not in target.parts
+                     and bool("/" in path or target.suffix))
+            if existing is not None:
+                valid = valid and ((path not in existing) if new else (path in existing))
+        except (OSError, ValueError, RuntimeError):
+            valid = False
+        if not valid:
+            bad.append(path)
+    return sorted(set(bad))
+
+
 def plan_file_lists(plan_text: str) -> dict[str, set[str]] | None:
+    rows = _plan_file_rows(plan_text)
+    return {name: {path for path, new in items} for name, items in rows.items()} if rows is not None else None
+
+
+def plan_required_path_errors(plan_text: str, existing: set[str] | None = None) -> list[str]:
+    rows = _plan_file_rows(plan_text)
+    return required_path_errors(sorted(rows["Wymagane"]), existing) if rows is not None else []
+
+
+def _plan_file_rows(plan_text: str) -> dict[str, set[tuple[str, bool]]] | None:
     section = re.search(r"^## Pliki\s*\n(.*?)(?=^## |\Z)", plan_text, re.M | re.S)
     if not section:
         return None
-    lists: dict[str, set[str]] = {}
+    lists: dict[str, set[tuple[str, bool]]] = {}
     current = None
     for line in section[1].splitlines():
         if not line.strip():
@@ -100,7 +130,7 @@ def plan_file_lists(plan_text: str) -> dict[str, set[str]] | None:
                 return None
             lists[current] = set()
             continue
-        item = re.fullmatch(r"- `?([^`\s:]+)`?:\s*(.+)", line)
+        item = re.fullmatch(r"- `?([^`\s:]+)`?(" + re.escape(NEW_FILE_MARKER) + r")?:\s*(.+)", line)
         if current is None or item is None:
             return None
         path = item[1].removeprefix("./")
@@ -108,10 +138,10 @@ def plan_file_lists(plan_text: str) -> dict[str, set[str]] | None:
                 or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts):
             return None
         if current == "Warunkowe":
-            condition = item[2].partition("warunek:")[2].split("[źródła:", 1)[0].strip()
+            condition = item[3].partition("warunek:")[2].split("[źródła:", 1)[0].strip()
             if not condition:
                 return None
-        lists[current].add(path)
+        lists[current].add((path, bool(item[2])))
     return lists if lists.get("Wymagane") is not None else None
 
 

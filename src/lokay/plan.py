@@ -8,7 +8,7 @@ from lokay import store
 
 from lokay.effects.pi import pi_step
 from lokay.safety import untrusted_issue_block
-from lokay.scope import plan_file_lists
+from lokay.scope import NEW_FILE_MARKER, plan_file_lists, plan_required_path_errors, required_path_errors
 
 SECTIONS = ("## Cel", "## Pliki", "## Testy", "## Poza zakresem")
 CRITERIA = ("k_cel", "k_pliki", "k_testy", "k_zakres")
@@ -45,7 +45,7 @@ def plan_questions(plan: str = "") -> dict:
                 }
                 for name, text in {
                     "k_cel": "Does Cel name the outcome?",
-                    "k_pliki": "Does Pliki separate Wymagane (must modify) from Warunkowe (each with a condition)?",
+                    "k_pliki": "Does Pliki separate Wymagane (must modify, nowy=true only for created files, rendered with ' (nowy plik)') from Warunkowe (each with a condition)?",
                     "k_testy": "Does Testy name a check that can fail?",
                     "k_zakres": "Does Poza zakresem name what stays out?",
                 }.items()
@@ -60,10 +60,31 @@ def valid_plan_text(text: str, plan_schema: int | None = None) -> bool:
             and not re.search(r"git\s+(?:commit|push|reset|rebase)\b|\bgh[ \t]+", text, re.IGNORECASE))
 
 
-def valid_plan(path: Path, plan_schema: int | None = None) -> bool:
+def base_paths(root: Path | None) -> set[str] | None:
+    if root is None:
+        return None
+    from lokay.effects.git import base_branch, git_try
+
+    code, out, err = git_try(root, "ls-tree", "-r", "--name-only", "-z", f"origin/{base_branch(root)}")
+    if code:
+        raise RuntimeError((err or out).strip())
+    return set(out.split("\0")) - {""}
+
+
+def valid_plan(path: Path, plan_schema: int | None = None, *, existing: set[str] | None = None) -> bool:
     if not path.is_file() or path.stat().st_size == 0:
         return False
-    return valid_plan_text(path.read_text(), plan_schema)
+    text = path.read_text()
+    return (valid_plan_text(text, plan_schema)
+            and (plan_schema != 2 or not plan_required_path_errors(text, existing)))
+
+
+def path_verdict(path: Path, plan_schema: int | None, existing: set[str] | None = None) -> dict | None:
+    bad = plan_required_path_errors(path.read_text(), existing) if plan_schema == 2 else []
+    if bad:
+        return {"next": "revise", "uwagi": [{"kryterium": "k_pliki", "paths": bad,
+                "reason": "invalid required paths: " + ", ".join(bad)}]}
+    return None
 
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
@@ -90,18 +111,19 @@ def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = Non
             return written
         if not valid_plan(art, 2):
             return {"result": "failed", "reason": "invalid plan"}
+        plan_schema = 2
         if on_written is not None:
             on_written()
     from lokay.effects.pi import check_deadline
 
     check_deadline()
-    result = verdict(decide(plan_questions(art.read_text())))
+    result = path_verdict(art, plan_schema, base_paths(cwd) if plan_schema == 2 else None) or verdict(decide(plan_questions(art.read_text())))
     if result["next"] not in ("ok", "revise"):
         raise RuntimeError(f"unknown plan verdict: {result['next']}")
     return {"result": "done", **result}
 
 
-def validate_synthesis(data: object, accepted: set[str]) -> dict:
+def validate_synthesis(data: object, accepted: set[str], *, cwd: Path | None = None) -> dict:
     def obj(value, fields):
         if not isinstance(value, dict) or not all(field in value for field in fields):
             raise ValueError("missing synthesis fields")
@@ -130,7 +152,13 @@ def validate_synthesis(data: object, accepted: set[str]) -> dict:
                 text(row[name])
             if field == "warunkowe" and not row["warunek"].strip():
                 raise ValueError("conditional file requires a condition")
+            if field == "wymagane" and type(row.get("nowy")) is not bool:
+                raise ValueError("required file requires boolean nowy")
             sources(row["zrodla"])
+    bad = required_path_errors([(row["sciezka"], row["nowy"]) for row in files["wymagane"]],
+                               base_paths(cwd) if files["wymagane"] else None)
+    if bad:
+        raise ValueError("invalid required paths: " + ", ".join(bad))
     for field in ("kryteria", "kroki", "testy", "poza_zakresem", "odrzucone"):
         if not isinstance(data[field], list):
             raise ValueError(f"{field} must be an array")
@@ -170,7 +198,8 @@ def render_synthesis(data: dict) -> str:
         rows = []
         for row in data["pliki"][field]:
             condition = f" — warunek: {row['warunek']}" if field == "warunkowe" else ""
-            rows.append(f"- {row['sciezka']}: {row[change_field]}{condition} [źródła: {', '.join(row['zrodla'])}]")
+            marker = NEW_FILE_MARKER if field == "wymagane" and row["nowy"] else ""
+            rows.append(f"- {row['sciezka']}{marker}: {row[change_field]}{condition} [źródła: {', '.join(row['zrodla'])}]")
         sections.append(f"### {title}\n" + "\n".join(rows))
     files = "\n\n".join(sections)
     rejected = "\n".join(f"- {row['tresc']} [{row['zrodlo']}]: {row['powod']}" for row in data["odrzucone"])
@@ -197,7 +226,7 @@ def write_synthesis(prompt: str, art: Path, accepted: set[str], *, cwd: Path | N
     if payload["result"] != "done":
         return payload
     try:
-        data = validate_synthesis(json.loads(artifact.read_text()), accepted)
+        data = validate_synthesis(json.loads(artifact.read_text()), accepted, cwd=cwd)
     except (ValueError, OSError) as exc:
         return {"result": "failed", "reason": f"invalid synthesis: {exc}"}
     text = render_synthesis(data)
