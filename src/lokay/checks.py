@@ -4,6 +4,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import unquote
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
 from lokay.scope import is_artifact, is_cache, is_test, kind as change_kind, matches_path, planned_files
@@ -151,6 +152,28 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
             Finding(path, first_added.get(path, 1), first_added.get(path, 1),
                     "add a replay fixture under fixtures/replay", "no_unit_tests") for path in paths))
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
+
+
+def encoded_rewrite(x: CheckInput) -> CheckResult:
+    findings = []
+    for block in re.split(r"(?m)(?=^diff --git )", x.diff):
+        header, *hunks = re.split(r"(?m)(?=^@@ )", block)
+        for hunk in hunks:
+            removed = set()
+            added = []
+            for path, number, kind, text in diff_lines(header + hunk):
+                if kind == "-":
+                    removed.add(text)
+                elif kind == "+":
+                    added.append((path, number, text))
+            for path, number, text in added:
+                decoded = unquote(text)
+                if decoded != text and decoded in removed:
+                    findings.append(Finding(path, number, number,
+                                            "Text was percent-encoded instead of changed; keep the original or make a real change.",
+                                            "encoded_rewrite"))
+    return CheckResult("encoded_rewrite", "fail" if findings else "pass",
+                       "percent-encoded rewrites found" if findings else "no percent-encoded rewrites", tuple(findings))
 
 
 def docs(x: CheckInput) -> CheckResult:
@@ -306,7 +329,7 @@ def plan_target(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, docs, plan_target]
+          no_new_comments, no_unit_tests, encoded_rewrite, docs, plan_target]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
