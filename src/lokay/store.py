@@ -16,6 +16,7 @@ from importlib.metadata import PackageNotFoundError, version
 from threading import RLock
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from lokay.config import HOME
 from lokay.types import CheckResult, Event, Run, event_record, parse_event
@@ -40,9 +41,63 @@ def prune_blobs(directory: Path) -> None:
             blob.unlink()
 
 
-def log_event(kind: str, **fields) -> None:
+def redact(value, env=None) -> Any:
+    secrets = sorted({value for source in (os.environ, env or {}) for key, value in source.items()
+                      if value and re.search(r"TOKEN|SECRET|PASSWORD|API[_-]?KEY", key, re.IGNORECASE)},
+                     key=len, reverse=True)
+
+    def clean(item):
+        if isinstance(item, dict):
+            return {clean(str(key)): "[REDACTED]" if re.search(
+                r"^(?:env|environ|environment|.*headers?|authorization|proxy-authorization|(?:.*[_-])?(?:token|secret|password|api[_-]?key))$",
+                str(key), re.IGNORECASE) else clean(value) for key, value in item.items()}
+        if isinstance(item, list):
+            result = []
+            header = False
+            for value in item:
+                if header:
+                    result.append("[REDACTED]")
+                    header = False
+                    continue
+                header = isinstance(value, str) and (value in ("-H", "--header", "--headers") or bool(re.fullmatch(
+                    r"--(?:.*-)?(?:token|secret|password|api-key)", value, re.IGNORECASE)))
+                result.append("[REDACTED]" if isinstance(value, str) and re.match(
+                    r"^(?:-H.+|--headers?=|--(?:.*-)?(?:token|secret|password|api-key)=)", value, re.IGNORECASE) else clean(value))
+            return result
+        if isinstance(item, bytes):
+            item = item.decode(errors="replace")
+        if not isinstance(item, str):
+            return item
+        for secret in secrets:
+            item = item.replace(secret, "[REDACTED]")
+        item = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,})\b",
+                      "[REDACTED]", item)
+        item = re.sub(r"(?i)(\b(?:authorization|proxy-authorization|x-api-key|api-key|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+",
+                      r"\1[REDACTED]", item)
+        item = re.sub(r"(?i)(\b(?:bearer|basic)\s+)[A-Za-z0-9_./+=-]+", r"\1[REDACTED]", item)
+        item = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[REDACTED]@", item)
+        item = re.sub(r"(?i)(--headers?=|-H\s+|\bhttp(?:\.[^\s=]+)?\.extraheader=).*", "[REDACTED]", item)
+        return item
+
+    return clean(json.loads(json.dumps(value, ensure_ascii=False,
+                                       default=lambda item: item.decode(errors="replace") if isinstance(item, bytes) else json_default(item))))
+
+
+def write_blob(directory: Path, raw: bytes) -> dict:
+    sha = hashlib.sha256(raw).hexdigest()
+    blobs = directory / "blobs"
+    blobs.mkdir(parents=True, exist_ok=True)
+    temporary = blobs / (sha + ".gz.tmp")
+    with gzip.open(temporary, "wb") as stream:
+        stream.write(raw)
+    temporary.replace(blobs / (sha + ".gz"))
+    return {"blob": "sha256:" + sha}
+
+
+def log_event(kind: str, *, _env=None, **fields) -> None:
     global TICK, SEQ, CONTEXT
     try:
+        fields = redact(fields, _env)
         with shared_file_lock(RUNS.parent / "events.lock"):
             directory = RUNS.parent / "ticks"
             now = datetime.now(timezone.utc)
@@ -86,6 +141,8 @@ def log_event(kind: str, **fields) -> None:
                    "tick": TICK, "seq": SEQ, "repo": None, "issue": None, "node": None,
                    **CONTEXT, "kind": kind, **fields}
             if kind == "call":
+                effect = row.pop("effect", {"input": row["input"], "output": row.get("output")})
+                row["effect"] = write_blob(directory, json.dumps(effect, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=json_default).encode())
                 value = row.pop("input")
                 raw = value.encode() if isinstance(value, str) else json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=json_default).encode()
                 row["input"] = "sha256:" + hashlib.sha256(raw).hexdigest()
@@ -115,13 +172,7 @@ def log_event(kind: str, **fields) -> None:
                         row.pop(key)
                     continue
                 if len(raw) > (2048 if key == "output" else 768):
-                    blobs = directory / "blobs"
-                    blobs.mkdir(parents=True, exist_ok=True)
-                    temporary = blobs / (sha + ".gz.tmp")
-                    with gzip.open(temporary, "wb") as stream:
-                        stream.write(raw)
-                    temporary.replace(blobs / (sha + ".gz"))
-                    row[key] = {"blob": "sha256:" + sha}
+                    row[key] = write_blob(directory, raw)
             line = json.dumps(row, separators=(",", ":"), ensure_ascii=False, default=json_default) + "\n"
             directory.mkdir(parents=True, exist_ok=True)
             with (directory / f"{now:%Y-%m-%d}.jsonl").open("a") as stream:

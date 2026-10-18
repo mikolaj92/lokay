@@ -211,9 +211,31 @@ def run_process(
     started = time.monotonic()
     output = None
     ok = False
+    attempts = []
+
+    def execute():
+        attempt = {}
+        try:
+            proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
+            attempt.update(argv=list(proc.args), returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr)
+            return proc
+        except BaseException as exc:
+            try:
+                attempt.update(error=type(exc).__name__, reason=str(exc),
+                               returncode=getattr(exc, "returncode", None),
+                               stdout=getattr(exc, "stdout", None), stderr=getattr(exc, "stderr", None))
+            except Exception:
+                pass
+            raise
+        finally:
+            try:
+                attempts.append(store.redact({"argv": list(argv), "stdin": input, **attempt}, env))
+            except Exception:
+                pass
+
     try:
         if call != "pi":
-            proc = _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
+            proc = execute()
         else:
             from lokay.effects.git import pi_git_guard
 
@@ -227,8 +249,7 @@ def run_process(
                     )
                     return match[0] if match else None
 
-                proc = retry(lambda: _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text),
-                             4, transient, call="pi")
+                proc = retry(execute, 4, transient, call="pi")
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout.decode(errors="replace") if isinstance(proc.stdout, bytes) else proc.stdout,
                   "stderr": proc.stderr.decode(errors="replace") if isinstance(proc.stderr, bytes) else proc.stderr,
@@ -242,7 +263,8 @@ def run_process(
         log_event("call", call=call, name="pi -p" if call == "pi" else " ".join(argv[command + 1:command + 3])[:200],
                   input={"argv": list(argv[command:]),
                          "stdin": input.decode(errors="replace") if isinstance(input, bytes) else input},
-                  output=output, started=started, ok=ok)
+                  output=output, started=started, ok=ok, _env=env,
+                  effect={"argv": list(argv), "stdin": input, "attempts": attempts})
 
 
 def _pi_pids(expires: float) -> set[int]:
@@ -479,7 +501,11 @@ def _run_pi_process(
                         log_event("call", call="pi", name="pi idle-retry",
                                   input={"argv": argv[command:], "stdin": input},
                                   output={"stdout": collected("stdout"), "stderr": collected("stderr"),
-                                          "returncode": process.returncode}, started=attempt, ok=False)
+                                          "returncode": process.returncode}, started=attempt, ok=False, _env=env,
+                                  effect={"argv": list(argv), "stdin": input,
+                                          "attempts": [{"argv": list(argv), "stdin": input,
+                                                        "stdout": collected("stdout"), "stderr": collected("stderr"),
+                                                        "returncode": process.returncode}]})
                         break
                     if not selector.get_map() and process.poll() is not None:
                         return subprocess.CompletedProcess(argv, process.returncode, collected("stdout"), collected("stderr"))

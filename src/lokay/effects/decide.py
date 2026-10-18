@@ -241,8 +241,9 @@ def decide(internal: Mapping) -> dict:
     started = time.monotonic()
     output = None
     ok = False
+    responses = []
     try:
-        output = _decide(internal)
+        output = _decide(internal, responses)
         ok = True
         return output
     except BaseException as exc:
@@ -250,10 +251,11 @@ def decide(internal: Mapping) -> dict:
         raise
     finally:
         log_event("call", call="decide", name=",".join(str(q.get("id", "")) for q in internal.get("questions", []) if isinstance(q, Mapping))[:200],
-                  input=internal, output=output, started=started, ok=ok)
+                  input=internal, output=output, started=started, ok=ok,
+                  effect={"input": internal, "requests": responses, "output": output})
 
 
-def _decide(internal: Mapping) -> dict:
+def _decide(internal: Mapping, recorder: list | None = None) -> dict:
     from lokay.effects.pi import run_process
     from lokay.effects.retry import retry
 
@@ -288,11 +290,32 @@ def _decide(internal: Mapping) -> dict:
         return None
 
     def request():
+        response = {}
         try:
-            return run_process(cmd, timeout=float(timeout) + 2,
-                               input=f"authorization: Bearer {key}\n" if key else None)
+            try:
+                proc = run_process(cmd, timeout=float(timeout) + 2,
+                                   input=f"authorization: Bearer {key}\n" if key else None)
+                response.update(stdout=proc.stdout, stderr=proc.stderr, returncode=proc.returncode)
+                return proc
+            except BaseException as exc:
+                try:
+                    response.update(error=type(exc).__name__,
+                                    reason=f"request timed out after {exc.timeout} seconds" if isinstance(exc, subprocess.TimeoutExpired) else str(exc),
+                                    stdout=getattr(exc, "stdout", None), stderr=getattr(exc, "stderr", None),
+                                    returncode=getattr(exc, "returncode", None))
+                except Exception:
+                    pass
+                raise
         except OSError:
             raise DecisionError("decision request failed or timed out") from None
+        finally:
+            if recorder is not None:
+                try:
+                    from lokay.store import redact
+
+                    recorder.append(redact({"body": json.loads(body), **response}))
+                except Exception:
+                    pass
 
     try:
         proc = retry(request, 4, transient, call="decide")
