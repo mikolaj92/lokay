@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from contextlib import ExitStack
 from copy import deepcopy
@@ -38,6 +39,13 @@ def segment(path: Path, rows: list[dict]) -> None:
     gh = import_module("lokay.effects.gh")
     decide = import_module("lokay.effects.decide")
     manifest = json.loads(path.with_suffix(".json").read_text())
+    entry = manifest.get("entry", "act")
+    if entry not in ("act", "check"):
+        raise ValueError("unsupported replay entry")
+
+    class Boundary(BaseException):
+        pass
+
     identities = {(row.get("tick"), row.get("repo"), row.get("issue")) for row in rows}
     sequences = [row["seq"] for row in rows]
     if (len(identities) != 1 or not rows or sequences != sorted(set(sequences))
@@ -72,6 +80,11 @@ def segment(path: Path, rows: list[dict]) -> None:
         rows = relocate(rows)
         effects = [row for row in rows if row["kind"] == "call"]
         transitions = [row for row in rows if row["kind"] == "transition"]
+        if entry == "check" and (
+                transitions[0]["before"].get("node") != "check"
+                or transitions[-1]["event"].get("action") != "verdict"
+                or transitions[-1]["event"]["outcome"].get("result") not in ("fix", "merge")):
+            raise ValueError("check segment must start at Check and end at a fix or merge verdict")
         position = 0
         transition_position = 0
         requests = []
@@ -135,6 +148,7 @@ def segment(path: Path, rows: list[dict]) -> None:
             nonlocal transition_position
             if kind != "transition":
                 return
+            fields = json.loads(json.dumps(fields, default=store.json_default))
             if transition_position >= len(transitions):
                 raise Mismatch("unrecorded transition")
             expected = transitions[transition_position]
@@ -144,6 +158,9 @@ def segment(path: Path, rows: list[dict]) -> None:
                 if stable(fields[key]) != stable(expected[key]):
                     raise Mismatch(f"seq={expected['seq']} transition {key} mismatch: expected {stable(expected[key])!r}, got {stable(fields[key])!r}")
             transition_position += 1
+            if (entry == "check" and transition_position == len(transitions)
+                    and fields["event"].get("action") == "verdict"):
+                raise Boundary
 
         home = sandbox / "home"
         store.ensure_directory(home)
@@ -170,7 +187,10 @@ def segment(path: Path, rows: list[dict]) -> None:
         stack.enter_context(patch.object(socket, "socket", blocked))
         stack.enter_context(patch.object(pi, "retry_sleep", blocked))
         stack.enter_context(patch.object(tick.time, "time", lambda: manifest["time"]))
-        for target, source in manifest.get("files", {}).items():
+        files = dict(manifest.get("files", {}))
+        if entry == "check":
+            files[manifest["diff_path"]] = manifest["diff"]
+        for target, source in files.items():
             destination = Path(relocate(target)).resolve()
             origin = (path.parent / source).resolve()
             if not destination.is_relative_to(sandbox) or not origin.is_relative_to(path.parent.resolve()):
@@ -179,11 +199,66 @@ def segment(path: Path, rows: list[dict]) -> None:
         before = relocate(manifest["before"])
         repo, issue = manifest["repo"]["name"], manifest["issue"]
         store.save_run(repo, issue, before)
-        event = tick.act(Run.from_state({**before, "repo": repo, "issue": issue}))
+        if entry == "check":
+            if not isinstance(manifest.get("uv"), str):
+                raise ValueError("check manifest requires uv string")
+            checks = import_module("lokay.checks")
+            original_which = checks.shutil.which
+            stack.enter_context(patch.object(checks.shutil, "which",
+                                            lambda name, *args, **kwargs: manifest["uv"] if name == "uv"
+                                            else original_which(name, *args, **kwargs)))
+            configured = relocate(manifest["repo"])
+            root, worktree = tick._repo_paths(configured, issue)
+            git = import_module("lokay.effects.git")
+            stack.enter_context(patch.object(git, "BASE_BRANCHES", {}))
+            git.BASE_BRANCHES[(worktree.resolve(), None)] = manifest["base"]
+            finish = import_module("lokay.finish")
+            check = import_module("lokay.check")
+            setup = import_module("lokay.setup")
+            stack.enter_context(patch.object(setup, "prepare_dependencies",
+                                            lambda *args, **kwargs: relocate(manifest["setup"])))
+            picked = {**before, "repo": repo, "issue": issue}
+            sha = before["sha"]
+            branch = f"lokay/{issue}"
+            tests = configured.get("test") or []
+            base = manifest["base"]
+            diff_path = Path(relocate(manifest["diff_path"])).resolve()
+            if not diff_path.is_relative_to(sandbox):
+                raise ValueError("fixture diff escapes sandbox")
+            diff = diff_path.read_text()
+            check_rows = check.hunks(diff)
+            saved = store.state_read(repo, issue)
+            try:
+                ci = finish.local_checks(picked, worktree, configured, sha, root, base, tests, check_rows)
+                pr_number, remote = finish.remote_checks(picked, branch, sha)
+                if remote["result"] not in ("green", "no_ci"):
+                    raise Mismatch(f"unsupported check remote result: {remote['result']}")
+                if remote.get("failed"):
+                    raise Mismatch(f"unsupported check remote failures: {remote['failed']}")
+                ci = {**ci, "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
+                    "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+                store.state_update(repo, issue, local_ci=ci)
+                rounds = before.get("check_rounds", 0)
+                decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
+                    picked, worktree, base, sha, saved, diff, check_rows, ci, rounds)
+                verdict, rounds = finish.verdict(
+                    picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
+                    check_results, pr_number, rounds, check_notes, hashlib.sha256(diff.encode()).hexdigest(),
+                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
+                store.state_update(repo, issue, _event={"action": "verdict", "outcome": verdict})
+            except Boundary:
+                outcome = transitions[-1]["event"]["outcome"]
+                detail = outcome
+            else:
+                raise Mismatch("check segment returned before final verdict boundary")
+        else:
+            event = tick.act(Run.from_state({**before, "repo": repo, "issue": issue}))
+            outcome = event.outcome
+            detail = event_record(event)
         after = store.load(repo, issue).state
         if stable(after) != stable(transitions[-1]["after"]):
             raise Mismatch("final state mismatch")
-        if stable(event.outcome) != stable(relocate(manifest["outcome"])):
-            raise Mismatch(f"final outcome mismatch: {event_record(event)!r}")
+        if stable(outcome) != stable(relocate(manifest["outcome"])):
+            raise Mismatch(f"final outcome mismatch: {detail!r}")
         if position != len(effects) or transition_position != len(transitions):
             raise Mismatch(f"unconsumed calls={len(effects) - position} transitions={len(transitions) - transition_position}")

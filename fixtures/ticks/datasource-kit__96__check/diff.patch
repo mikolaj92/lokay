@@ -1,0 +1,392 @@
+diff --git a/README.md b/README.md
+index d1e3fd2..17723ec 100644
+--- a/README.md
++++ b/README.md
+@@ -398,19 +398,15 @@ backend = FalaExecutionBackend("journal.sqlite")
+ summary = backend.execute(request, perform_step)
+ ```
+ 
+-This is a thin adapter over Fala 0.7.28's public `record_in_process` API:
++This is a thin adapter over Fala 0.8.1's public `record_in_process` API:
+ `run_id`, `execution_id` (as Fala's `process_id`), `inputs`, `metadata`, and the
+ callback are forwarded unchanged. Fala owns validation, recording, exact-once
+ callback invocation, and return/exception semantics. The caller still creates
+ and finalizes the run and owns IDs, retries, and result lifetime.
+ 
+-A custom backend may add observation or durable recording, but concurrency and
+-recording policy are its own responsibility.
+-
+-This boundary intentionally does **not** create or finalize runs, mint IDs,
+-retry, checkpoint, persist business data, clean results, or manage result
+-lifetimes. The optional Fala execution and artifact adapters are separate; neither
+-is imported by the dependency-free core.
++Custom backends own concurrency and recording policy. This boundary does not
++create or finalize runs, mint IDs, retry, checkpoint, persist business data,
++clean results, or manage result lifetimes.
+ 
+ ## Install
+ 
+@@ -423,14 +419,18 @@ Core has no third-party runtime dependencies. Optional integrations are lazy:
+ 
+ ```bash
+ pip install "datasource-kit[profiles]"   # YAML profile loading
+-pip install "datasource-kit[fala]"       # Fala execution + artifact adapters
++pip install "datasource-kit[fala]"
+ pip install "datasource-kit[fastapi]"    # FastAPI control-plane router
+ ```
+ 
+ The `[fala]` extra installs [mikolaj92/Fala](https://github.com/mikolaj92/Fala)
+-from GitHub at the `v0.7.28` tag (`record_in_process`). Fala is not published
+-to PyPI; the extra carries a PEP 508 git URL so `pip` does not resolve the
+-unrelated PyPI project named `fala`.
++0.8.1 for execution (`record_in_process`), not artifact storage, from a
++[commit-pinned archive](https://github.com/mikolaj92/Fala/archive/27c179aee96daf6953ef36d6b1a007214d14a0db.tar.gz).
++Installation needs no Git fetch and does not resolve the unrelated PyPI project named `fala`.
++
++`build_control_plane_router` imports FastAPI lazily and returns an `APIRouter`
++for the host to mount with its own prefix and authentication dependencies.
++Routes delegate to `WorkerControlPlane`; they never start or stop processes.
+ 
+ ## Minimal Batch Usage
+ 
+diff --git a/pyproject.toml b/pyproject.toml
+index 27da8f3..c54d8c8 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -16,11 +16,7 @@ dependencies = []
+ datasource-kit = "datasource_kit.cli:main"
+ 
+ [project.optional-dependencies]
+-# Blob/artifact resolution and in-process journal recording only.
+-# Fala is GitHub-only (name = "fala"); the PEP 508 URL keeps pip off the
+-# unrelated PyPI project of the same name. Adapter needs record_in_process
+-# (Fala 0.7.28+).
+-fala = ["fala @ git+https://github.com/mikolaj92/Fala.git@v0.7.28"]
++fala = ["fala @ https://github.com/mikolaj92/Fala/archive/27c179aee96daf6953ef36d6b1a007214d14a0db.tar.gz"]
+ # YAML profile loading only; JSON profiles are the dep-free default.
+ profiles = ["pyyaml>=6.0"]
+ # Optional FastAPI control-plane router; the core stays HTTP-framework-free.
+@@ -34,9 +30,6 @@ dev = ["pytest>=8.0", "fastapi>=0.141.1", "httpx2>=2.12.0"]
+ [dependency-groups]
+ dev = ["pytest>=8.0", "fastapi>=0.141.1", "httpx2>=2.12.0"]
+ 
+-[tool.uv.sources]
+-fala = { git = "https://github.com/mikolaj92/Fala", tag = "v0.7.28" }
+-
+ [build-system]
+ requires = ["hatchling"]
+ build-backend = "hatchling.build"
+diff --git a/src/datasource_kit/adapters/fala.py b/src/datasource_kit/adapters/fala.py
+index 87a4561..9a40c04 100644
+--- a/src/datasource_kit/adapters/fala.py
++++ b/src/datasource_kit/adapters/fala.py
+@@ -1,23 +1,15 @@
+-"""Optional Fala execution and artifact adapters."""
+-
+ from __future__ import annotations
+ 
+ from collections.abc import Callable, Mapping
+-from io import BytesIO
+ from os import PathLike
+-from pathlib import Path
+-from typing import Any, BinaryIO, Protocol, TypeVar
++from typing import Any, Protocol, TypeVar
+ 
+ from datasource_kit.execution import ExecutionRequest
+-from datasource_kit.protocols import ArtifactStore
+ 
+-__all__ = ["FalaArtifactStore", "FalaExecutionBackend"]
++__all__ = ["FalaExecutionBackend"]
+ 
+ _T = TypeVar("_T")
+ 
+-_INSTALL_HINT = (
+-    "FalaArtifactStore requires the 'fala' extra: pip install datasource-kit[fala]"
+-)
+ _EXECUTION_INSTALL_HINT = (
+     "FalaExecutionBackend requires the 'fala' extra: pip install datasource-kit[fala]"
+ )
+@@ -25,28 +17,6 @@ _EXECUTION_CAPABILITY_ERROR = (
+     "FalaExecutionBackend requires Fala 0.7.28 or newer with the public "
+     "record_in_process API"
+ )
+-_BLOB_KIND = "blob"
+-_PAYLOAD_FILENAME = "payload.bin"
+-
+-
+-class _FalaArtifactRef(Protocol):
+-    uri: str
+-
+-
+-class _FalaArtifactRefFactory(Protocol):
+-    def __call__(self, *, kind: str, uri: str) -> object: ...
+-
+-
+-class _FalaFileArtifactStore(Protocol):
+-    def put_fileobj(
+-        self,
+-        *,
+-        kind: str,
+-        fileobj: BinaryIO,
+-        filename: str,
+-    ) -> _FalaArtifactRef: ...
+-
+-    def resolve(self, artifact: object) -> Path: ...
+ 
+ 
+ class _RecordInProcess(Protocol):
+@@ -99,30 +69,3 @@ class FalaExecutionBackend:
+             inputs=request.inputs,
+             metadata=request.metadata,
+         )
+-
+-
+-class FalaArtifactStore(ArtifactStore):
+-    """Thin ``ArtifactStore`` adapter over Fala's file artifact store."""
+-
+-    def __init__(self, root: str | PathLike[str]) -> None:
+-        try:
+-            from fala.artifacts import ArtifactRef, FileArtifactStore
+-        except ImportError as exc:
+-            raise ImportError(_INSTALL_HINT) from exc
+-
+-        self._artifact_ref: _FalaArtifactRefFactory = ArtifactRef
+-        self._store: _FalaFileArtifactStore = FileArtifactStore(Path(root))
+-
+-    def store(self, payload: bytes) -> str:
+-        """Store bytes in Fala and return the content-addressed artifact URI."""
+-        artifact = self._store.put_fileobj(
+-            kind=_BLOB_KIND,
+-            fileobj=BytesIO(payload),
+-            filename=_PAYLOAD_FILENAME,
+-        )
+-        return artifact.uri
+-
+-    def resolve(self, ref: str) -> bytes:
+-        """Resolve a Fala artifact URI and return the payload bytes."""
+-        artifact = self._artifact_ref(kind=_BLOB_KIND, uri=ref)
+-        return self._store.resolve(artifact).read_bytes()
+diff --git a/src/datasource_kit/adapters/fastapi.py b/src/datasource_kit/adapters/fastapi.py
+index d97d7fb..043c297 100644
+--- a/src/datasource_kit/adapters/fastapi.py
++++ b/src/datasource_kit/adapters/fastapi.py
+@@ -1,19 +1,3 @@
+-"""Optional FastAPI adapter: an ``APIRouter`` over :class:`WorkerControlPlane`.
+-
+-Mirrors the ``fala`` artifact-store adapter (and, in the consuming host, the
+-my-auth / my-usermanager pattern): the third-party dependency is imported
+-lazily inside the factory, so importing this module never pulls in FastAPI.
+-Install the extra to use it::
+-
+-    pip install datasource-kit[fastapi]
+-
+-The factory returns a bare :class:`~fastapi.APIRouter` that the host mounts
+-under its own prefix and security dependencies -- the adapter itself carries
+-no authentication and never touches worker processes directly. Every route
+-delegates to the control plane, which is the only thing that reads liveness or
+-flips desired state.
+-"""
+-
+ from __future__ import annotations
+ 
+ from typing import TYPE_CHECKING, Any, Callable, TypeVar
+diff --git a/tests/adapters/test_fala_artifact_store.py b/tests/adapters/test_fala_artifact_store.py
+deleted file mode 100644
+index 7c58a05..0000000
+--- a/tests/adapters/test_fala_artifact_store.py
++++ /dev/null
+@@ -1,129 +0,0 @@
+-from __future__ import annotations
+-
+-import builtins
+-import hashlib
+-import sys
+-import types
+-from pathlib import Path
+-from typing import BinaryIO, Final
+-
+-import pytest
+-
+-
+-_INSTALL_HINT: Final = (
+-    "FalaArtifactStore requires the 'fala' extra: "
+-    "pip install datasource-kit[fala]"
+-)
+-
+-
+-def _block_fala_imports(monkeypatch: pytest.MonkeyPatch) -> None:
+-    monkeypatch.delitem(sys.modules, "fala", raising=False)
+-    monkeypatch.delitem(sys.modules, "fala.artifacts", raising=False)
+-    real_import = builtins.__import__
+-
+-    def guarded_import(
+-        name: str,
+-        globals_: dict[str, object] | None = None,
+-        locals_: dict[str, object] | None = None,
+-        fromlist: tuple[str, ...] = (),
+-        level: int = 0,
+-    ) -> object:
+-        if name == "fala" or name.startswith("fala."):
+-            raise ModuleNotFoundError("No module named 'fala'")
+-        return real_import(name, globals_, locals_, fromlist, level)
+-
+-    monkeypatch.setattr(builtins, "__import__", guarded_import)
+-
+-
+-class _FakeArtifactRef:
+-    def __init__(self, *, kind: str, uri: str) -> None:
+-        self.kind = kind
+-        self.uri = uri
+-
+-
+-class _FakeFileArtifactStore:
+-    def __init__(self, root: str | Path) -> None:
+-        self.root = Path(root)
+-        self._payloads: dict[str, bytes] = {}
+-
+-    def put_fileobj(
+-        self,
+-        *,
+-        kind: str,
+-        fileobj: BinaryIO,
+-        filename: str,
+-        artifact_id: str | None = None,
+-        metadata: dict[str, object] | None = None,
+-    ) -> _FakeArtifactRef:
+-        payload = fileobj.read()
+-        digest = hashlib.sha256(payload).hexdigest()
+-        uri = f"fala-artifact://sha256/{digest}"
+-        self._payloads[uri] = payload
+-        return _FakeArtifactRef(kind=kind, uri=uri)
+-
+-    def resolve(self, artifact: _FakeArtifactRef) -> Path:
+-        digest = artifact.uri.removeprefix("fala-artifact://sha256/")
+-        target = self.root / "blobs" / "sha256" / digest[:2] / digest
+-        target.parent.mkdir(parents=True, exist_ok=True)
+-        target.write_bytes(self._payloads[artifact.uri])
+-        return target
+-
+-
+-def _install_fake_fala(monkeypatch: pytest.MonkeyPatch) -> None:
+-    package = types.ModuleType("fala")
+-    artifacts = types.ModuleType("fala.artifacts")
+-    artifacts.ArtifactRef = _FakeArtifactRef
+-    artifacts.FileArtifactStore = _FakeFileArtifactStore
+-    package.artifacts = artifacts
+-    monkeypatch.setitem(sys.modules, "fala", package)
+-    monkeypatch.setitem(sys.modules, "fala.artifacts", artifacts)
+-
+-
+-def test_importing_core_and_adapters_when_fala_missing(
+-    monkeypatch: pytest.MonkeyPatch,
+-) -> None:
+-    # Given: the optional fala dependency is not importable.
+-    _block_fala_imports(monkeypatch)
+-
+-    # When: the core package and adapters package are imported.
+-    import datasource_kit
+-    import datasource_kit.adapters as adapters
+-
+-    # Then: import succeeds without touching fala.
+-    assert datasource_kit.__name__ == "datasource_kit"
+-    assert adapters.__name__ == "datasource_kit.adapters"
+-
+-
+-def test_fala_artifact_store_requires_fala_extra_when_missing(
+-    monkeypatch: pytest.MonkeyPatch,
+-) -> None:
+-    # Given: the adapter module is importable, but fala itself is not.
+-    from datasource_kit.adapters.fala import FalaArtifactStore
+-
+-    _block_fala_imports(monkeypatch)
+-
+-    # When / Then: constructing the adapter raises the install hint.
+-    with pytest.raises(ImportError) as exc_info:
+-        FalaArtifactStore("unused")
+-    assert str(exc_info.value) == _INSTALL_HINT
+-
+-
+-def test_fala_artifact_store_round_trips_bytes_through_fala(
+-    monkeypatch: pytest.MonkeyPatch,
+-    tmp_path: Path,
+-) -> None:
+-    # Given: a fala-compatible FileArtifactStore implementation is importable.
+-    _install_fake_fala(monkeypatch)
+-    from datasource_kit import ArtifactStore
+-    from datasource_kit.adapters.fala import FalaArtifactStore
+-
+-    store = FalaArtifactStore(tmp_path)
+-
+-    # When: payload bytes are stored and resolved through the adapter.
+-    ref = store.store(b"payload")
+-    resolved = store.resolve(ref)
+-
+-    # Then: the adapter satisfies the kit protocol and returns the original bytes.
+-    assert isinstance(store, ArtifactStore)
+-    assert ref.startswith("fala-artifact://sha256/")
+-    assert resolved == b"payload"
+diff --git a/tests/adapters/test_fala_extra_source.py b/tests/adapters/test_fala_extra_source.py
+index 00ca593..e24b9ca 100644
+--- a/tests/adapters/test_fala_extra_source.py
++++ b/tests/adapters/test_fala_extra_source.py
+@@ -5,22 +5,24 @@ from pathlib import Path
+ from typing import Final
+ 
+ _ROOT: Final = Path(__file__).resolve().parents[2]
+-_FALA_GIT: Final = "https://github.com/mikolaj92/Fala"
+-_FALA_TAG: Final = "v0.7.28"
+-_FALA_EXTRA: Final = f"fala @ git+{_FALA_GIT}.git@{_FALA_TAG}"
++_FALA_ARCHIVE: Final = (
++    "https://github.com/mikolaj92/Fala/archive/"
++    "27c179aee96daf6953ef36d6b1a007214d14a0db.tar.gz"
++)
++_FALA_EXTRA: Final = f"fala @ {_FALA_ARCHIVE}"
+ 
+ 
+ def _pyproject() -> dict[str, object]:
+     return tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+ 
+ 
+-def test_fala_extra_installs_mikolaj92_fala_from_git() -> None:
++def test_fala_extra_installs_mikolaj92_fala_from_archive() -> None:
+     extras = _pyproject()["project"]["optional-dependencies"]["fala"]
+ 
+     assert extras == [_FALA_EXTRA]
+ 
+ 
+-def test_uv_sources_pin_fala_to_the_same_git_tag() -> None:
+-    sources = _pyproject()["tool"]["uv"]["sources"]["fala"]
++def test_uv_sources_do_not_override_fala_archive() -> None:
++    sources = _pyproject().get("tool", {}).get("uv", {}).get("sources", {})
+ 
+-    assert sources == {"git": _FALA_GIT, "tag": _FALA_TAG}
++    assert "fala" not in sources
+diff --git a/uv.lock b/uv.lock
+index 5333090..3313321 100644
+--- a/uv.lock
++++ b/uv.lock
+@@ -72,7 +72,7 @@ dev = [
+ 
+ [package.metadata]
+ requires-dist = [
+-    { name = "fala", marker = "extra == 'fala'", git = "https://github.com/mikolaj92/Fala?tag=v0.7.28" },
++    { name = "fala", marker = "extra == 'fala'", url = "https://github.com/mikolaj92/Fala/archive/27c179aee96daf6953ef36d6b1a007214d14a0db.tar.gz" },
+     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.141.1" },
+     { name = "fastapi", marker = "extra == 'fastapi'", specifier = ">=0.141.1" },
+     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.12.0" },
+@@ -90,8 +90,13 @@ dev = [
+ 
+ [[package]]
+ name = "fala"
+-version = "0.7.28"
+-source = { git = "https://github.com/mikolaj92/Fala?tag=v0.7.28#36b98995f515766b867dd5e43c63799a6892aa48" }
++version = "0.8.1"
++source = { url = "https://github.com/mikolaj92/Fala/archive/27c179aee96daf6953ef36d6b1a007214d14a0db.tar.gz" }
++sdist = { hash = "sha256:328563fd39dd551e6c3e4058741aed3edec0902c51dadb8952485d2c525c94ad" }
++
++[package.metadata]
++requires-dist = [{ name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" }]
++provides-extras = ["dev"]
+ 
+ [[package]]
+ name = "fastapi"
