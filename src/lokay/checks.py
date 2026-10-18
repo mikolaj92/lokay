@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import is_artifact, is_cache, is_test, matches_path, planned_files
+from lokay.scope import is_artifact, is_cache, is_test, kind as change_kind, matches_path, planned_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -157,7 +157,7 @@ def docs(x: CheckInput) -> CheckResult:
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
         file = Path(path)
-        if file.suffix.lower() not in {".md", ".rst", ".txt"} and "docs" not in file.parts[:-1]:
+        if change_kind([path]) != "docs":
             continue
         if not (x.worktree / file).resolve().is_relative_to(x.worktree.resolve()):
             continue

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
+from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 
 
@@ -10,6 +11,15 @@ CACHE_PATTERNS = [
     ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".venv/", ".check-local/",
     "*.pyc", "*.db-shm", "*.db-wal", "manifest.db",
 ]
+
+
+def kind(files: Sequence[object]) -> str:
+    return "docs" if files and all(
+        isinstance(path, str) and bool(path)
+        and not Path(path).is_absolute() and ".." not in Path(path).parts
+        and (path.startswith("docs/") or Path(path).suffix in {".md", ".rst", ".txt"})
+        for path in files
+    ) else "code"
 
 
 def is_cache(path: str) -> bool:

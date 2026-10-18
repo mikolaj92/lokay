@@ -13,6 +13,7 @@ from pathlib import Path
 from lokay import store
 
 from lokay.effects.decide import DecisionError, from_wire
+from lokay.scope import kind as change_kind
 from lokay.types import CheckResult, Finding, Note, parse_finding, to_dict
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
@@ -106,11 +107,7 @@ def docs_only(diff: str) -> bool:
                 or not tokens[2].startswith("a/") or not tokens[3].startswith("b/")):
             return False
         paths.extend(token[2:] for token in tokens[2:])
-    return bool(paths) and all(
-        path and not Path(path).is_absolute() and ".." not in Path(path).parts
-        and (path.startswith("docs/") or Path(path).suffix in {".md", ".rst", ".txt"})
-        for path in paths
-    )
+    return change_kind(paths) == "docs"
 
 
 def lens(kind: str) -> str:

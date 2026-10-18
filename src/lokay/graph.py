@@ -3,6 +3,7 @@ from dataclasses import replace
 import re
 from typing import assert_never
 
+from lokay.scope import kind as change_kind
 from lokay.types import (
     PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, Snapshot, Pick, pr_number,
@@ -113,10 +114,7 @@ def _kind(row: dict, pr: bool = False) -> int:
                      if path != "/dev/null")
     paths = [file.get("path") or file.get("filename") if isinstance(file, dict) else file
              for file in files]
-    return int(bool(paths) and all(isinstance(path, str) and bool(path)
-                                  and (path.startswith("docs/")
-                                       or path.endswith((".md", ".yml", ".yaml", ".toml")))
-                                  for path in paths))
+    return int(change_kind(paths) == "docs")
 
 
 def pick(snapshot: Snapshot) -> Pick | None:
