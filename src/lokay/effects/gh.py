@@ -3,6 +3,7 @@ from __future__ import annotations
 from json import dumps
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -12,7 +13,8 @@ from pathlib import Path
 
 from lokay.effects.pi import run_process
 from lokay.effects.retry import retry
-from lokay.safety import validate_argv
+from lokay.redact import redact_text
+from lokay.safety import SafetyError, validate_argv
 from lokay.types import CheckResult, Note, parse_finding
 
 ORIGIN = "lokay"
@@ -50,7 +52,13 @@ def auth_status(env: Mapping[str, str]):
 
 
 def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | None = None) -> tuple[int, str, str]:
-    args = list(args)
+    args = [redact_text(arg, env) for arg in args]
+    for index, arg in enumerate(args):
+        if re.search(r"(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}", arg):
+            subcommand = " ".join(part if re.fullmatch(r"[a-z][a-z-]*", part) else "?" for part in args[:2])
+            message = f"gh post blocked: GitHub token pattern survived redaction (arg {index}, {subcommand})"
+            logging.getLogger(__name__).error(message)
+            raise SafetyError(message)
     index = 0
     while index < len(args):
         arg = args[index]

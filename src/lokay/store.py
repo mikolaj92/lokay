@@ -20,6 +20,7 @@ from typing import Any
 
 from lokay import graph
 from lokay.config import HOME
+from lokay.redact import redact_text
 from lokay.types import CheckResult, Event, Run, event_record, parse_event, pr_number
 
 RUNS = HOME / "runs"
@@ -43,10 +44,6 @@ def prune_blobs(directory: Path) -> None:
 
 
 def redact(value, env=None) -> Any:
-    secrets = sorted({value for source in (os.environ, env or {}) for key, value in source.items()
-                      if value and re.search(r"TOKEN|SECRET|PASSWORD|API[_-]?KEY", key, re.IGNORECASE)},
-                     key=len, reverse=True)
-
     def clean(item):
         if isinstance(item, dict):
             return {clean(str(key)): "[REDACTED]" if re.search(
@@ -69,17 +66,7 @@ def redact(value, env=None) -> Any:
             item = item.decode(errors="replace")
         if not isinstance(item, str):
             return item
-        for secret in secrets:
-            item = item.replace(secret, "[REDACTED]")
-        item = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,})\b",
-                      "[REDACTED]", item)
-        item = re.sub(r'''(?i)(--headers?(?:=|\s+)|-H\s+|\bhttp(?:\.[^\s=]+)?\.extraheader=)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)''',
-                      r"\1[REDACTED]", item)
-        item = re.sub(r"(?i)(\b(?:authorization|proxy-authorization|x-api-key|api-key|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+",
-                      r"\1[REDACTED]", item)
-        item = re.sub(r"(?i)(\b(?:bearer|basic)\s+)[A-Za-z0-9_./+=-]+", r"\1[REDACTED]", item)
-        item = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[REDACTED]@", item)
-        return item
+        return redact_text(item, env)
 
     return clean(json.loads(json.dumps(value, ensure_ascii=False,
                                        default=lambda item: item.decode(errors="replace") if isinstance(item, bytes) else json_default(item))))

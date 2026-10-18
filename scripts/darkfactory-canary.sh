@@ -4,11 +4,12 @@ uv run --project "$(dirname "$0")/.." python - <<'PY'
 import fcntl
 import json
 import os
-import subprocess
 import time
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+from lokay.effects.gh import _gh
 
 REPO = 'mikolaj92/lokay-sandbox'
 if os.environ.get('LOKAY2_REPO') != REPO:
@@ -29,10 +30,10 @@ def save():
     temporary.replace(path)
 
 def gh(*args):
-    result = subprocess.run(['gh', *args, '--repo', REPO], capture_output=True, text=True, timeout=60)
-    if result.returncode:
-        raise RuntimeError(result.stderr.strip() or 'gh failed')
-    return result.stdout.strip()
+    code, out, err = _gh([*args, '--repo', REPO])
+    if code:
+        raise RuntimeError(err.strip() or 'gh failed')
+    return out.strip()
 
 def stamp(value):
     return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
