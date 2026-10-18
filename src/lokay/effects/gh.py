@@ -81,16 +81,26 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None, *, cwd: Path | No
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
-def gh_ok(args: list[str], *, error: str = "gh failed", strip: bool = True, include_stdout: bool = False) -> str:
+def gh_ok(args: list[str], *, error: str = "gh failed", strip: bool = True, include_stdout: bool = False,
+          allow_partial_data: bool = False) -> str:
     code, out, err = _gh(args)
     if code != 0:
+        if allow_partial_data:
+            try:
+                response = json.loads(out)
+            except ValueError:
+                pass
+            else:
+                if isinstance(response, dict) and isinstance(response.get("data"), dict):
+                    return out
         reason = err.strip() if strip else err
         raise RuntimeError(reason or (out.strip() if include_stdout else "") or error)
     return out
 
 
-def gh_json(args: list[str], *, error: str = "gh failed", strip: bool = True, default: str | None = None):
-    out = gh_ok(args, error=error, strip=strip)
+def gh_json(args: list[str], *, error: str = "gh failed", strip: bool = True, default: str | None = None,
+            allow_partial_data: bool = False):
+    out = gh_ok(args, error=error, strip=strip, allow_partial_data=allow_partial_data)
     return json.loads(out if default is None else out or default)
 
 
@@ -120,7 +130,7 @@ def children_merged(repo: str, children: list[int]) -> bool:
 
 def open_issues(repo: str) -> list[dict]:
     rows = gh_json(
-        ["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000", "--json", "number,createdAt,title,labels,state"],
+        ["issue", "list", "--repo", repo, "--state", "open", "--limit", "1000000", "--json", "number,createdAt,title,labels,state"],
         error="issue list failed", default="[]",
     )
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))

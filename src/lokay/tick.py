@@ -235,7 +235,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     def list_prs(name):
         if name not in pr_lists:
             pr_lists[name] = tuple(gh_json([
-                "pr", "list", "--repo", name, "--state", "all", "--limit", "1000000",
+                "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
                 "--json", "number,headRefName,headRefOid,labels,state",
             ], error="pr list failed", default="[]"))
         return pr_lists[name]
@@ -277,15 +277,30 @@ def pick(env: dict[str, str] | None = None) -> dict:
                   if saved.get("result") not in ("merged", "closed")
                   and (only_issue is None or issue == only_issue)}
         if active:
-            prs = list_prs(name)
-            issues = list_issues(name)
-            closed_issues = {row["number"] for row in issues if row.get("state") == "CLOSED"}
-            closed_prs = [row for row in prs if row.get("state") == "CLOSED"]
-            closing = [issue for issue, saved in active.items()
-                       if issue in closed_issues or any(
-                           (row["number"] == saved["pr"] if saved.get("pr") else
-                            row["headRefName"] == (saved.get("branch") or f"lokay/{issue}"))
-                           for row in closed_prs)]
+            owner, repo_name = name.split("/", 1)
+            fields = [f"issue_{int(issue)}: issueOrPullRequest(number: {int(issue)}) "
+                      "{ ... on Issue { state } ... on PullRequest { state } }" for issue in active]
+            fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state }}"
+                          for number in sorted({int(saved["pr"]) for saved in active.values() if saved.get("pr")}))
+            query = ("query($owner: String!, $name: String!) { repository(owner:$owner,name:$name) { "
+                     + " ".join(fields) + " } }")
+            response = gh_json(["api", "graphql", "-f", f"owner={owner}", "-f", f"name={repo_name}",
+                                "-f", f"query={query}"], allow_partial_data=True)
+            remote = response["data"].get("repository") or {}
+            closing = []
+            for issue, saved in active.items():
+                if (remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED":
+                    closing.append(issue)
+                elif saved.get("pr"):
+                    if (remote.get(f"pr_{int(saved['pr'])}") or {}).get("state") == "CLOSED":
+                        closing.append(issue)
+                else:
+                    prs = gh_json([
+                        "pr", "list", "--repo", name, "--head", saved.get("branch") or f"lokay/{issue}",
+                        "--state", "closed", "--json", "number,headRefName,state",
+                    ], error="pr list failed", default="[]")
+                    if any(row.get("state") == "CLOSED" for row in prs):
+                        closing.append(issue)
             if closing:
                 held = acquire_lock(lock_path(name.split("/")[0], name))
                 busy = held["result"] != "held"
