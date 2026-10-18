@@ -63,6 +63,16 @@ def compatible_state(actual: dict, expected: dict) -> dict:
     actual = actual.copy()
     if "check_inputs" not in expected:
         actual.pop("check_inputs", None)
+    if "plan_schema" not in expected:
+        actual.pop("plan_schema", None)
+    for key in ("plan_branches", "plan_synthesis"):
+        if isinstance(actual.get(key), dict) and isinstance(expected.get(key), dict):
+            if key == "plan_branches":
+                actual[key] = {name: compatible_state(branch, expected[key][name])
+                               if name in expected[key] else branch
+                               for name, branch in actual[key].items()}
+            else:
+                actual[key] = compatible_state(actual[key], expected[key])
     return compatible_checks(actual, expected)
 
 

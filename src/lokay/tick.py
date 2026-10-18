@@ -60,6 +60,15 @@ def act(run: Run) -> Event:
             node = "check"
         try:
             check_deadline()
+            if saved.get("plan_schema") == 2 and node != "plan":
+                from lokay.plan import valid_plan
+
+                if not valid_plan(run_dir(picked["repo"], picked["issue"]) / "plan.md", 2):
+                    outcome = {"next": "plan", "reason": "PLAN ERROR: invalid version-2 plan"}
+                    state_update(picked["repo"], picked["issue"],
+                                 _event={"action": "replan", "outcome": outcome},
+                                 **deepcopy(PLAN_RESET))
+                    return outcome
             prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
             outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
         except TickExpired:
@@ -618,12 +627,12 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
 
             outcome = _retry(picked, "plan", lambda: plan.plan_one(
                 "minimal", context, art, cwd=cwd, phase=phase,
-                on_written=single_written, single=True), "done", plan_branch=True)
+                on_written=single_written, single=True, plan_schema=2), "done", plan_branch=True)
             rounds_append(repo, issue, f"Plan single {rounds}: Decision {outcome['next']}")
             if outcome["next"] == "ok":
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
                              plan_kind=outcome.get("kind", "code"),
-                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                             plan_schema=2, plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
@@ -639,7 +648,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 "phase": "write", "rounds": 0, "accepted_sha": None,
                 "prompt": context, "fingerprint": None,
             })
-            accepted = (plan.valid_plan(branch_art) and branch.get("accepted_sha") ==
+            accepted = (plan.valid_plan(branch_art, branch.get("plan_schema")) and branch.get("accepted_sha") ==
                         hashlib.sha256(branch_art.read_bytes()).hexdigest())
             if accepted:
                 paths[perspective] = branch_art
@@ -657,13 +666,14 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 def written():
                     nonlocal rounds
                     rounds += 1
-                    branch.update(phase="check", rounds=branch["rounds"] + 1)
+                    branch.update(phase="check", rounds=branch["rounds"] + 1, plan_schema=2)
                     state_update(repo, issue, plan_branches=branches, plan_rounds=rounds)
                     rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: write")
                 try:
                     outcome = _retry(picked, "plan", lambda: plan.plan_one(
                         perspective, branch["prompt"], branch_art,
-                        cwd=cwd, phase=branch["phase"], on_written=written), "done", plan_branch=True)
+                        cwd=cwd, phase=branch["phase"], on_written=written,
+                        plan_schema=branch.get("plan_schema")), "done", plan_branch=True)
                 except RetryLater as exc:
                     branch.update(phase="failed", reason=str(exc), accepted_sha=None)
                     state_update(repo, issue, plan_branches=branches,
@@ -699,7 +709,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             store.write_artifact(art, paths[choice].read_text())
             state_update(repo, issue, _event={"action": "synthesis", "outcome": {"next": "ok"}},
                          plan_comparison=comparison, plan_kind=branches[choice].get("kind", "code"),
-                         plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                         plan_schema=branches[choice].get("plan_schema"), plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                          plan_notes=[], fix_history=[], fix_counts=[],
                          **store.round_fields(state_read(repo, issue), accepted_plan=True))
             return rounds
@@ -710,13 +720,13 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 raise Escalated(escalated)
             state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase="write", plan_synthesis=synthesis)
             check_deadline()
-            if synthesis["phase"] == "write" or not plan.valid_plan(art):
+            if synthesis["phase"] == "write" or not plan.valid_plan(art, synthesis.get("plan_schema")):
                 failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
                 prompt = context + "\n\nFailed branches:\n" + dumps(failed, ensure_ascii=False)
                 prompt += "\n\nUwagi:\n" + dumps(synthesis["uwagi"], ensure_ascii=False)
                 _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art, cwd=cwd), "done")
                 rounds += 1
-                synthesis.update(phase="check", rounds=synthesis["rounds"] + 1)
+                synthesis.update(phase="check", rounds=synthesis["rounds"] + 1, plan_schema=2)
                 state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
                 rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: write")
             check_deadline()
@@ -728,7 +738,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 synthesis["phase"] = "accepted"
                 state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
                              plan_synthesis=synthesis, plan_kind=outcome.get("kind", "code"),
-                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                             plan_schema=synthesis.get("plan_schema"), plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
                              plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
@@ -801,7 +811,7 @@ def _prepare(picked: dict) -> tuple | dict:
         state_update(picked["repo"], picked["issue"], previous_head=git_head(worktree))
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = saved.get("plan_rounds", 0)
-    accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
+    accepted = (plan.valid_plan(art, saved.get("plan_schema")) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
         plan_rounds = _plan_graph(picked, art, title, body, cwd=root)

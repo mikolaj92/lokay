@@ -73,6 +73,49 @@ def matches_path(path: str, planned: str) -> bool:
 
 
 def planned_files(plan_text: str, repo_files: list[str], diff_files: list[str]) -> set[str]:
+    return _planned_files(plan_text, repo_files, diff_files)
+
+
+def legacy_planned_files(plan_text: str, repo_files: list[str], diff_files: list[str]) -> set[str]:
+    return _planned_files(plan_text, repo_files, diff_files, real_paths=False)
+
+
+def required_files(plan_text: str, repo_files: list[str], diff_files: list[str]) -> set[str]:
+    lists = plan_file_lists(plan_text)
+    return lists["Wymagane"] if lists is not None else set()
+
+
+def plan_file_lists(plan_text: str) -> dict[str, set[str]] | None:
+    section = re.search(r"^## Pliki\s*\n(.*?)(?=^## |\Z)", plan_text, re.M | re.S)
+    if not section:
+        return None
+    lists: dict[str, set[str]] = {}
+    current = None
+    for line in section[1].splitlines():
+        if not line.strip():
+            continue
+        if line in ("### Wymagane", "### Warunkowe"):
+            current = line[4:]
+            if current in lists:
+                return None
+            lists[current] = set()
+            continue
+        item = re.fullmatch(r"- `?([^`\s:]+)`?:\s*(.+)", line)
+        if current is None or item is None:
+            return None
+        path = item[1].removeprefix("./")
+        if (not ("/" in path or PurePosixPath(path).suffix)
+                or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts):
+            return None
+        if current == "Warunkowe":
+            condition = item[2].partition("warunek:")[2].split("[źródła:", 1)[0].strip()
+            if not condition:
+                return None
+        lists[current].add(path)
+    return lists if lists.get("Wymagane") is not None else None
+
+
+def _planned_files(plan_text: str, repo_files: list[str], diff_files: list[str], *, real_paths: bool = True) -> set[str]:
     section = re.search(r"^## Pliki\s*\n(.*?)(?=^## |\Z)", plan_text, re.M | re.S)
     known = {path.removeprefix("./") for path in (*repo_files, *diff_files)}
     planned = set()
@@ -107,7 +150,8 @@ def planned_files(plan_text: str, repo_files: list[str], diff_files: list[str]) 
                 continue
             quoted = re.match(r"`([^`]+)`", text)
             path = (quoted[1] if quoted else text.split()[0].rstrip("*_:,;.)]")).removeprefix("./")
-            if (not path or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts
+            if (not path or (real_paths and not ("/" in path or PurePosixPath(path).suffix))
+                    or PurePosixPath(path).is_absolute() or ".." in PurePosixPath(path).parts
                     or (not quoted and not any(matches_path(known_path, path) for known_path in known))):
                 continue
             planned.add(path)

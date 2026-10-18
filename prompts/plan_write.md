@@ -1,4 +1,5 @@
 Write plan.md: ## Cel, ## Pliki (include docs files to trim), ## Testy, ## Poza zakresem.
+Under ## Pliki use ### Wymagane for files the change must modify (- path: change), and ### Warunkowe for conditional files (- path: change — warunek: condition). Omit empty subsections. Anything only if needed, if checks fail, or after confirmation belongs in Warunkowe, never Wymagane. Keep read-only files separate.
 Search only inside the current working directory; never scan the home directory.
 Docs describe only how the project works. On every change read the docs you touch, delete what is stale or duplicated, and keep added doc lines <= removed doc lines.
 No new unit test functions.
