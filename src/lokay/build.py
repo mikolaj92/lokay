@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import hashlib
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
@@ -220,25 +221,28 @@ def build_code(
 ) -> dict:
     previous_head = previous_head or git_head(worktree)
     clean = pi_env(env, worktree)
-    clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
-    exclude_caches(worktree)
-    before = worktree_status(worktree)
-    prompt = (
-        Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
-        + "\n\nPlan:\n" + plan
-        + "\n\n" + untrusted_issue_block(title, body)
-        + ("\n\n" + build_note if build_note else "")
-    )
-    if kind == "docs_change":
-        prompt += "\n\n" + Path(__file__).resolve().parents[2].joinpath("prompts/build_docs_change.md").read_text()
-    proc = run_pi(
-        worktree,
-        prompt,
-        clone_path,
-        env=clean,
-        cwd=worktree,
-        timeout=3600,
-    )
+    try:
+        clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
+        exclude_caches(worktree)
+        before = worktree_status(worktree)
+        prompt = (
+            Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
+            + "\n\nPlan:\n" + plan
+            + "\n\n" + untrusted_issue_block(title, body)
+            + ("\n\n" + build_note if build_note else "")
+        )
+        if kind == "docs_change":
+            prompt += "\n\n" + Path(__file__).resolve().parents[2].joinpath("prompts/build_docs_change.md").read_text()
+        proc = run_pi(
+            worktree,
+            prompt,
+            clone_path,
+            env=clean,
+            cwd=worktree,
+            timeout=3600,
+        )
+    finally:
+        shutil.rmtree(clean["LOKAY_STATE_DIR"], ignore_errors=True)
     if isinstance(proc, dict):
         return proc
     if proc.returncode != 0:
@@ -292,16 +296,19 @@ def build_code(
 def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
     before = worktree_status(worktree)
     clean = pi_env(env, worktree)
-    clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
-    proc = run_pi(
-        worktree,
-        prompt,
-        clone_path,
-        env=clean,
-        cwd=worktree,
-        timeout=3600,
-        missing_is_failure=True,
-    )
+    try:
+        clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
+        proc = run_pi(
+            worktree,
+            prompt,
+            clone_path,
+            env=clean,
+            cwd=worktree,
+            timeout=3600,
+            missing_is_failure=True,
+        )
+    finally:
+        shutil.rmtree(clean["LOKAY_STATE_DIR"], ignore_errors=True)
     if isinstance(proc, dict):
         return proc
     tidy_and_commit(worktree, "lokay fix", before)

@@ -139,7 +139,13 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], ext
     if not Path("/usr/bin/sandbox-exec").exists():
         return argv
     worktree = Path(worktree).resolve()
-    gitdir = env.get("LOKAY_PI_GITDIR") or pi_env({}, worktree)["LOKAY_PI_GITDIR"]
+    gitdir = env.get("LOKAY_PI_GITDIR")
+    if not gitdir:
+        child = pi_env({}, worktree)
+        try:
+            gitdir = child["LOKAY_PI_GITDIR"]
+        finally:
+            shutil.rmtree(child["LOKAY_STATE_DIR"], ignore_errors=True)
     return [
         "/usr/bin/sandbox-exec", "-f", str(Path(__file__).resolve().parents[3] / "sandbox/pi.sb"),
         "-D", f"WORKTREE={worktree}", "-D", f"GITDIR={gitdir}",
@@ -571,23 +577,26 @@ def pi_step(
 ) -> dict[str, str]:
     worktree = cwd if cwd is not None else Path.cwd()
     child = pi_env(os.environ if env is None else env, worktree)
-    provider = child.get("LOKAY2_PROVIDER", "")
-    model = child.get("LOKAY2_MODEL", "")
-    if not provider or not model:
-        return {"result": "failed", "artifact": ""}
-    from lokay import store
+    try:
+        provider = child.get("LOKAY2_PROVIDER", "")
+        model = child.get("LOKAY2_MODEL", "")
+        if not provider or not model:
+            return {"result": "failed", "artifact": ""}
+        from lokay import store
 
-    store.ensure_directory(artifact.parent)
-    proc = run_pi(
-        worktree,
-        prompt,
-        env=child,
-        cwd=cwd,
-        timeout=timeout,
-        extra_dir=artifact.parent.resolve(),
-        guarded=False,
-        json_mode=True,
-    )
+        store.ensure_directory(artifact.parent)
+        proc = run_pi(
+            worktree,
+            prompt,
+            env=child,
+            cwd=cwd,
+            timeout=timeout,
+            extra_dir=artifact.parent.resolve(),
+            guarded=False,
+            json_mode=True,
+        )
+    finally:
+        shutil.rmtree(child["LOKAY_STATE_DIR"], ignore_errors=True)
     if isinstance(proc, dict):
         return proc
     if proc.returncode != 0 or not artifact.is_file() or artifact.stat().st_size == 0:
