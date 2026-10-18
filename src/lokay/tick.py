@@ -803,6 +803,7 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish, recover_no_changes
 
     from lokay import plan
+    from lokay.effects.git import plan_checkout
 
     saved = state_read(picked["repo"], picked["issue"])
     if "issue_title" not in saved or "issue_body" not in saved:
@@ -848,7 +849,7 @@ def _prepare(picked: dict) -> tuple | dict:
         if tasks is None:
             outcome = _retry(picked, "plan", lambda: plan.split_tasks(
                 saved.get("plan_prompt") or plan.prompt_for(title, body),
-                run_dir(picked["repo"], picked["issue"]) / "split.json", cwd=root), "done")
+                run_dir(picked["repo"], picked["issue"]) / "split.json", cwd=plan_checkout(root)), "done")
             tasks = plan.validate_tasks(outcome["tasks"])
             state_update(picked["repo"], picked["issue"], split_tasks=tasks, children=[])
         tasks = plan.validate_tasks(tasks)
@@ -872,7 +873,7 @@ def _prepare(picked: dict) -> tuple | dict:
                                 existing=plan.base_paths(root) if saved.get("plan_schema") == 2 else None) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
-        plan_rounds = _plan_graph(picked, art, title, body, cwd=root)
+        plan_rounds = _plan_graph(picked, art, title, body, cwd=plan_checkout(root))
     branch = f"lokay/{picked['issue']}"
     check_deadline()
     if saved.get("build_from_main"):
