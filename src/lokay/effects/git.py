@@ -214,6 +214,33 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
         return {"result": "failed", "error": str(exc)}
 
 
+def plan_checkout(root: Path) -> Path:
+    root = root.resolve()
+    path = root.parent / f"{root.name}-plan"
+    if path.is_symlink():
+        raise ValueError("expected non-symlink plan checkout")
+    base = base_branch(root)
+    common = (root / git(root, "rev-parse", "--git-common-dir")).resolve()
+    if not path.exists():
+        git(root, "worktree", "add", "--detach", str(path), f"origin/{base}", timeout=60)
+    if not (path / ".git").is_file() or (path / ".git").is_symlink():
+        raise ValueError("expected a registered linked plan checkout")
+    records = git(root, "worktree", "list", "--porcelain", "-z").split("\0\0")
+    matches = [record.split("\0") for record in records if f"worktree {path}" in record.split("\0")]
+    if (len(matches) != 1 or "detached" not in matches[0]
+            or any(field.startswith("locked") for field in matches[0])):
+        raise ValueError("plan checkout registration mismatch or locked")
+    git_dir = (path / git(path, "rev-parse", "--git-dir")).resolve()
+    if (Path(git(path, "rev-parse", "--show-toplevel")).resolve() != path
+            or (path / git(path, "rev-parse", "--git-common-dir")).resolve() != common
+            or git_dir.parent != common / "worktrees"):
+        raise ValueError("plan checkout repository mismatch")
+    git(path, "checkout", "--detach", "--force", f"origin/{base}", timeout=60)
+    git(path, "clean", "-fdx", timeout=60)
+    BASE_BRANCHES[(path, None)] = base
+    return path
+
+
 def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None) -> dict:
     if safe:
         def checked(where, args):

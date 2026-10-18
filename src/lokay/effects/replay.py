@@ -332,6 +332,10 @@ def segment(path: Path, rows: list[dict]) -> None:
                 raise Mismatch("check segment returned before final verdict boundary")
         else:
             if before.get("node") in ("plan", "build"):
+                if not any(row.get("effect", {}).get("argv", [])[:4] == ["git", "worktree", "add", "--detach"]
+                           or row.get("effect", {}).get("argv", [])[:4] == ["git", "checkout", "--detach", "--force"]
+                           for row in effects):
+                    stack.enter_context(patch("lokay.effects.git.plan_checkout", lambda root: root))
                 stack.enter_context(patch.object(tick, "changes_before_merge", lambda worktree: []))
                 stack.enter_context(patch.object(tick, "abort_conflicted_merge", lambda worktree: False))
             event = tick.act(Run.from_state({**before, "repo": repo, "issue": issue}))
