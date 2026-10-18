@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, planned_code_touch_reason, planned_files, required_files
+from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, plan_file_lists, planned_code_touch_reason, planned_files, required_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -158,6 +158,56 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
 
 
 def weakened_tests(x: CheckInput) -> CheckResult:
+    from lokay.config import repo as repo_config
+    from lokay.effects.tests import base_tests_on_head
+
+    changed = set()
+    deleted = set()
+    for block in x.diff.split("diff --git ")[1:]:
+        header = block.split("\n@@ ", 1)[0].splitlines()
+        if any(line.startswith("new file mode ") for line in header):
+            continue
+        match = re.fullmatch(r'("a/(?:\\.|[^"])*"|a/.*?) ("b/(?:\\.|[^"])*"|b/.*)', header[0])
+        if match is None:
+            raise ValueError("invalid diff path")
+        path = match[1]
+        if path.startswith('"'):
+            path = ast.literal_eval(path)
+        path = path.removeprefix("a/")
+        if Path(path).is_absolute() or ".." in Path(path).parts:
+            continue
+        lines = [text for _, _, kind, text in diff_lines("diff --git " + block) if kind in {"-", "+"}]
+        if is_test(path, lines):
+            changed.add(path)
+            if "+++ /dev/null" in header:
+                deleted.add(path)
+    if x.plan_schema == 2:
+        lists = plan_file_lists(x.plan)
+        planned = lists["Wymagane"] if lists is not None else set()
+        changed = {path for path in changed if not any(matches_path(path, target) for target in planned)}
+    else:
+        planned = planned_files(x.plan, [], sorted(deleted))
+        changed = {path for path in changed
+                   if path not in deleted or not any(matches_path(path, target) for target in planned)}
+    if not changed:
+        return CheckResult("weakened_tests", "pass", "no existing tests changed", ())
+    config = repo_config(x.repo)
+    if x.ci.get("result") != "green" or not config.get("test") or config.get("syntax_only"):
+        return _count_weakened_tests(x)
+    paths = sorted(changed)
+    result = base_tests_on_head(x.worktree, x.sha, paths, config, x.issue)
+    if result.get("result") == "green":
+        return CheckResult("weakened_tests", "pass",
+                           "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
+    if result.get("result") == "red" and result.get("executed", 0) > 0:
+        reason = "base version of this test fails on the new code"
+        findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in paths)
+        log = result.get("log", "")[-800:]
+        return CheckResult("weakened_tests", "fail", reason + (": " + log if log else ""), findings)
+    return _count_weakened_tests(x)
+
+
+def _count_weakened_tests(x: CheckInput) -> CheckResult:
     deleted = set()
     for block in x.diff.split("diff --git ")[1:]:
         header = block.split("\n@@ ", 1)[0].splitlines()

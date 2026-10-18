@@ -270,6 +270,9 @@ def segment(path: Path, rows: list[dict]) -> None:
         before = relocate(manifest["before"])
         repo, issue = manifest["repo"]["name"], manifest["issue"]
         store.save_run(repo, issue, before)
+        if before.get("node") == "check":
+            stack.enter_context(patch("lokay.effects.tests.base_tests_on_head",
+                                      lambda *args, **kwargs: {"result": "unknown", "tested": False}))
         if entry == "check":
             if not isinstance(manifest.get("uv"), str):
                 raise ValueError("check manifest requires uv string")
