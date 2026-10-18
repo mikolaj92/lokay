@@ -19,7 +19,7 @@ from dataclasses import replace
 from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Dispatched, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
-from lokay.effects.git import base_branch, changes_before_merge, commit_paths, worktree_remove
+from lokay.effects.git import abort_conflicted_merge, base_branch, changes_before_merge, commit_paths, worktree_remove
 from lokay.effects.git import git, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
@@ -893,6 +893,9 @@ def _prepare(picked: dict) -> tuple | dict:
     except RuntimeError as exc:
         return needs_help(picked, f"build fetch: {exc}")
     try:
+        if abort_conflicted_merge(worktree):
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Build: merge with origin/{base} conflicted, aborted; Check resolves it")
         changed_paths = changes_before_merge(worktree)
         if changed_paths:
             committed = commit_paths(worktree, changed_paths, "lokay build (resume)")
@@ -901,7 +904,11 @@ def _prepare(picked: dict) -> tuple | dict:
                               f"Build: committed leftover changes before merge: {len(committed)} files")
         git(worktree, "merge", "--no-edit", f"origin/{base}", timeout=300)
     except RuntimeError as exc:
-        return needs_help(picked, f"build merge: {exc}")
+        if abort_conflicted_merge(worktree):
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Build: merge with origin/{base} conflicted, aborted; Check resolves it")
+        else:
+            return needs_help(picked, f"build merge: {exc}")
     from lokay.setup import prepare_dependencies
 
     prepare_dependencies(worktree, repo, int(picked["issue"]))
