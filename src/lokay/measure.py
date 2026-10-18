@@ -56,7 +56,7 @@ def changed_files(value, home: Path):
     return None
 
 
-def merges(home: Path) -> list[dict]:
+def merges(home: Path, ticks: list[datetime] | None = None) -> list[dict]:
     rows = []
     for path in sorted((home / "ticks").glob("*.jsonl*")):
         if not path.name.endswith((".jsonl", ".jsonl.gz")):
@@ -67,6 +67,8 @@ def merges(home: Path) -> list[dict]:
                 row = json.loads(line)
                 if not isinstance(row, dict):
                     raise ValueError("expected tick object")
+                if ticks is not None:
+                    ticks.append(utc(row["ts"]))
                 if row.get("kind") in ("call", "transition") and row.get("repo") and row.get("issue"):
                     rows.append((utc(row["ts"]), row))
     evidence = {}
@@ -136,7 +138,11 @@ def main(argv: list[str]) -> int:
         end_b = boundary(args.until) if args.until else datetime.now(timezone.utc)
         window(args.baseline, start_a, end_a, [])
         window(args.since, start_b, end_b, [])
-        records = merges(config.HOME)
+        ticks = []
+        records = merges(config.HOME, ticks)
+        for name, start, end in (("A", start_a, end_a), ("B", start_b, end_b)):
+            if not any(start <= timestamp < end for timestamp in ticks):
+                raise ValueError(f"no ticks for window {name} {start.isoformat()}..{end.isoformat()}")
         a = window(args.baseline, start_a, end_a, records)
         b = window(args.since, start_b, end_b, records)
         verdict = "keep" if b["code/h"] >= a["code/h"] else "revert"
