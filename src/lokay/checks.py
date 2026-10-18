@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import is_artifact, is_cache, is_test, kind as change_kind, matches_path, planned_files
+from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, matches_path, planned_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -152,6 +152,33 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
             Finding(path, first_added.get(path, 1), first_added.get(path, 1),
                     "add a replay fixture under fixtures/replay", "no_unit_tests") for path in paths))
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
+
+
+def weakened_tests(x: CheckInput) -> CheckResult:
+    deleted = set()
+    for block in x.diff.split("diff --git ")[1:]:
+        header = block.split("\n@@ ", 1)[0].splitlines()
+        if "+++ /dev/null" in header:
+            deleted.update(path for path, _, _, _ in diff_lines("diff --git " + block))
+    planned = planned_files(x.plan, [], sorted(deleted))
+    changes = {}
+    for path, number, kind, text in diff_lines(x.diff):
+        if kind in {"-", "+"} and ASSERTION.match(text):
+            change = changes.setdefault(path, {"-": [], "+": []})
+            change[kind].append((number, text))
+    findings = []
+    reasons = []
+    for path, change in changes.items():
+        if path in deleted and any(matches_path(path, target) for target in planned):
+            continue
+        removed = len(change["-"]) - len(change["+"])
+        if removed > 0 and is_test(path, [text for lines in change.values() for _, text in lines]):
+            reason = f"Removes {removed} test assertions: {path}"
+            line = max(1, change["-"][0][0])
+            reasons.append(reason)
+            findings.append(Finding(path, line, line, reason, "weakened_tests"))
+    return CheckResult("weakened_tests", "fail" if findings else "pass",
+                       "; ".join(reasons) if findings else "no test assertions removed", tuple(findings))
 
 
 def encoded_rewrite(x: CheckInput) -> CheckResult:
@@ -329,7 +356,7 @@ def plan_target(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, encoded_rewrite, docs, plan_target]
+          no_new_comments, no_unit_tests, weakened_tests, encoded_rewrite, docs, plan_target]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
