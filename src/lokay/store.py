@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from lokay import graph
 from lokay.config import HOME
 from lokay.types import CheckResult, Event, Run, event_record, parse_event, pr_number
 
@@ -263,10 +264,11 @@ def state_read(repo: str, issue: int) -> dict:
 
 
 def state_update(repo: str, issue: int, **fields) -> Path:
-    from lokay.tick import tick
-
     event = {"ts": time.time(), **fields.pop("_event", {}), "fields": fields}
-    tick(repo, issue, lambda run: parse_event(event))
+    run = load(repo, issue)
+    event = parse_event(event)
+    run = graph.step(run, event)
+    save(repo, issue, run, event)
     return run_dir(repo, issue) / "state.json"
 
 

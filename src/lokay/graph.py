@@ -4,7 +4,7 @@ import re
 from typing import assert_never
 
 from lokay.types import (
-    PLAN_RESET, Run, Event, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
+    PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Progress, Snapshot, Pick, pr_number,
 )
 
@@ -16,6 +16,8 @@ def step(run: Run, event: Event) -> Run:
     fields = dict(event.fields)
     outcome = event.outcome
     match event:
+        case EnteredNode():
+            fields["node"] = outcome["node"]
         case Failed():
             reason = outcome["reason"]
             failures = current.get("failures", 0) + 1
