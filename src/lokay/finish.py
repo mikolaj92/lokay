@@ -55,7 +55,7 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
     from lokay.merge import merge_sha
     from lokay.review import recompute_verdict
 
-    verdict = recompute_verdict(sha, state_read(picked["repo"], picked["issue"]), verdict)
+    verdict = recompute_verdict(sha, state_read(picked["repo"], picked["issue"]))
     pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
     if pr and pr.get("baseRefName"):
         base = pr["baseRefName"]

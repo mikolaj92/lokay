@@ -319,11 +319,11 @@ def validate_sha(sha: str, ci: dict, decisions: list[dict]) -> None:
         raise DecisionError("sha mismatch")
 
 
-def recompute_verdict(sha: str, saved: dict, fallback: dict) -> dict:
+def recompute_verdict(sha: str, saved: dict) -> dict | None:
     inputs = saved.get("check_inputs")
     if (not inputs or inputs.get("sha") != sha
             or not {"sha", "ci", "decisions", "results", "scope", "dismissed_keys"} <= inputs.keys()):
-        return fallback
+        return None
     results = tuple(
         result if isinstance(result, CheckResult) else CheckResult(
             **{**result, "findings": tuple(

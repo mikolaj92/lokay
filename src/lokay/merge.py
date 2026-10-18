@@ -14,15 +14,14 @@ def merge_blocked(state: dict, sha: str) -> bool:
     return state.get("merge_conflict_sha") == sha or state.get("merge_attempts", {}).get(sha, 0) >= 2
 
 
-def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
+def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, worktree: Path | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
     from lokay.review import recompute_verdict
 
     saved = state_read(repo_name, issue)
-    if not merge_allowed(saved, sha):
+    if not merge_allowed(saved, sha) or (verdict := recompute_verdict(sha, saved)) is None:
         state_update(repo_name, issue, _event={"action": "enter_node", "outcome": {"node": "check"}},
                      sha=sha, verdict=None, result="check")
         return {"result": "check", "sha": sha, "merge_sha": None}
-    verdict = recompute_verdict(sha, saved, verdict)
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
     if worktree is not None and clone_path is None:
