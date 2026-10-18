@@ -300,7 +300,8 @@ def segment(path: Path, rows: list[dict]) -> None:
                 verdict, rounds = finish.complete_check(
                     picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
                     check_results, pr_number, rounds, check_notes, hashlib.sha256(diff.encode()).hexdigest(),
-                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
+                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log),
+                    plan_schema=saved.get("plan_schema"))
                 store.state_update(repo, issue, _event={"action": "verdict", "outcome": verdict})
             except Boundary:
                 outcome = transitions[-1]["event"]["outcome"]

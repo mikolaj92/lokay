@@ -247,7 +247,8 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
 
 
 def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
+                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix,
+                   plan_schema=None):
     from lokay.tick import _retry, dumps, refresh_body
     from lokay.review import validate_sha, verdict as check_verdict
     from lokay.effects.git import git_try
@@ -264,7 +265,7 @@ def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks
     if code != 0:
         raise RuntimeError(err or "scope paths lookup failed")
     repo_files = list(filter(None, tracked.split("\0")))
-    scope = code_scope_issue(files, plan_text, repo_files)
+    scope = code_scope_issue(files, plan_text, repo_files, plan_schema)
     if not checks_failed and scope and dismissed_key(scope) not in dismissed_keys:
         rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
     verdict = check_verdict(sha, ci, decisions, check_results, scope, dismissed_keys)

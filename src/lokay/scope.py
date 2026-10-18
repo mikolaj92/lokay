@@ -188,7 +188,14 @@ def _planned_files(plan_text: str, repo_files: list[str], diff_files: list[str],
     return planned
 
 
-def code_scope_issue(files: list[str], plan: str, repo_files: list[str] | None = None) -> dict | None:
+def planned_code_touch_reason(files: Sequence[str] | set[str], code: set[str]) -> str | None:
+    if code and not any(matches_path(path, target) for path in files for target in code):
+        return "Diff does not touch any planned code file: " + ", ".join(sorted(code))
+    return None
+
+
+def code_scope_issue(files: list[str], plan: str, repo_files: list[str] | None = None,
+                     plan_schema: int | None = None) -> dict | None:
     planned = planned_files(plan, repo_files or [], files)
     if not planned:
         return None
@@ -198,13 +205,11 @@ def code_scope_issue(files: list[str], plan: str, repo_files: list[str] | None =
                         PurePosixPath(path).name in ("package-lock.json", "npm-shrinkwrap.json"))]
     code = {path for path in planned if not is_test(path) and not path.startswith("docs/")
             and PurePosixPath(path).suffix.lower() not in (".md", ".rst", ".txt")}
-    touches_code = any(matches_path(path, target) for path in files for target in code)
-    reasons = []
-    if code and not touches_code:
-        reasons.append("Diff does not touch any planned code file: " + ", ".join(sorted(code)))
+    touch_reason = planned_code_touch_reason(files, code) if plan_schema != 2 else None
+    reasons = [touch_reason] if touch_reason else []
     if outside:
         reasons.append("Diff contains files outside ## Pliki: " + ", ".join(outside))
     if reasons:
-        path = sorted(code)[0] if code and not touches_code else sorted(outside)[0]
+        path = sorted(code)[0] if touch_reason else sorted(outside)[0]
         return {"warstwa": "scope", "plik": path, "linia_od": 1, "linia_do": 1, "log": "; ".join(reasons)}
     return None
