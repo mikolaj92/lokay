@@ -28,8 +28,6 @@ def step(run: Run, event: Event) -> Run:
     match event:
         case EnteredNode():
             fields["node"] = outcome["node"]
-        case Failed() if fields.get("awaiting") == "human" and fields.get("result") == "needs_help":
-            pass
         case Failed():
             reason = outcome["reason"]
             failures = current.get("failures", 0) + 1
@@ -166,8 +164,6 @@ def pick(snapshot: Snapshot) -> Pick | None:
             continue
         for issue, state in repo.states.items():
             if (state.get("result") in ("merged", "closed")
-                    or (state.get("result") != "parked"
-                        and (state.get("waiting_on") == "human" or state.get("awaiting") == "human"))
                     or state.get("waiting_on") == "children"
                     or (snapshot.only_issue is not None and snapshot.only_issue != issue)):
                 continue

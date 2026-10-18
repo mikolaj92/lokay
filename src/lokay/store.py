@@ -234,8 +234,6 @@ def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
         return "ready"
     if state.get("result") == "wait":
         return "retry_at" if state.get("retry_at", 0) > now else "ready"
-    if state.get("awaiting") == "human":
-        return "human"
     if state.get("retry_at", 0) > now:
         return "retry_at"
     if (state.get("result") == "pending" and state.get("node") in ("check", "build")
@@ -382,9 +380,10 @@ def write_json(path: Path, value: object, *, indent: int | None = None,
 def normalize_state(state: dict) -> None:
     if "pr" in state:
         state["pr"] = pr_number(state["pr"])
-    if (state.get("result") == "wait" and state.get("awaiting") == "human"
-            and not state.get("wait_escape")):
-        state.update(awaiting=None, retry_at=time.time(), wait_escape="retry")
+    if "awaiting" in state and state["awaiting"] not in (None, "children"):
+        state["awaiting"] = None
+        if state.get("result") == "wait" and not state.get("wait_escape"):
+            state.update(retry_at=time.time(), wait_escape="retry")
 
 
 def save_run(repo: str, issue: int, state: dict) -> None:

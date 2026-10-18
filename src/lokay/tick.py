@@ -817,11 +817,19 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(picked["repo"], picked["issue"])
     title, body = saved["issue_title"], saved["issue_body"]
     if host_ops(body):
+        from lokay.effects.gh import fit_body
+
         reason = "not a coding issue (lokay-host-ops)"
+        gh_ok(["label", "create", "lokay-host-ops", "--force", "--repo", picked["repo"]],
+              error="host-ops label creation failed")
+        gh_ok(["issue", "edit", str(picked["issue"]), "--repo", picked["repo"],
+               "--add-label", "lokay-host-ops"], error="issue label failed")
+        gh_ok(["issue", "comment", str(picked["issue"]), "--repo", picked["repo"],
+               "--body", fit_body("lokay skips this issue: its body carries the lokay-host-ops marker, so it is host/ops work, not a code change.")],
+              strip=False, error="issue comment failed")
         state_update(picked["repo"], picked["issue"],
-                     _event={"action": "needs_help", "outcome": {"reason": reason}},
-                     awaiting="human", result="needs_help", reason=reason)
-        return {"result": "needs_help", "reason": reason}
+                     _event={"action": "closed", "outcome": {"reason": reason}})
+        return {"result": "closed", "reason": reason}
     if saved.get("difficulty") not in plan.DIFFICULTIES:
         from lokay.effects.decide import decide
 
