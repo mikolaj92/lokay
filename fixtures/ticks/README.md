@@ -1,14 +1,12 @@
-# Tick replay checks
-A segment resumes `act()` from a recorded node boundary, not a complete tick invocation.
-Source: read-only `~/.lokay/ticks/2026-10-18.jsonl`, tick `f09832d2-6b0f-429d-9fee-e80d395206a5`, `mikolaj92/anonimizator3000#74` (00:45–00:50Z).
-Plan resumes after seq 121: entry precondition seq 72–79, then seq 122–148; accepted-plan comparison, synthesis, Build merge conflict and cleanup.
-Build resumes after seq 131: entry precondition seq 122–129, then seq 132–148; merge conflict, failure transition and cleanup.
-The entry preconditions are recorded worktree verification calls; every segment preserves their original order.
-Only redacted recordings and referenced blobs are included; plans come from the recorded comparison input, and Git markers only seed filesystem shape.
-Replay runs offline in a temporary sandbox, checks calls and transitions in order, and fails closed on unexpected effects.
-Check is absent because successful paths require missing worktree contents and check artifacts; nested pi guard calls cannot replay as a flat stream.
-Local test commands and `uv lock --check` now opt into the existing recorded call path, including redacted argv, stdin, return code, stdout/stderr and exception attempts in effect blobs.
-Existing recordings lack these local test effects; a Check fixture must follow deployment and a new recording.
-For that fixture, use `files` in the segment manifest to seed required worktree files and `plan.md` from read-only run artifacts or recorded call outputs (`ls-files` and diff); preserve the recorded paths and call order.
-Do not fabricate missing effects or use Temida data. Keep the redacted fixture under 2 MB.
-Fix needs source snapshots and pi filesystem changes; Merge also needs an unrecorded temporary checkout and its checks.
+# Tick segments
+A segment resumes recorded effects at a node boundary, not a complete tick invocation.
+Source: read-only `~/.lokay/ticks/2026-10-18.jsonl`; no Temida data.
+Plan/Build: `anonimizator3000#74`, tick `f09832d2-6b0f-429d-9fee-e80d395206a5` (00:45–00:50Z).
+Check: `datasource-kit#96`, tick `bf5ee2c2-db77-4552-9f82-d3e92b9c2b7f`, seq 150–221 (02:18Z), verdict `fix`.
+Check starts after dependency setup and ends at the verdict, before Fix or Merge.
+Setup was not recorded as a call; its exact result comes from the seq 163 local-test log.
+Plan comes from the read-only run directory; diff, source text and file names come from recorded outputs.
+Empty files seed tracked paths; lock input uses recorded added lines; Git markers seed filesystem shape only.
+Replay checks every call and transition, including the local test (316 passed) and `uv lock --check`.
+Unrecorded effects, exceptions and mismatches fail closed; subprocesses and sockets stay blocked.
+Run `uv run lokay replay fixtures/ticks/`; `scripts/check.sh` already runs it offline.
