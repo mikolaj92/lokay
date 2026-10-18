@@ -36,3 +36,4 @@ chmod +x "$sandbox/bin/gh"
 export HOME="$sandbox/home" TMPDIR="$sandbox/tmp" UV_CACHE_DIR="$sandbox/cache"
 export UV_NO_SYNC=1 UV_PYTHON_DOWNLOADS=never UV_OFFLINE=1 PATH="$sandbox/bin:$PATH"
 uv run lokay replay fixtures/replay/
+uv run lokay replay fixtures/ticks/
