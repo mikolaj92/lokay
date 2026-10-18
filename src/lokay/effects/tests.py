@@ -48,6 +48,22 @@ def check_uv_lock(cwd: Path) -> tuple[str, str]:
     return "unknown", "uv lock checks unavailable"
 
 
+def base_tests_on_head(worktree: Path, sha: str, paths: list[str], config: dict, issue: int) -> dict:
+    from lokay.effects.git import base_branch, git
+    from lokay.setup import prepare_dependencies
+
+    base = git(worktree, "merge-base", sha, f"origin/{base_branch(worktree)}")
+    with tempfile.TemporaryDirectory(prefix="lokay-base-tests-") as temporary:
+        tmp = Path(temporary) / "checkout"
+        git(worktree, "worktree", "add", "--detach", str(tmp), sha)
+        try:
+            git(tmp, "checkout", base, "--", *paths)
+            prepare_dependencies(tmp, config, issue)
+            return local_ci(sha, [config["test"]], tmp, timeout=config.get("test_timeout", 600))
+        finally:
+            git(worktree, "worktree", "remove", "--force", str(tmp))
+
+
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.effects.pi import run_process
