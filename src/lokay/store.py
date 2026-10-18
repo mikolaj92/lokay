@@ -72,11 +72,12 @@ def redact(value, env=None) -> Any:
             item = item.replace(secret, "[REDACTED]")
         item = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{30,})\b",
                       "[REDACTED]", item)
+        item = re.sub(r'''(?i)(--headers?(?:=|\s+)|-H\s+|\bhttp(?:\.[^\s=]+)?\.extraheader=)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"']+)''',
+                      r"\1[REDACTED]", item)
         item = re.sub(r"(?i)(\b(?:authorization|proxy-authorization|x-api-key|api-key|cookie|set-cookie)\s*[:=]\s*)[^\r\n]+",
                       r"\1[REDACTED]", item)
         item = re.sub(r"(?i)(\b(?:bearer|basic)\s+)[A-Za-z0-9_./+=-]+", r"\1[REDACTED]", item)
         item = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[REDACTED]@", item)
-        item = re.sub(r"(?i)(--headers?=|-H\s+|\bhttp(?:\.[^\s=]+)?\.extraheader=).*", "[REDACTED]", item)
         return item
 
     return clean(json.loads(json.dumps(value, ensure_ascii=False,
