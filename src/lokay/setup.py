@@ -7,7 +7,7 @@ from lokay.effects.pi import TimeoutExpired
 
 from lokay.build import generated_cleanup
 from lokay.effects.git import git
-from lokay.effects.pi import pi_env, run_process
+from lokay.effects.pi import pi_env, run_process, scrubbed_env
 from lokay.store import rounds_append
 
 
@@ -29,7 +29,8 @@ def repair_venvs(worktree: Path) -> None:
         if venv.is_symlink() or not venv.is_dir():
             continue
         try:
-            proc = run_process([str(venv.absolute() / "bin/python"), "-c", ""], cwd=path, timeout=10)
+            proc = run_process([str(venv.absolute() / "bin/python"), "-c", ""], cwd=path,
+                               env=scrubbed_env(os.environ), timeout=10)
             if proc.returncode == 0:
                 continue
         except (OSError, TimeoutExpired):

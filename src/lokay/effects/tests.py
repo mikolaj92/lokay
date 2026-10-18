@@ -22,9 +22,9 @@ def executed_tests(log: str) -> int:
 
 def check_uv_lock(cwd: Path) -> tuple[str, str]:
     from subprocess import TimeoutExpired
-    from lokay.effects.pi import run_process
+    from lokay.effects.pi import run_process, scrubbed_env
 
-    env = {**os.environ, "UV_OFFLINE": "1"}
+    env = {**scrubbed_env(os.environ), "UV_OFFLINE": "1"}
     for offline in (True, False):
         if not offline:
             env.pop("UV_OFFLINE", None)
@@ -66,12 +66,12 @@ def base_tests_on_head(worktree: Path, sha: str, paths: list[str], config: dict,
 
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
-    from lokay.effects.pi import run_process
+    from lokay.effects.pi import run_process, scrubbed_env
     from lokay.effects.git import git_try
     from lokay.build import generated_cleanup
 
     cache = UV_CACHE_DIR
-    env = {**os.environ, "UV_CACHE_DIR": str(cache), "UV_LOCKED": "1"}
+    env = {**scrubbed_env(os.environ), "UV_CACHE_DIR": str(cache), "UV_LOCKED": "1"}
 
     def execute(argv):
         if any(re.search(r"(?:^|[\s;|&])(?:--cache-dir(?:=|\s|$)|UV_CACHE_DIR=)", arg)

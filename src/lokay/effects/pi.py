@@ -95,16 +95,19 @@ def cleanup_worktree_caches(worktree: Path) -> None:
         tick_deadline.reset(token)
 
 
+def scrubbed_env(base: Mapping[str, str]) -> dict[str, str]:
+    return {key: value for key, value in base.items()
+            if key not in ("GIT_ASKPASS", "SSH_AUTH_SOCK")
+            and not re.search(r"TOKEN|SECRET|PASSWORD|API[_-]?KEY", key, re.IGNORECASE)}
+
+
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     from lokay.effects.git import git_try
 
     worktree = Path(worktree).resolve()
     code, out, _ = git_try(worktree, "rev-parse", "--git-common-dir", timeout=30)
     gitdir = (worktree / out.strip()).resolve() if code == 0 else worktree
-    env = dict(base)
-    for key in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
-                "GIT_ASKPASS", "SSH_AUTH_SOCK"):
-        env.pop(key, None)
+    env = scrubbed_env(base)
     temporary = Path(env.get("TMPDIR") or "/tmp").resolve()
     if temporary.is_relative_to(Path(worktree).resolve()):
         temporary = Path("/tmp").resolve()
