@@ -1313,7 +1313,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix,
+            saved.get("plan_schema"))
         pending = verdict["result"]
         escalated = escalate(picked, verdict.get("uwagi"))
         if escalated:

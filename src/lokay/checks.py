@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, planned_files, required_files
+from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, planned_code_touch_reason, planned_files, required_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -356,8 +356,8 @@ def plan_target(x: CheckInput) -> CheckResult:
             reasons.append("PLAN ERROR: invalid version-2 files list; redo Plan")
         if missing:
             reasons.append("Required planned files missing from the diff: " + ", ".join(missing))
-    elif code and not any(matches_path(path, target) for path in changed for target in code):
-        reasons.append("Diff does not touch any planned code file: " + ", ".join(sorted(code)))
+    elif touch_reason := planned_code_touch_reason(changed, code):
+        reasons.append(touch_reason)
     if changed and deletions_only and addition:
         reasons.append("Deletions-only diff does not implement planned additions")
     reason = "; ".join(reasons) if reasons else "diff touches planned files"
