@@ -298,6 +298,8 @@ def segment(path: Path, rows: list[dict]) -> None:
             else:
                 raise Mismatch("check segment returned before final verdict boundary")
         else:
+            if before.get("node") in ("plan", "build"):
+                stack.enter_context(patch.object(tick, "changes_before_merge", lambda worktree: []))
             event = tick.act(Run.from_state({**before, "repo": repo, "issue": issue}))
             outcome = event.outcome
             detail = event_record(event)
