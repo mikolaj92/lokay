@@ -11,7 +11,7 @@ import signal
 import subprocess
 import tempfile
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from contextvars import ContextVar
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -540,33 +540,24 @@ def run_pi(
     json_mode: bool = False,
     missing_is_failure: bool = False,
 ) -> subprocess.CompletedProcess[Any] | dict:
-    from lokay.effects.git import failure, guard
-
     argv = ["pi", "-p"]
     if json_mode:
         argv += ["--mode", "json"]
     argv += ["--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt]
-    guard_paths = [Path(__file__).resolve().parents[3], clone_path] if guarded else None
-    changes = {"changed": False}
     try:
-        with (guard(guard_paths) if guard_paths is not None else nullcontext(changes)) as changes:
-            proc = run_process(
-                sandboxed(argv, worktree, env, extra_dir),
-                cwd=cwd,
-                env=env,
-                timeout=timeout,
-            )
+        proc = run_process(
+            sandboxed(argv, worktree, env, extra_dir),
+            cwd=cwd,
+            env=env,
+            timeout=timeout,
+        )
     except Exception as exc:
-        if changes["changed"]:
-            return failure(changes, worktree)
         if missing_is_failure and isinstance(exc, FileNotFoundError):
             return {"result": "failed", "artifact": ""}
         raise
     finally:
-        if guard_paths is not None:
+        if guarded:
             cleanup_worktree_caches(worktree)
-    if changes["changed"]:
-        return failure(changes, worktree)
     return proc
 
 
