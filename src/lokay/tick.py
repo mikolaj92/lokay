@@ -61,14 +61,26 @@ def act(run: Run) -> Event:
         try:
             check_deadline()
             if saved.get("plan_schema") == 2 and node != "plan":
-                from lokay.plan import valid_plan
+                from lokay.plan import base_paths, path_verdict, valid_plan
 
-                if not valid_plan(run_dir(picked["repo"], picked["issue"]) / "plan.md", 2):
+                art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
+                if not valid_plan(art, 2):
                     outcome = {"next": "plan", "reason": "PLAN ERROR: invalid version-2 plan"}
                     state_update(picked["repo"], picked["issue"],
                                  _event={"action": "replan", "outcome": outcome},
                                  **deepcopy(PLAN_RESET))
                     return outcome
+                if node in ("check", "fix"):
+                    root, _ = _repo_paths(repo_config(picked["repo"]), picked["issue"])
+                    invalid = path_verdict(art, 2, base_paths(root))
+                    if invalid:
+                        reason = "PLAN ERROR: invalid required paths"
+                        outcome = {"next": "plan", "reason": reason, "uwagi": invalid["uwagi"]}
+                        prompt = replan_prompt(picked, reason, invalid["uwagi"], saved.get("sha") or "")
+                        state_update(picked["repo"], picked["issue"],
+                                     _event={"action": "replan", "outcome": outcome},
+                                     **{**deepcopy(PLAN_RESET), "plan_prompt": prompt})
+                        return outcome
             prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
             outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
         except TickExpired:
@@ -562,6 +574,15 @@ def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | 
                   if isinstance(outcome, dict) else str(outcome))
     except Exception as exc:
         reason = f"{type(exc).__name__}: {exc}"
+    if node == "plan" and reason.startswith("invalid synthesis: invalid required paths:"):
+        saved = state_read(repo, issue)
+        updates = {"plan_prompt": (saved.get("plan_prompt") or "") + "\n\n" + reason}
+        branches = saved.get("plan_branches") or {}
+        for branch in branches.values():
+            if branch.get("phase") == "write":
+                branch["prompt"] = (branch.get("prompt") or saved.get("plan_prompt") or "") + "\n\n" + reason
+        updates["plan_branches"] = branches
+        state_update(repo, issue, **updates)
     outcome = needs_help(picked, reason, plan_branch=plan_branch)
     if outcome.get("next") == "plan" and outcome.get("result") == "pending":
         raise Escalated(outcome)
@@ -663,7 +684,8 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 "phase": "write", "rounds": 0, "accepted_sha": None,
                 "prompt": context, "fingerprint": None,
             })
-            accepted = (plan.valid_plan(branch_art, branch.get("plan_schema")) and branch.get("accepted_sha") ==
+            accepted = (plan.valid_plan(branch_art, branch.get("plan_schema"),
+                                        existing=plan.base_paths(cwd) if branch.get("plan_schema") == 2 else None) and branch.get("accepted_sha") ==
                         hashlib.sha256(branch_art.read_bytes()).hexdigest())
             if accepted:
                 paths[perspective] = branch_art
@@ -671,7 +693,8 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             if branch["phase"] == "failed":
                 continue
             if branch["phase"] == "accepted":
-                branch.update(phase="write", accepted_sha=None)
+                branch.update(phase="check" if plan.valid_plan(branch_art, branch.get("plan_schema")) else "write",
+                              accepted_sha=None)
             while True:
                 if escalated := escalate(picked):
                     raise Escalated(escalated)
@@ -745,7 +768,9 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
                 rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: write")
             check_deadline()
-            outcome = plan.verdict(decide(plan.plan_questions(art.read_text())))
+            outcome = (plan.path_verdict(art, synthesis.get("plan_schema"),
+                                         plan.base_paths(cwd) if synthesis.get("plan_schema") == 2 else None)
+                       or plan.verdict(decide(plan.plan_questions(art.read_text()))))
             if outcome.get("next") not in ("ok", "revise"):
                 raise RuntimeError(f"unknown plan verdict: {outcome.get('next')}")
             rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: Decision {outcome['next']}")
@@ -826,7 +851,8 @@ def _prepare(picked: dict) -> tuple | dict:
         state_update(picked["repo"], picked["issue"], previous_head=git_head(worktree))
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = saved.get("plan_rounds", 0)
-    accepted = (plan.valid_plan(art, saved.get("plan_schema")) and saved.get("plan_accepted_sha") ==
+    accepted = (plan.valid_plan(art, saved.get("plan_schema"),
+                                existing=plan.base_paths(root) if saved.get("plan_schema") == 2 else None) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
         plan_rounds = _plan_graph(picked, art, title, body, cwd=root)
