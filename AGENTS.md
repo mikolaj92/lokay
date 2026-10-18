@@ -2,7 +2,7 @@
 | --- | --- |
 | Plan → Build → Check → Fix → Merge; only Merge ends a run | `graph.step`, `tick.act` |
 | Decisions return probabilities, not prose | `effects.decide._check` |
-| LLM and code steps return `result`; decisions return `next` | `tick`, `plan.verdict`, `check.aggregate` |
+| LLM and code steps return `result`; decisions return `next` | `tick`, `plan.verdict`, `review.verdict` |
 | Retry failed steps, recheck revised plans, return Fix to Check | `tick._retry`, `tick._plan_graph`, `graph.step` |
 | `pi -p` writes production code | `build.build_code`, `fix.fix_code` |
 | Only `store.py` writes persisted state | `store.save`, `store.write_json` |

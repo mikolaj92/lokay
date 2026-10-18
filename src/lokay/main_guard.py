@@ -114,7 +114,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
 
 
 def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = None) -> dict:
-    from lokay.check import test_failures
+    from lokay.review import test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
     if (main["lockfile"]["status"] != "pass" or ci.get("tested") is not True
