@@ -183,10 +183,9 @@ def weakened_tests(x: CheckInput) -> CheckResult:
     if x.plan_schema == 2:
         lists = plan_file_lists(x.plan)
         planned = lists["Wymagane"] if lists is not None else set()
-        changed = {path for path in changed if not any(matches_path(path, target) for target in planned)}
         conditional = lists.get("Warunkowe", set()) if lists is not None else set()
         outside = sorted(path for path in changed
-                         if not any(matches_path(path, target) for target in conditional))
+                         if not any(matches_path(path, target) for target in planned | conditional))
         if outside:
             reason = "existing test changed outside the plan: " + ", ".join(outside) + "; revert the test change (scope creep) unless the issue's acceptance criteria require it"
             findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in outside)
@@ -208,7 +207,13 @@ def weakened_tests(x: CheckInput) -> CheckResult:
     if result.get("result") == "red" and result.get("executed", 0) > 0:
         reason = "base version of this test fails on the new code"
         if x.plan_schema == 2:
-            reason = "base version of this test fails on the new code; unless the issue's acceptance criteria require this behaviour, revert the production change that breaks it (scope creep) and keep the base test"
+            unapproved = [path for path in paths if not re.search(
+                r"(?<![\w.-])" + re.escape(Path(path).name) + r"(?![\w.-])", x.issue_body)]
+            if not unapproved:
+                return CheckResult("weakened_tests", "pass",
+                                   "base versions of changed tests fail on the new code but the issue names those tests: " + ", ".join(paths), ())
+            paths = unapproved
+            reason = "base version of this test fails on the new code and the issue does not name it; revert the production change that breaks it (scope creep) or keep the old behaviour."
         findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in paths)
         log = result.get("log", "")[-800:]
         return CheckResult("weakened_tests", "fail", reason + (": " + log if log else ""), findings)
