@@ -110,7 +110,7 @@ def log_event(kind: str, *, _env=None, **fields) -> None:
                     age = (now.date() - datetime.strptime(path.name[:10], "%Y-%m-%d").date()).days
                     if age > 180:
                         path.unlink()
-                    elif age > 30 and path.suffix == ".jsonl":
+                    elif age > 1 and path.suffix == ".jsonl":
                         temporary = path.with_suffix(".jsonl.gz.tmp")
                         with path.open("rb") as source, gzip.open(temporary, "wb") as target:
                             shutil.copyfileobj(source, target)
@@ -126,15 +126,10 @@ def log_event(kind: str, *, _env=None, **fields) -> None:
                         blob.unlink()
                 maximum = max(0, float(os.environ.get("LOKAY2_TICKS_MAX_MB", "300"))) * 1024 * 1024
                 size = sum(path.stat().st_size for path in directory.rglob("*") if path.is_file())
-                for path in sorted((*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz"))):
-                    if size <= maximum:
-                        break
-                    if path.name[:10] >= f"{now:%Y-%m-%d}":
-                        continue
-                    path.unlink()
-                    prune_blobs(directory)
-                    size = sum(item.stat().st_size for item in directory.rglob("*") if item.is_file())
-                return
+                if size <= maximum:
+                    return
+                kind = "ticks_over_cap"
+                fields = {"size": size}
             CONTEXT.update({key: fields[key] for key in ("repo", "issue", "node") if key in fields})
             if kind == "context":
                 return
