@@ -36,11 +36,11 @@ def sync_main(worktree, base):
     from lokay.effects.git import git
     from lokay.effects.git import git_try
 
-    git(worktree, "fetch", "origin", base)
+    git(worktree, "fetch", "origin", base, timeout=300)
     out = git(worktree, "diff", "--name-only", "--diff-filter=U")
     if out:
         return out.splitlines()
-    code, out, err = git_try(worktree, "merge", "--no-edit", f"origin/{base}")
+    code, out, err = git_try(worktree, "merge", "--no-edit", f"origin/{base}", timeout=300)
     if code != 0:
         conflict_code, files, conflict_err = git_try(worktree, "diff", "--name-only", "--diff-filter=U")
         if conflict_code == 0 and files.strip():

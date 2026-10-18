@@ -813,11 +813,11 @@ def _prepare(picked: dict) -> tuple | dict:
     state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "build"}}, branch=branch)
     base = base_branch(worktree)
     try:
-        git(worktree, "fetch", "origin", base)
+        git(worktree, "fetch", "origin", base, timeout=300)
     except RuntimeError as exc:
         return needs_help(picked, f"build fetch: {exc}")
     try:
-        git(worktree, "merge", "--no-edit", f"origin/{base}")
+        git(worktree, "merge", "--no-edit", f"origin/{base}", timeout=300)
     except RuntimeError as exc:
         return needs_help(picked, f"build merge: {exc}")
     from lokay.setup import prepare_dependencies
