@@ -300,7 +300,8 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
     ):
         return {"result": "pushed", "sha": current, "attempts": 0}
     if current != expected_remote_sha:
-        return {"result": "remote_moved", "sha": current or ""}
+        if not current or git_try(repo, "merge-base", "--is-ancestor", current, "HEAD")[0] != 0:
+            return {"result": "remote_moved", "sha": current or ""}
     if attempts <= 0:
         return {"result": "failed", "error": ""}
     attempt = 0
