@@ -119,11 +119,22 @@ def create_child_issue(repo: str, parent: int, index: int, task: dict, generatio
     return int(match[1])
 
 
-def children_merged(repo: str, children: list[int]) -> bool:
+def children_done(repo: str, children: list[int]) -> bool:
+    owner, name = repo.split("/", 1)
+    query = ('query($owner: String!, $name: String!, $issue: Int!, $head: String!) {'
+             ' repository(owner: $owner, name: $name) { issue(number: $issue) { state }'
+             ' pullRequests(headRefName: $head, states: MERGED, first: 1) { nodes { number } } } }')
     for issue in children:
-        if not gh_json(["pr", "list", "--repo", repo, "--head", f"lokay/{issue}",
-                        "--state", "merged", "--json", "number"],
-                       error="child merge lookup failed", default="[]"):
+        response = gh_json(["api", "graphql", "-f", f"query={query}",
+                            "-f", f"owner={owner}", "-f", f"name={name}",
+                            "-F", f"issue={issue}", "-f", f"head=lokay/{issue}"],
+                           error="child merge lookup failed")
+        if response.get("errors"):
+            raise RuntimeError("child merge lookup failed")
+        repository = response["data"]["repository"]
+        state = repository["issue"]["state"]
+        nodes = repository["pullRequests"]["nodes"]
+        if state != "CLOSED" and not nodes:
             return False
     return bool(children)
 
