@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lokay.effects.gh import merge as gh_merge, pr_files
 from lokay.effects.git import base_branch, worktree_remove
+from lokay.graph import merge_allowed
 from lokay.store import state_read, state_update
 from lokay.main_guard import check_main
 
@@ -16,7 +17,12 @@ def merge_blocked(state: dict, sha: str) -> bool:
 def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
     from lokay.review import recompute_verdict
 
-    verdict = recompute_verdict(sha, state_read(repo_name, issue), verdict)
+    saved = state_read(repo_name, issue)
+    if not merge_allowed(saved, sha):
+        state_update(repo_name, issue, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                     sha=sha, verdict=None, result="check")
+        return {"result": "check", "sha": sha, "merge_sha": None}
+    verdict = recompute_verdict(sha, saved, verdict)
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
     if worktree is not None and clone_path is None:

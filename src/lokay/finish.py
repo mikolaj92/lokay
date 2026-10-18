@@ -488,20 +488,8 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
         return "return", {"result": "check", "sha": sha}
     if fixed.get("dispute_rejected"):
-        if verdict.get("unknown") or verdict.get("unlocated_fail") or verdict.get("unlocated_findings"):
-            state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, result="check")
-            return "return", {"result": "check", "sha": sha}
-        from lokay.review import dismissed_verdict, recompute_verdict
-
-        current = state_read(picked["repo"], picked["issue"])
-        if not current.get("check_inputs") or current["check_inputs"].get("sha") != sha:
-            verdict = dismissed_verdict(verdict)
-        else:
-            verdict = recompute_verdict(sha, current, verdict)
-        pending = verdict["result"]
-        state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict},
-                     result=pending, verdict=verdict)
-        return "continue", (sha, pending, verdict)
+        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, result="check")
+        return "return", {"result": "check", "sha": sha}
     if fixed.get("next") in ("build", "plan"):
         return "return", fixed
     if fixed["result"] == "failed":

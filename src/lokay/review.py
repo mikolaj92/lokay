@@ -319,10 +319,6 @@ def validate_sha(sha: str, ci: dict, decisions: list[dict]) -> None:
         raise DecisionError("sha mismatch")
 
 
-def dismissed_verdict(verdict: dict) -> dict:
-    return {**verdict, "result": "merge", "uwagi": []}
-
-
 def recompute_verdict(sha: str, saved: dict, fallback: dict) -> dict:
     inputs = saved.get("check_inputs")
     if (not inputs or inputs.get("sha") != sha

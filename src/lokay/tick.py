@@ -1168,6 +1168,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pending = "fix"
         elif pending == "merge" and saved.get("merge_conflict_sha") == sha:
             pending = "check"
+        if pending == "merge" and not graph.merge_allowed(saved, sha):
+            pending = "check"
+            verdict = None
+            state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}},
+                         sha=sha, verdict=None, result="check")
         if pending == "merge" and verdict and verdict.get("sha") == sha:
             merged, base, sha, pending, verdict = finish.merge(
                 picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clone_path, sync_head)
