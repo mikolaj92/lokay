@@ -769,9 +769,11 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
                 rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: write")
             check_deadline()
+            text = art.read_text()
+            kind = plan.issue_kind(title)
             outcome = (plan.path_verdict(art, synthesis.get("plan_schema"),
                                          plan.base_paths(cwd) if synthesis.get("plan_schema") == 2 else None)
-                       or plan.verdict(decide(plan.plan_questions(art.read_text()))))
+                       or plan.verdict(decide(plan.plan_questions(text, title, body)), text, kind))
             if outcome.get("next") not in ("ok", "revise"):
                 raise RuntimeError(f"unknown plan verdict: {outcome.get('next')}")
             rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: Decision {outcome['next']}")

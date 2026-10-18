@@ -8,7 +8,7 @@ from lokay import store
 
 from lokay.effects.pi import pi_step
 from lokay.safety import untrusted_issue_block
-from lokay.scope import NEW_FILE_MARKER, plan_file_lists, plan_required_path_errors, required_path_errors
+from lokay.scope import NEW_FILE_MARKER, kind as scope_kind, plan_file_lists, plan_required_path_errors, required_path_errors
 
 SECTIONS = ("## Cel", "## Pliki", "## Testy", "## Poza zakresem")
 CRITERIA = ("k_cel", "k_pliki", "k_testy", "k_zakres")
@@ -17,9 +17,18 @@ DIFFICULTIES = ("easy", "medium", "hard", "too_big")
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 
 
-def plan_questions(plan: str = "") -> dict:
+def issue_kind(title: str | None) -> str | None:
+    if title is not None:
+        if title.startswith("[docs-audit]"):
+            return "docs_change"
+        if title.startswith(("[code-audit]", "[test-audit]")):
+            return "code"
+    return None
+
+
+def plan_questions(plan: str = "", title: str | None = None, body: str | None = None) -> dict:
     return {
-        "state": {"plan": plan},
+        "state": {"plan": plan, "issue": {"title": title, "body": body}},
         "questions": [
             {
                 "id": "next",
@@ -30,7 +39,7 @@ def plan_questions(plan: str = "") -> dict:
             {
                 "id": "kind",
                 "type": "choice",
-                "instructions": "What kind of change does the issue require?",
+                "instructions": "What kind of change do the issue's done-criteria require? Judge the issue, not the plan.",
                 "options": {
                     "code": "the issue changes code",
                     "docs_change": "the issue only touches docs (including 'add a missing description')",
@@ -117,7 +126,9 @@ def plan_one(perspective: str, prompt: str, art: Path, *, cwd: Path | None = Non
     from lokay.effects.pi import check_deadline
 
     check_deadline()
-    result = path_verdict(art, plan_schema, base_paths(cwd) if plan_schema == 2 else None) or verdict(decide(plan_questions(art.read_text())))
+    text = art.read_text()
+    result = (path_verdict(art, plan_schema, base_paths(cwd) if plan_schema == 2 else None)
+              or verdict(decide(plan_questions(text, None, None)), text))
     if result["next"] not in ("ok", "revise"):
         raise RuntimeError(f"unknown plan verdict: {result['next']}")
     return {"result": "done", **result}
@@ -236,8 +247,9 @@ def write_synthesis(prompt: str, art: Path, accepted: set[str], *, cwd: Path | N
     return {"result": "done", "artifact": str(art)}
 
 
-def verdict(answers: dict) -> dict:
-    kind = answers["kind"]["choice"] if "kind" in answers else "code"
+def verdict(answers: dict, text: str = "", kind: str | None = None) -> dict:
+    if kind is None:
+        kind = answers["kind"]["choice"] if "kind" in answers else "code"
     if kind not in ("code", "docs_change"):
         raise ValueError("unknown issue kind")
     confidence = answers["next"]["confidence"]
@@ -249,6 +261,9 @@ def verdict(answers: dict) -> dict:
             uwagi.append({"kryterium": name, "p": p})
         elif p < 0.5:
             notes.append({"kryterium": name, "p": p})
+    files = plan_file_lists(text)
+    if kind == "code" and files and files["Wymagane"] and scope_kind(sorted(files["Wymagane"])) == "docs":
+        uwagi = [{"kryterium": "k_pliki", "reason": "docs-only plan for a code issue: Wymagane must include the code the done-criteria require"}]
     return {"next": "revise" if uwagi else "ok", "kind": kind,
             "confidence": confidence, "uwagi": uwagi, "notes": notes}
 
