@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import signal
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -86,8 +87,12 @@ def act(run: Run) -> Event:
             return outcome
         reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
         return needs_help(picked, reason)
-    outcome = dispatch()
-    return Updated(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
+    try:
+        outcome = dispatch()
+        return Updated(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
+    finally:
+        if sys.exception() is None:
+            published_cleanup(picked)
 
 
 def _repo_paths(repo: dict, issue: int) -> tuple[Path, Path]:
@@ -992,6 +997,24 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
     ):
         return needs_help(picked, f"{node}: {outcome}", sha)
     return outcome
+
+
+def published_cleanup(picked: dict) -> None:
+    from lokay.effects.git import git_try
+
+    try:
+        root, worktree = _repo_paths(repo_config(picked["repo"]), picked["issue"])
+        if not worktree.exists():
+            return
+        branch = f"lokay/{picked['issue']}"
+        code, out, err = git_try(worktree, "merge-base", "--is-ancestor", "HEAD", f"refs/remotes/origin/{branch}")
+        if code != 0:
+            cleanup = {"result": "kept", "path": str(worktree), "reason": "HEAD not confirmed on origin branch"}
+        else:
+            cleanup = worktree_remove(root, worktree, safe=True, branch=branch)
+    except Exception as exc:
+        cleanup = {"result": "failed", "error": str(exc)}
+    store.log_event("published_cleanup", repo=picked["repo"], issue=picked["issue"], outcome=cleanup)
 
 
 def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
