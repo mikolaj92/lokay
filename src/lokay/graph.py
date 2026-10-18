@@ -10,6 +10,9 @@ from lokay.types import (
 )
 
 
+CHECK_ROUND_LIMIT = 15
+
+
 def merge_allowed(state: dict, sha: str) -> bool:
     recorded = (state.get("verdict") if "last_check" not in state and "check_inputs" not in state
                 else state.get("last_check")) or {}
@@ -60,7 +63,12 @@ def step(run: Run, event: Event) -> Run:
             if outcome.get("result") == "pr_open":
                 fields.update(node="check", verdict=None)
         case Checked():
-            fields["node"] = outcome["result"]
+            rounds = fields.get("check_rounds", current.get("check_rounds", 0))
+            if outcome["result"] != "merge" and rounds >= CHECK_ROUND_LIMIT:
+                fields.update(node="check", result="needs_help", awaiting="human", retry_at=0,
+                              reason=f"check round limit: {rounds} rounds without merge")
+            else:
+                fields["node"] = outcome["result"]
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
             rechecks = current.get("dispute_rechecks", [])

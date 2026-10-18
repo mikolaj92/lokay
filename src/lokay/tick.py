@@ -16,7 +16,7 @@ from pathlib import Path
 
 from lokay import graph, store
 from dataclasses import replace
-from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Dispatched, parse_event, pr_number
+from lokay.types import PLAN_RESET, Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
 from lokay.effects.git import abort_conflicted_merge, base_branch, changes_before_merge, commit_paths, worktree_remove
@@ -103,6 +103,8 @@ def act(run: Run) -> Event:
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
             return outcome
         state = state_read(repo, issue)
+        if state.get("awaiting") == "human":
+            return outcome
         if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
                 and state.get("updated_at") != before):
             return outcome
@@ -1347,7 +1349,16 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix,
             saved.get("plan_schema"))
-        pending = verdict["result"]
+        derived = graph.step(store.load(picked["repo"], picked["issue"]),
+                             Checked(time.time(), outcome=verdict)).state
+        pending = derived["node"]
+        if derived.get("awaiting") == "human":
+            state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Check round limit: {rounds} rounds without merge → awaiting human")
+            store.log_event("check_round_limit", repo=picked["repo"], issue=picked["issue"],
+                            rounds=rounds, reason=derived["reason"])
+            return {"result": derived["result"], "reason": derived["reason"], "sha": sha}
         escalated = escalate(picked, verdict.get("uwagi"))
         if escalated:
             return escalated
