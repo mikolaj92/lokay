@@ -28,6 +28,8 @@ def step(run: Run, event: Event) -> Run:
     match event:
         case EnteredNode():
             fields["node"] = outcome["node"]
+        case Failed() if fields.get("awaiting") == "human" and fields.get("result") == "needs_help":
+            pass
         case Failed():
             reason = outcome["reason"]
             failures = current.get("failures", 0) + 1

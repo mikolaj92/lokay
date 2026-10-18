@@ -24,7 +24,7 @@ from lokay.effects.git import git, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
-from lokay.effects.gh import gh_json, gh_ok, auth_status, open_issues, open_pr_for
+from lokay.effects.gh import gh_json, gh_ok, auth_status, host_ops, open_issues, open_pr_for
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
 from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
@@ -815,6 +815,12 @@ def _prepare(picked: dict) -> tuple | dict:
         state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body)
         saved = state_read(picked["repo"], picked["issue"])
     title, body = saved["issue_title"], saved["issue_body"]
+    if host_ops(body):
+        reason = "not a coding issue (lokay-host-ops)"
+        state_update(picked["repo"], picked["issue"],
+                     _event={"action": "needs_help", "outcome": {"reason": reason}},
+                     awaiting="human", result="needs_help", reason=reason)
+        return {"result": "needs_help", "reason": reason}
     if saved.get("difficulty") not in plan.DIFFICULTIES:
         from lokay.effects.decide import decide
 
