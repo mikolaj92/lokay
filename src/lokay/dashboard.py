@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from lokay import config
 from lokay.config import load_repos
+from lokay.scope import kind as change_kind
 from lokay.store import write_json
 from lokay.types import pr_number
 from lokay.effects.gh import dashboard_request as gh
@@ -105,7 +106,7 @@ def kind(files) -> str:
         if path.startswith(".lokay/"):
             continue
         name = path.rsplit("/", 1)[-1]
-        if path.startswith("docs/") or name.endswith((".md", ".rst", ".txt")) or name.startswith("LICENSE"):
+        if change_kind([path]) == "docs":
             kinds.add("docs")
         elif path.startswith(("tests/", "test/", "fixtures/replay/")) or (name.startswith("test_") and name.endswith(".py")) or name.endswith("_test.py") or name == "conftest.py":
             kinds.add("tests")
