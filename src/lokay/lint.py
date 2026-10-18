@@ -124,8 +124,9 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
                 if isinstance(first, ast.Constant) and first.value in ("git", "gh"):
                     if numbers.intersection(range(node.lineno, (node.end_lineno or node.lineno) + 1)):
                         errors.append(f"{path}:{node.lineno}: git/gh outside effects/git.py or effects/gh.py -> call lokay.effects.git / lokay.effects.gh")
-    errors.extend(f"{path}: new unit test -> add a replay fixture under fixtures/replay and run uv run lokay replay"
-                  for path in unit_test_files(diff))
+    hint = ("add a replay fixture under fixtures/replay and run uv run lokay replay" if lokay_rules else
+            "keep the test change inside existing test functions with no net added lines, or remove the added test code")
+    errors.extend(f"{path}: new unit test -> {hint}" for path in unit_test_files(diff))
     return sorted(set(errors))
 
 

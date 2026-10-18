@@ -19,6 +19,14 @@ from lokay.replay import unpack
 from lokay.types import Run, event_record
 
 
+CHECK_HINTS = (
+    ("new unit test -> keep the test change inside existing test functions with no net added lines, or remove the added test code",
+     "new unit test -> add a replay fixture under fixtures/replay and run uv run lokay replay"),
+    ("keep the test change inside existing test functions with no net added lines, or remove the added test code",
+     "add a replay fixture under fixtures/replay"),
+)
+
+
 class Mismatch(BaseException):
     pass
 
@@ -34,6 +42,10 @@ def stable(value):
 
 
 def compatible_checks(actual, expected) -> Any:
+    if isinstance(actual, str) and isinstance(expected, str):
+        for new, old in CHECK_HINTS:
+            if old in expected and new in actual:
+                actual = actual.replace(new, old)
     header = "| name | status | reason |\n| --- | --- | --- |\n"
     if isinstance(actual, str) and isinstance(expected, str) and header in actual and header in expected:
         prefix, _, tail = actual.partition(header)
@@ -43,6 +55,8 @@ def compatible_checks(actual, expected) -> Any:
         table = "\n".join(line for line in table.splitlines()
                           if line.split(" | ", 2)[0] in names or line.split(" | ", 2)[1:2] != ["pass"])
         return prefix + header + table + separator + suffix
+    if isinstance(actual, list) and isinstance(expected, list) and len(actual) == len(expected):
+        return [compatible_checks(value, recorded) for value, recorded in zip(actual, expected)]
     if not isinstance(actual, dict) or not isinstance(expected, dict):
         return actual
     actual = actual.copy()
@@ -50,7 +64,8 @@ def compatible_checks(actual, expected) -> Any:
         value, recorded = actual[key], expected[key]
         if key in {"checks", "results"} and isinstance(value, list) and isinstance(recorded, list):
             names = {item["name"] for item in recorded}
-            actual[key] = [item for item in value if item["name"] in names or item["status"] != "pass"]
+            actual[key] = compatible_checks(
+                [item for item in value if item["name"] in names or item["status"] != "pass"], recorded)
         elif key == "progress_checks" and isinstance(value, dict) and isinstance(recorded, dict):
             actual[key] = {name: status for name, status in value.items()
                            if name in recorded or status != "pass"}
