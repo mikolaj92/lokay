@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
@@ -11,6 +12,12 @@ PLAN_RESET = {
     "plan_synthesis": {},
     "plan_accepted_sha": None,
 }
+
+
+def pr_number(value):
+    if isinstance(value, str) and (match := re.fullmatch(r"https://github\.com/[^/]+/[^/]+/pull/([0-9]+)", value)):
+        return int(match[1])
+    return value
 
 
 @dataclass(frozen=True)

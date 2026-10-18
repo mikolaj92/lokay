@@ -326,6 +326,7 @@ def fix_publish(worktree: Path, branch: str, expected: str | None) -> dict:
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
     from lokay.store import state_read
+    from lokay.types import pr_number
 
     saved = state_read(repo_name, issue)
     body = pr_body(worktree, plan_path, issue, saved.get("last_check") or saved.get("verdict"))
@@ -333,4 +334,4 @@ def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: 
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}
     created = pr_create(repo_name, branch, title, body, issue)
-    return {"result": "pr_open", "pr": created.get("url"), "sha": pushed["sha"]}
+    return {"result": "pr_open", "pr": pr_number(created.get("url")), "sha": pushed["sha"]}

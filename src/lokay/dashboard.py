@@ -3,6 +3,7 @@ from __future__ import annotations
 from lokay import config
 from lokay.config import load_repos
 from lokay.store import write_json
+from lokay.types import pr_number
 from lokay.effects.gh import dashboard_request as gh
 
 import argparse
@@ -369,7 +370,7 @@ def esc(value) -> str:
 def link(repo, pr) -> str:
     if not isinstance(repo, str) or not REPO.fullmatch(repo):
         return "—"
-    pr = number(pr)
+    pr = number(pr_number(pr))
     return f'<a href="{esc(f"https://github.com/{repo}/pull/{pr}")}">#{pr}</a>' if pr else "—"
 
 

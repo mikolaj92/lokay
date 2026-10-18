@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from lokay.config import HOME
-from lokay.types import CheckResult, Event, Run, event_record, parse_event
+from lokay.types import CheckResult, Event, Run, event_record, parse_event, pr_number
 
 RUNS = HOME / "runs"
 LOCKS = HOME / "locks"
@@ -252,6 +252,8 @@ def state_read(repo: str, issue: int) -> dict:
     if not path.exists():
         return {}
     state = json.loads(path.read_text())
+    if "pr" in state:
+        state["pr"] = pr_number(state["pr"])
     if (state.get("waiting_on") != derive_waiting_on(state)
             or (state.get("result") == "wait" and state.get("awaiting") == "human"
                 and not state.get("wait_escape"))):
@@ -384,6 +386,8 @@ def write_json(path: Path, value: object, *, indent: int | None = None,
 
 
 def save_run(repo: str, issue: int, state: dict) -> None:
+    if "pr" in state:
+        state["pr"] = pr_number(state["pr"])
     if (state.get("result") == "wait" and state.get("awaiting") == "human"
             and not state.get("wait_escape")):
         state.update(awaiting=None, retry_at=time.time(), wait_escape="retry")
