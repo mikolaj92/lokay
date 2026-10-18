@@ -6,6 +6,11 @@ from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 
 
+ASSERTION = re.compile(
+    r"^\s*(?:assert\s+|(?:[A-Za-z_]\w*\.)*(?:assert|assert[A-Z_]\w*|expect|XCTAssert\w*|#expect|_check|require)\s*\()"
+)
+
+
 CACHE_PATTERNS = [
     ".cache/", ".build/", "DerivedData/", "node_modules/", "__pycache__/",
     ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".venv/", ".check-local/",
@@ -59,10 +64,7 @@ def is_test(path: str, added_lines: Sequence[str] = ()) -> bool:
                    ("test_*.*", "*_test.*", "*.test.*", "*.spec.*", "*Test.*", "*Tests.*", "*_spec.*", "conftest.py"))
             or (kind([path]) != "docs"
                 and any(part in {"scenarios", "fixtures", "validation", "checks"} for part in parts)
-                and any(re.match(
-                    r"^\s*(?:assert\s+|(?:[A-Za-z_]\w*\.)*(?:assert|expect|XCTAssert\w*|#expect|_check|require)\s*\()",
-                    line,
-                ) for line in added_lines)))
+                and any(ASSERTION.match(line) for line in added_lines)))
 
 
 def matches_path(path: str, planned: str) -> bool:
