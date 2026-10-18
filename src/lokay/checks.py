@@ -143,8 +143,13 @@ def no_new_comments(x: CheckInput) -> CheckResult:
 def no_unit_tests(x: CheckInput) -> CheckResult:
     paths = unit_test_files(x.diff)
     if paths:
+        first_added = {}
+        for path, number, kind, _ in diff_lines(x.diff):
+            if kind == "+":
+                first_added.setdefault(path, number)
         return CheckResult("no_unit_tests", "fail", "new unit tests: " + ", ".join(paths), tuple(
-            Finding(path, 1, 1, "add a replay fixture under fixtures/replay", "no_unit_tests") for path in paths))
+            Finding(path, first_added.get(path, 1), first_added.get(path, 1),
+                    "add a replay fixture under fixtures/replay", "no_unit_tests") for path in paths))
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 
