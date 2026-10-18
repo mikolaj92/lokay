@@ -149,9 +149,11 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
         for path, number, kind, _ in diff_lines(x.diff):
             if kind == "+":
                 first_added.setdefault(path, number)
+        hint = ("add a replay fixture under fixtures/replay" if x.repo.rsplit("/", 1)[-1] == "lokay" else
+                "keep the test change inside existing test functions with no net added lines, or remove the added test code")
         return CheckResult("no_unit_tests", "fail", "new unit tests: " + ", ".join(paths), tuple(
             Finding(path, first_added.get(path, 1), first_added.get(path, 1),
-                    "add a replay fixture under fixtures/replay", "no_unit_tests") for path in paths))
+                    hint, "no_unit_tests") for path in paths))
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 
