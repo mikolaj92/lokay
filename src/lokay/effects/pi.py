@@ -240,19 +240,16 @@ def run_process(
         if call != "pi":
             proc = execute()
         else:
-            from lokay.effects.git import pi_git_guard
+            def transient(proc):
+                if isinstance(proc, Exception) or proc.returncode == 0:
+                    return None
+                match = re.search(
+                    r"\b(?:401|429|5\d{2})\b|overloaded|rate[ _-]limit|ECONNRESET|Empty reply",
+                    (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
+                )
+                return match[0] if match else None
 
-            with pi_git_guard(Path(cwd) if cwd is not None else Path.cwd()):
-                def transient(proc):
-                    if isinstance(proc, Exception) or proc.returncode == 0:
-                        return None
-                    match = re.search(
-                        r"\b(?:401|429|5\d{2})\b|overloaded|rate[ _-]limit|ECONNRESET|Empty reply",
-                        (proc.stdout or "") + "\n" + (proc.stderr or ""), re.IGNORECASE,
-                    )
-                    return match[0] if match else None
-
-                proc = retry(execute, 4, transient, call="pi")
+            proc = retry(execute, 4, transient, call="pi")
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout.decode(errors="replace") if isinstance(proc.stdout, bytes) else proc.stdout,
                   "stderr": proc.stderr.decode(errors="replace") if isinstance(proc.stderr, bytes) else proc.stderr,
@@ -543,7 +540,7 @@ def run_pi(
     json_mode: bool = False,
     missing_is_failure: bool = False,
 ) -> subprocess.CompletedProcess[Any] | dict:
-    from lokay.effects.git import PiGitViolation, failure, guard
+    from lokay.effects.git import failure, guard
 
     argv = ["pi", "-p"]
     if json_mode:
@@ -560,8 +557,6 @@ def run_pi(
                 timeout=timeout,
             )
     except Exception as exc:
-        if isinstance(exc, PiGitViolation):
-            return exc.failure()
         if changes["changed"]:
             return failure(changes, worktree)
         if missing_is_failure and isinstance(exc, FileNotFoundError):
