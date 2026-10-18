@@ -243,14 +243,14 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     return decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed
 
 
-def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
+def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
+                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
     from lokay.tick import _retry, dumps, refresh_body
-    from lokay.check import aggregate
+    from lokay.check import validate_sha, verdict as check_verdict
     from lokay.effects.git import git_try
     from lokay.effects.gh import pr_files, check_comment
 
-    verdict = aggregate(sha, ci, decisions)
+    validate_sha(sha, ci, decisions)
     from lokay.scope import code_scope_issue
 
     code, changed, err = git_try(worktree, "diff", "--name-only", f"origin/{base}...HEAD")
@@ -263,13 +263,8 @@ def verdict(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed
     repo_files = list(filter(None, tracked.split("\0")))
     scope = code_scope_issue(files, plan_text, repo_files)
     if not checks_failed and scope and dismissed_key(scope) not in dismissed_keys:
-        verdict = {**verdict, "result": "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
         rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
-    from lokay.check import apply_checks
-
-    verdict = apply_checks(verdict, check_results, ci)
-    if checks_failed:
-        verdict = {**verdict, "result": "fix"}
+    verdict = check_verdict(sha, ci, decisions, check_results, scope, dismissed_keys)
     saved_merge = state_read(picked["repo"], picked["issue"])
     if verdict["result"] == "merge" and merge_blocked(saved_merge, sha):
         verdict = conflict_fix(_retry(picked, "fix", lambda: pr_files(picked["repo"], pr_number)),

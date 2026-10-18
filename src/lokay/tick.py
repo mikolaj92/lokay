@@ -1260,7 +1260,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(picked["repo"], picked["issue"], local_ci=ci)
         decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
-        verdict, rounds = finish.verdict(
+        verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
         pending = verdict["result"]

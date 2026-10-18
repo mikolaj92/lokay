@@ -14,7 +14,7 @@ from lokay import store
 
 from lokay.effects.decide import DecisionError, from_wire
 from lokay.scope import kind as change_kind
-from lokay.types import CheckResult, Finding, Note, parse_finding, to_dict
+from lokay.types import CheckResult, Finding, Note, dismissed_key, parse_finding, to_dict
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
@@ -314,10 +314,37 @@ def test_failures(log: str) -> set[str]:
 
 
 
-def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
-    from lokay.checks import verdict
+def validate_sha(sha: str, ci: dict, decisions: list[dict]) -> None:
+    if ci.get("sha") != sha or any(item.get("sha", sha) != sha for item in decisions):
+        raise DecisionError("sha mismatch")
 
-    checked = verdict(results, ci)
+
+def verdict(sha: str, ci: dict, decisions: list[dict], results: tuple[CheckResult, ...],
+            scope=None, dismissed_keys=()) -> dict:
+    validate_sha(sha, ci, decisions)
+    uwagi = list(ci.get("failed") or [])
+    for item in decisions:
+        uwagi.extend(item.get("uwagi") or [])
+    notes = [finding for item in decisions if item.get("next") == "issue" and not item.get("uwagi")
+             for finding in (item.get("replan") or [{
+                 "pytanie": parse_finding(item).lens or item.get("kind") or "check",
+                 "prompt": "Check sees a problem; identify a concrete location."}])]
+    fix = bool(uwagi) or ci.get("result") == "red"
+    ok = ci.get("result") in ("green", "no_ci") and not uwagi
+    outcome = {"result": "fix" if fix else "merge" if ok else "wait", "sha": sha, "uwagi": uwagi,
+               "replan": [],
+               "notes": [*(ci.get("notes") or []),
+                         *(note for item in decisions for note in item.get("notes") or []),
+                         *({**item, "pytanie": parse_finding(item).lens, "note": item.get("prompt", "")}
+                           for item in notes)]}
+    checks_failed = any(result.status == "fail" for result in results)
+    if not checks_failed and scope and dismissed_key(scope) not in dismissed_keys:
+        uwagi.append(scope)
+    failed = tuple(result for result in results if result.status == "fail" and result.findings)
+    unknown = tuple(result for result in results if result.status == "unknown")
+    unlocated_fail = tuple(result for result in results if result.status == "fail" and not result.findings)
+    checked = {"result": "fix" if failed else "wait" if unknown or unlocated_fail else "merge",
+               "checks": results, "failed": failed, "unknown": unknown, "unlocated_fail": unlocated_fail}
     located = []
     unlocated = []
     for finding in outcome.get("uwagi") or []:
@@ -329,25 +356,7 @@ def apply_checks(outcome: dict, results: tuple[CheckResult, ...], ci: dict | Non
     result = checked["result"]
     if result == "merge":
         result = "fix" if located else "merge"
+    if checks_failed:
+        result = "fix"
     return {**outcome, **checked, "result": result, "uwagi": [*located, *findings],
             "notes": notes, "replan": [], "unlocated_findings": unlocated}
-
-
-def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
-    if ci.get("sha") != sha or any(item.get("sha", sha) != sha for item in decisions):
-        raise DecisionError("sha mismatch")
-    uwagi = list(ci.get("failed") or [])
-    for item in decisions:
-        uwagi.extend(item.get("uwagi") or [])
-    notes = [finding for item in decisions if item.get("next") == "issue" and not item.get("uwagi")
-             for finding in (item.get("replan") or [{
-                 "pytanie": parse_finding(item).lens or item.get("kind") or "check",
-                 "prompt": "Check sees a problem; identify a concrete location."}])]
-    fix = bool(uwagi) or ci.get("result") == "red"
-    ok = ci.get("result") in ("green", "no_ci") and not uwagi
-    return {"result": "fix" if fix else "merge" if ok else "wait", "sha": sha, "uwagi": uwagi,
-            "replan": [],
-            "notes": [*(ci.get("notes") or []),
-                      *(note for item in decisions for note in item.get("notes") or []),
-                      *({**item, "pytanie": parse_finding(item).lens, "note": item.get("prompt", "")}
-                        for item in notes)]}
