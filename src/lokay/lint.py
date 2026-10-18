@@ -43,10 +43,11 @@ def diff_lines(diff: str):
                 line_number += 1
 
 
-def unit_test_files(diff: str) -> list[str]:
+def unit_test_hints(diff: str) -> dict[str, str]:
     paths = []
     changes = {}
     added_lines = {}
+    new_paths = set()
     for path, _, kind, text in diff_lines(diff):
         if kind == "+":
             added_lines.setdefault(path, []).append(text)
@@ -66,10 +67,16 @@ def unit_test_files(diff: str) -> list[str]:
                 path = path.removeprefix("b/")
                 break
         paths.append(path)
-    return sorted({path for path in paths if is_test(path, added_lines.get(path, ()))
-                   and not Path(path).is_absolute() and ".." not in Path(path).parts
-                   and not any(Path(path).parts[i:i + 2] == ("fixtures", "replay")
-                               for i in range(len(Path(path).parts) - 1))})
+        new_paths.add(path)
+    return {
+        path: ("new test file -> remove it; new test files are not allowed" if path in new_paths else
+               f"{changes[path]} more non-blank lines added than removed; blank lines do not count; "
+               "make added non-blank lines <= removed non-blank lines in this file, or remove the added test code")
+        for path in sorted({path for path in paths if is_test(path, added_lines.get(path, ()))
+                            and not Path(path).is_absolute() and ".." not in Path(path).parts
+                            and not any(Path(path).parts[i:i + 2] == ("fixtures", "replay")
+                                        for i in range(len(Path(path).parts) - 1))})
+    }
 
 
 def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
@@ -124,9 +131,10 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
                 if isinstance(first, ast.Constant) and first.value in ("git", "gh"):
                     if numbers.intersection(range(node.lineno, (node.end_lineno or node.lineno) + 1)):
                         errors.append(f"{path}:{node.lineno}: git/gh outside effects/git.py or effects/gh.py -> call lokay.effects.git / lokay.effects.gh")
-    hint = ("add a replay fixture under fixtures/replay and run uv run lokay replay" if lokay_rules else
-            "keep the test change inside existing test functions with no net added lines, or remove the added test code")
-    errors.extend(f"{path}: new unit test -> {hint}" for path in unit_test_files(diff))
+    errors.extend(
+        f"{path}: new unit test -> " +
+        ("add a replay fixture under fixtures/replay and run uv run lokay replay" if lokay_rules else hint)
+        for path, hint in unit_test_hints(diff).items())
     return sorted(set(errors))
 
 

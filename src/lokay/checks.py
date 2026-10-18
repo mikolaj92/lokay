@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
-from lokay.lint import diff_lines, lint_diff, unit_test_files
+from lokay.lint import diff_lines, lint_diff, unit_test_hints
 from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, plan_file_lists, planned_code_touch_reason, planned_files, required_files
 from lokay.types import CheckResult, Finding, parse_finding
 
@@ -143,17 +143,16 @@ def no_new_comments(x: CheckInput) -> CheckResult:
 
 
 def no_unit_tests(x: CheckInput) -> CheckResult:
-    paths = unit_test_files(x.diff)
+    paths = unit_test_hints(x.diff)
     if paths:
         first_added = {}
         for path, number, kind, _ in diff_lines(x.diff):
             if kind == "+":
                 first_added.setdefault(path, number)
-        hint = ("add a replay fixture under fixtures/replay" if x.repo.rsplit("/", 1)[-1] == "lokay" else
-                "keep the test change inside existing test functions with no net added lines, or remove the added test code")
         return CheckResult("no_unit_tests", "fail", "new unit tests: " + ", ".join(paths), tuple(
             Finding(path, first_added.get(path, 1), first_added.get(path, 1),
-                    hint, "no_unit_tests") for path in paths))
+                    "add a replay fixture under fixtures/replay" if x.repo.rsplit("/", 1)[-1] == "lokay" else hint,
+                    "no_unit_tests") for path, hint in paths.items()))
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 

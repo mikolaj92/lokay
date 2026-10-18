@@ -7,6 +7,7 @@ from copy import deepcopy
 from importlib import import_module
 import os
 from pathlib import Path
+import re
 import socket
 from subprocess import CompletedProcess
 import sys
@@ -20,6 +21,10 @@ from lokay.types import Run, event_record
 
 
 CHECK_HINTS = (
+    (r"\d+ more non-blank lines added than removed; blank lines do not count; make added non-blank lines <= removed non-blank lines in this file, or remove the added test code",
+     "keep the test change inside existing test functions with no net added lines, or remove the added test code"),
+    ("new test file -> remove it; new test files are not allowed",
+     "keep the test change inside existing test functions with no net added lines, or remove the added test code"),
     ("new unit test -> keep the test change inside existing test functions with no net added lines, or remove the added test code",
      "new unit test -> add a replay fixture under fixtures/replay and run uv run lokay replay"),
     ("keep the test change inside existing test functions with no net added lines, or remove the added test code",
@@ -44,8 +49,8 @@ def stable(value):
 def compatible_checks(actual, expected) -> Any:
     if isinstance(actual, str) and isinstance(expected, str):
         for new, old in CHECK_HINTS:
-            if old in expected and new in actual:
-                actual = actual.replace(new, old)
+            if old in expected or any(older in expected for newer, older in CHECK_HINTS if newer == old):
+                actual = re.sub(new, lambda match: old, actual)
     header = "| name | status | reason |\n| --- | --- | --- |\n"
     if isinstance(actual, str) and isinstance(expected, str) and header in actual and header in expected:
         prefix, _, tail = actual.partition(header)
