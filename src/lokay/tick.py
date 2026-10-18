@@ -628,8 +628,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
             state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
-            if escalated := escalate(picked):
-                raise Escalated(escalated)
             prompt = replan_prompt(picked, "Single plan rejected", outcome["uwagi"])
             state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt, plan_notes=[])
             continue
@@ -670,8 +668,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                     branch.update(phase="failed", reason=str(exc), accepted_sha=None)
                     state_update(repo, issue, plan_branches=branches,
                                  **store.round_fields(state_read(repo, issue)))
-                    if escalated := escalate(picked):
-                        raise Escalated(escalated)
                     rounds_append(repo, issue, f"Plan {perspective}: failed: {exc}")
                     break
                 rounds_append(repo, issue, f"Plan {perspective} {branch['rounds']}: Decision {outcome['next']}")
@@ -683,8 +679,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                                  **store.round_fields(state_read(repo, issue), accepted_plan=True))
                     break
                 state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
-                if escalated := escalate(picked):
-                    raise Escalated(escalated)
                 fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
                 branch.update(phase="write", fingerprint=fingerprint,
                               prompt=context + "\n\nPrevious branch plan:\n" + branch_art.read_text()
@@ -739,8 +733,6 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                              **store.round_fields(state_read(repo, issue), accepted_plan=True))
                 return rounds
             state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
-            if escalated := escalate(picked):
-                raise Escalated(escalated)
             fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
             if synthesis["fingerprint"] == fingerprint:
                 prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
@@ -813,9 +805,6 @@ def _prepare(picked: dict) -> tuple | dict:
                 hashlib.sha256(art.read_bytes()).hexdigest())
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
         plan_rounds = _plan_graph(picked, art, title, body, cwd=root)
-    escalated = escalate(picked)
-    if escalated:
-        return escalated
     branch = f"lokay/{picked['issue']}"
     check_deadline()
     if saved.get("build_from_main"):
