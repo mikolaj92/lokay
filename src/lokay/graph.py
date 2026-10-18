@@ -10,6 +10,12 @@ from lokay.types import (
 )
 
 
+def merge_allowed(state: dict, sha: str) -> bool:
+    recorded = (state.get("verdict") if "last_check" not in state and "check_inputs" not in state
+                else state.get("last_check")) or {}
+    return bool(sha) and recorded.get("sha") == sha and recorded.get("result") == "merge"
+
+
 def step(run: Run, event: Event) -> Run:
     current = dict(run.state)
     if current.get("result") == "closed":
@@ -85,6 +91,10 @@ def step(run: Run, event: Event) -> Run:
             pass
         case _:
             assert_never(event)
+    if fields.get("node") == "merge":
+        sha = fields.get("sha", current.get("sha")) or ""
+        if not merge_allowed({**current, **fields}, sha):
+            fields.update(node="check", verdict=None, result="check")
     if "node" in fields and (fields["node"] != current.get("node") or "node_since" not in current):
         current["node_since"] = event.ts
     if fields.get("last_attempt") and not current.get("issue_since"):
