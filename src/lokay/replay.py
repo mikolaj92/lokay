@@ -95,9 +95,12 @@ def main(argv: list[str]) -> int:
                         row[key] = unpack(row[key], path.parent, source=source)
                     if any(not isinstance(row[key], dict) for key in ("before", "event", "after")):
                         raise ValueError("expected before/event/after objects")
+                    from lokay.effects.replay import compatible_state
+
                     got = graph.step(Run.from_state(row["before"]), parse_event(row["event"])).state
                     got = {key: value for key, value in got.items() if key != "updated_at"}
                     expected = {key: value for key, value in row["after"].items() if key != "updated_at"}
+                    got = compatible_state(got, expected)
                     if got != expected:
                         print(f"replay: mismatch seq={row.get('seq')} node={row.get('node')} "
                               f"event={dumps(row['event'], ensure_ascii=False)}", file=sys.stderr)

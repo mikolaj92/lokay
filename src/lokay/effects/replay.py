@@ -81,10 +81,9 @@ def compatible_checks(actual, expected) -> Any:
 
 def compatible_state(actual: dict, expected: dict) -> dict:
     actual = actual.copy()
-    if "check_inputs" not in expected:
-        actual.pop("check_inputs", None)
-    if "plan_schema" not in expected:
-        actual.pop("plan_schema", None)
+    for key in ("check_inputs", "plan_schema", "fix_rounds", "fix_limit_hits"):
+        if key not in expected:
+            actual.pop(key, None)
     for key in ("plan_branches", "plan_synthesis"):
         if isinstance(actual.get(key), dict) and isinstance(expected.get(key), dict):
             if key == "plan_branches":

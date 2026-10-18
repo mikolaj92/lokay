@@ -11,6 +11,7 @@ import shutil
 import signal
 import sys
 import time
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
@@ -103,8 +104,6 @@ def act(run: Run) -> Event:
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
             return outcome
         state = state_read(repo, issue)
-        if state.get("awaiting") == "human":
-            return outcome
         if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
                 and state.get("updated_at") != before):
             return outcome
@@ -1358,13 +1357,49 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         derived = graph.step(store.load(picked["repo"], picked["issue"]),
                              Checked(time.time(), outcome=verdict)).state
         pending = derived["node"]
-        if derived.get("awaiting") == "human":
-            state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})
-            rounds_append(picked["repo"], picked["issue"],
-                          f"Check round limit: {rounds} rounds without merge → awaiting human")
-            store.log_event("check_round_limit", repo=picked["repo"], issue=picked["issue"],
+        findings = [finding for entry in derived.get("check_history", [])
+                    for finding in entry.get("findings", [])]
+        if pending == "plan":
+            prompt = replan_prompt(
+                picked,
+                f"Check→Fix did not converge in {graph.FIX_ROUND_LIMIT} rounds; revise the plan against every finding below.",
+                findings, sha)
+            state_update(picked["repo"], picked["issue"],
+                         _event={"action": "verdict", "outcome": verdict}, plan_prompt=prompt)
+            rounds_append(picked["repo"], picked["issue"], "Fix round limit → Plan (1st)")
+            store.log_event("fix_round_limit", hit=1, repo=picked["repo"], issue=picked["issue"],
                             rounds=rounds, reason=derived["reason"])
-            return {"result": derived["result"], "reason": derived["reason"], "sha": sha}
+            return {"result": "pending", "next": "plan"}
+        if derived.get("result") == "infeasible":
+            from lokay.effects.gh import fit_body
+
+            state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})
+            counts = Counter(
+                (item.plik, item.lens) if isinstance(item, Finding) else ("", item.pytanie or item.lens)
+                for finding in findings if isinstance(item := parse_finding(finding), (Finding, Note)))
+            evidence = (
+                f"Infeasible: fix round limit reached twice.\n\n"
+                f"Total Check rounds: {rounds}\n"
+                f"Check→Fix rounds: {2 * graph.FIX_ROUND_LIMIT}\n"
+                f"PR #{pr_number}: https://github.com/{picked['repo']}/pull/{pr_number}\n"
+                f"Last SHA: `{sha}`\n\n"
+                "Top 10 recurring findings (file, question/lens):\n"
+                + "\n".join(f"- {path or '(no file)'} — {lens}: {count}"
+                            for (path, lens), count in counts.most_common(10)))
+            gh_ok(["label", "create", "lokay-infeasible", "--force", "--repo", picked["repo"]],
+                  error="infeasible label creation failed")
+            gh_ok(["pr", "edit", str(pr_number), "--repo", picked["repo"],
+                   "--add-label", "lokay-infeasible"], error="PR label failed")
+            gh_ok(["issue", "edit", str(picked["issue"]), "--repo", picked["repo"],
+                   "--add-label", "lokay-infeasible"], error="issue label failed")
+            gh_ok(["issue", "close", str(picked["issue"]), "--repo", picked["repo"],
+                   "--comment", fit_body(evidence)], strip=False, error="issue close failed")
+            rounds_append(picked["repo"], picked["issue"],
+                          "Fix round limit (2nd) → issue closed as infeasible")
+            state_update(picked["repo"], picked["issue"], _event={"action": "closed"})
+            store.log_event("fix_round_limit", hit=2, repo=picked["repo"], issue=picked["issue"],
+                            rounds=rounds, reason=derived["reason"])
+            return {"result": "closed", "reason": "infeasible: fix round limit reached twice"}
         escalated = escalate(picked, verdict.get("uwagi"))
         if escalated:
             return escalated
