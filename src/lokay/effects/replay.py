@@ -241,7 +241,7 @@ def segment(path: Path, rows: list[dict]) -> None:
                 rounds = before.get("check_rounds", 0)
                 decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
                     picked, worktree, base, sha, saved, diff, check_rows, ci, rounds)
-                verdict, rounds = finish.verdict(
+                verdict, rounds = finish.complete_check(
                     picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
                     check_results, pr_number, rounds, check_notes, hashlib.sha256(diff.encode()).hexdigest(),
                     kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
