@@ -27,14 +27,14 @@ check_command() {
         esac
     fi
     case "$command" in
-        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|clone|remote|config) return 1 ;;
+        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|clone|remote|config|switch|symbolic-ref|worktree|notes|replace) return 1 ;;
         branch) [ "$#" -eq 0 ] || return 1 ;;
-        checkout|switch)
-            for arg do
-                case "$arg" in
-                    -b*|-B*|-c*|-C*|--branch|--branch=*|--create|--create=*|--force-create|--force-create=*|--orphan|--orphan=*) return 1 ;;
-                esac
-            done ;;
+        checkout)
+            case "${1-}" in
+                --) [ "$#" -ge 2 ] ;;
+                -*) return 1 ;;
+                *) [ "$#" -ge 3 ] && [ "$2" = "--" ] ;;
+            esac ;;
     esac
 }
 if ! check_command "$@"; then

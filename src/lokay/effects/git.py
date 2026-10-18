@@ -342,37 +342,6 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     return committed
 
 
-class PiGitViolation(RuntimeError):
-    def failure(self) -> dict:
-        return {"result": "failed", "reason": "pi_git_changed", "explanation": str(self), "artifact": ""}
-
-
-@contextmanager
-def pi_git_guard(path: Path):
-    def checked(args):
-        code, out, err = git_try(path, *args, timeout=30)
-        if code != 0:
-            raise PiGitViolation(f"pi git checks failed: {err.strip()}")
-        return out
-
-    head = checked(["rev-parse", "HEAD"]).strip()
-    refs = checked(["for-each-ref"])
-    try:
-        yield
-    finally:
-        from lokay.effects.pi import tick_deadline
-
-        token = tick_deadline.set(None)
-        try:
-            after = checked(["rev-parse", "HEAD"]).strip()
-            after_refs = checked(["for-each-ref"])
-            commits = checked(["rev-list", "HEAD", f"^{head}", "--"])
-            if after != head or after_refs != refs or commits.strip():
-                raise PiGitViolation("pi changed git HEAD or refs, or created commits beyond its pre-run HEAD")
-        finally:
-            tick_deadline.reset(token)
-
-
 def guarded_command(path: Path, *args: str, input: bytes | None = None) -> bytes:
     proc = _command(None, ["--literal-pathspecs", "-C", str(path), *args],
                     input=input, timeout=60, text=False)
