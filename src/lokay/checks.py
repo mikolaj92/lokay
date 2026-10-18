@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import is_artifact, is_cache, is_test, planned_files
+from lokay.scope import is_artifact, is_cache, is_test, matches_path, planned_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -285,19 +285,12 @@ def plan_target(x: CheckInput) -> CheckResult:
     code = {path for path in planned if not is_test(path) and not path.startswith("docs/")
             and Path(path).suffix.lower() not in (".md", ".rst", ".txt")}
     goal = re.search(r"^## Cel\s*\n(.*?)(?=^## |\Z)", x.plan, re.M | re.S)
-    section = re.search(r"^## Pliki\s*\n(.*?)(?=^## |\Z)", x.plan, re.M | re.S)
-    descriptions = []
-    if section:
-        for line in section[1].splitlines():
-            paths = planned_files("## Pliki\n" + line, repo_files, sorted(changed))
-            if paths:
-                descriptions.append(line.split(next(iter(paths)), 1)[-1])
     addition = re.search(r"\b(?:add(?:s|ed|ing)?|doda[cć]\w*|dodaj\w*|uzupełni\w*)\b",
-                         "\n".join([goal[1] if goal else "", *descriptions]), re.IGNORECASE)
+                         goal[1] if goal else "", re.IGNORECASE)
     reasons = []
     if not changed:
         reasons.append("Empty diff")
-    if code and not code.intersection(changed):
+    if code and not any(matches_path(path, target) for path in changed for target in code):
         reasons.append("Diff does not touch any planned code file: " + ", ".join(sorted(code)))
     if changed and deletions_only and addition:
         reasons.append("Deletions-only diff does not implement planned additions")
