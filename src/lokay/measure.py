@@ -38,7 +38,9 @@ def changed_files(value, home: Path):
     if isinstance(value, dict):
         for key in ("files", "changed_files"):
             files = value.get(key)
-            if isinstance(files, list) and files:
+            if isinstance(files, list) and not files:
+                return []
+            if isinstance(files, list):
                 normalized = [{"path": item} if isinstance(item, str) else item for item in files]
                 if kind(normalized) != "?":
                     return normalized
@@ -85,14 +87,17 @@ def merges(home: Path) -> list[dict]:
         sha = fields.get("sha")
         if not isinstance(sha, str) or not sha.strip() or key in seen:
             continue
-        seen.add(key)
         files = evidence.get(key)
-        if files is None:
-            if repos is None:
-                repos = {repo["name"]: Path(repo["clone_path"]).expanduser() for repo in config.load_repos()}
-            clone = repos.get(row["repo"])
-            if clone is not None:
-                files = merge_files(clone, sha)
+        if repos is None:
+            repos = {repo["name"]: Path(repo["clone_path"]).expanduser() for repo in config.load_repos()}
+        clone = repos.get(row["repo"])
+        if clone is not None:
+            merged_files = merge_files(clone, sha)
+            if merged_files is not None:
+                files = merged_files
+        if files == []:
+            continue
+        seen.add(key)
         change = kind(files)
         result.append({"time": timestamp, "kind": "code" if change not in ("docs", "lokay") else change,
                        "unknown_kind": change == "?"})

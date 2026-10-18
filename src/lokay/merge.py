@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from lokay.effects.gh import merge as gh_merge
+from lokay.effects.gh import merge as gh_merge, pr_files
 from lokay.effects.git import base_branch, worktree_remove
 from lokay.store import state_read, state_update
 from lokay.main_guard import check_main
@@ -22,6 +22,9 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
     if attempts.get(sha, 0) >= 2:
         state_update(repo_name, issue, merge_conflict_sha=sha)
         return {"result": "merge_limit", "merge_sha": None}
+    if not pr_files(repo_name, number):
+        state_update(repo_name, issue, result="closed", reason="empty PR diff")
+        return {"result": "closed", "merge_sha": None, "reason": "empty PR diff"}
     base_path = worktree if worktree is not None else clone_path
     base = base_branch(base_path) if base_path is not None else None
     state_update(repo_name, issue, merge_attempts={**attempts, sha: attempts.get(sha, 0) + 1})

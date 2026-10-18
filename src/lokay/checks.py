@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lokay.lint import diff_lines, lint_diff, unit_test_files
-from lokay.scope import is_artifact
+from lokay.scope import is_artifact, is_cache, is_test, planned_files
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -248,8 +248,67 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
+def plan_target(x: CheckInput) -> CheckResult:
+    changed = set()
+    deletions_only = True
+    for block in x.diff.split("diff --git ")[1:]:
+        lines = block.splitlines()
+        header = re.fullmatch(r'("a/(?:\\.|[^"])*"|a/.*?) ("b/(?:\\.|[^"])*"|b/.*)', lines[0])
+        if header is None:
+            raise ValueError("invalid diff path")
+        paths = [(path, True) for path in header.groups()]
+        for line in lines[1:]:
+            if line.startswith(("--- ", "+++ ")):
+                paths.append((line[4:].split("\t", 1)[0], True))
+            elif line.startswith(("rename from ", "rename to ")):
+                paths.append((line.split(" ", 2)[2], False))
+        for path, prefixed in paths:
+            if path.startswith('"'):
+                path = ast.literal_eval(path)
+            if prefixed and path.startswith(("a/", "b/")):
+                path = path[2:]
+            if path != "/dev/null" and not Path(path).is_absolute() and ".." not in Path(path).parts:
+                changed.add(path)
+        removed = any(line.startswith("-") and not line.startswith("--- ") for line in lines[1:])
+        added = any(line.startswith("+") and not line.startswith("+++ ") for line in lines[1:])
+        deleted = any(line.startswith("deleted file mode ") for line in lines[1:])
+        metadata = any(line.startswith(("rename ", "copy ", "old mode ", "new mode ",
+                                        "Binary files ", "GIT binary patch")) for line in lines[1:])
+        if not deleted and (not removed or added or metadata):
+            deletions_only = False
+    repo_files = []
+    for directory, dirs, files in os.walk(x.worktree, followlinks=False):
+        dirs[:] = sorted(name for name in dirs if name != ".git" and not is_cache(name)
+                         and not (Path(directory) / name).is_symlink())
+        repo_files.extend((Path(directory) / name).relative_to(x.worktree).as_posix() for name in files)
+    planned = planned_files(x.plan, repo_files, sorted(changed))
+    code = {path for path in planned if not is_test(path) and not path.startswith("docs/")
+            and Path(path).suffix.lower() not in (".md", ".rst", ".txt")}
+    goal = re.search(r"^## Cel\s*\n(.*?)(?=^## |\Z)", x.plan, re.M | re.S)
+    section = re.search(r"^## Pliki\s*\n(.*?)(?=^## |\Z)", x.plan, re.M | re.S)
+    descriptions = []
+    if section:
+        for line in section[1].splitlines():
+            paths = planned_files("## Pliki\n" + line, repo_files, sorted(changed))
+            if paths:
+                descriptions.append(line.split(next(iter(paths)), 1)[-1])
+    addition = re.search(r"\b(?:add(?:s|ed|ing)?|doda[cć]\w*|dodaj\w*|uzupełni\w*)\b",
+                         "\n".join([goal[1] if goal else "", *descriptions]), re.IGNORECASE)
+    reasons = []
+    if not changed:
+        reasons.append("Empty diff")
+    if code and not code.intersection(changed):
+        reasons.append("Diff does not touch any planned code file: " + ", ".join(sorted(code)))
+    if changed and deletions_only and addition:
+        reasons.append("Deletions-only diff does not implement planned additions")
+    reason = "; ".join(reasons) if reasons else "diff touches planned files"
+    path = next(iter(sorted(code) or sorted(planned) or sorted(changed)), "plan.md")
+    findings = (Finding(path, 1, 1, reason, "plan_target"),) if reasons else ()
+    return CheckResult("plan_target", "fail" if reasons else "pass", reason, findings)
+
+
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, docs]
+          no_new_comments, no_unit_tests, docs, plan_target]
 
 
 def verdict(results: tuple[CheckResult, ...], ci: dict | None = None) -> dict:
