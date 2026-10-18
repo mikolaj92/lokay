@@ -7,4 +7,8 @@ The entry preconditions are recorded worktree verification calls; every segment 
 Only redacted recordings and referenced blobs are included; plans come from the recorded comparison input, and Git markers only seed filesystem shape.
 Replay runs offline in a temporary sandbox, checks calls and transitions in order, and fails closed on unexpected effects.
 Check is absent because successful paths require missing worktree contents and check artifacts; nested pi guard calls cannot replay as a flat stream.
+Local test commands and `uv lock --check` now opt into the existing recorded call path, including redacted argv, stdin, return code, stdout/stderr and exception attempts in effect blobs.
+Existing recordings lack these local test effects; a Check fixture must follow deployment and a new recording.
+For that fixture, use `files` in the segment manifest to seed required worktree files and `plan.md` from read-only run artifacts or recorded call outputs (`ls-files` and diff); preserve the recorded paths and call order.
+Do not fabricate missing effects or use Temida data. Keep the redacted fixture under 2 MB.
 Fix needs source snapshots and pi filesystem changes; Merge also needs an unrecorded temporary checkout and its checks.

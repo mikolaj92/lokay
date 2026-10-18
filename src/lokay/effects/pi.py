@@ -200,13 +200,16 @@ def run_process(
     timeout: float | None = None,
     input: str | bytes | None = None,
     text: bool = True,
+    record: bool = False,
 ) -> subprocess.CompletedProcess[Any]:
     from lokay.store import log_event
 
     command = next((index for index, arg in enumerate(argv)
                     if Path(arg).name in ("gh", "git") or (Path(arg).name == "pi" and "-p" in argv[index + 1:])), None)
     if command is None:
-        return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
+        if not record or not argv:
+            return _run_process(argv, cwd=cwd, env=env, timeout=timeout, input=input, text=text)
+        command = 0
     call = Path(argv[command]).name
     started = time.monotonic()
     output = None

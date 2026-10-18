@@ -29,7 +29,7 @@ def check_uv_lock(cwd: Path) -> tuple[str, str]:
         if not offline:
             env.pop("UV_OFFLINE", None)
         try:
-            proc = run_process(["uv", "lock", "--check"], cwd=cwd, timeout=60, env=env)
+            proc = run_process(["uv", "lock", "--check"], cwd=cwd, timeout=60, env=env, record=True)
         except (OSError, TimeoutExpired) as exc:
             return "unknown", f"uv lock checks unavailable: {exc}"
         if proc.returncode == 0:
@@ -77,7 +77,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
             timed_out = False
             with generated_cleanup(Path(cwd)) as drifted:
                 try:
-                    proc = run_process(argv, cwd=cwd, timeout=timeout, env=env)
+                    proc = run_process(argv, cwd=cwd, timeout=timeout, env=env, record=True)
                 except TimeoutExpired:
                     proc = CompletedProcess(argv, 1, "", f"tests timed out after {timeout} s")
                     timed_out = True
