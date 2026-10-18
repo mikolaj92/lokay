@@ -144,14 +144,16 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
 
     def registration():
         records = registrations()
-        matches = [row for row in records if row.get("worktree") == str(path)]
+        matches = [row for row in records
+                   if row.get("worktree") is not None and Path(row["worktree"]).resolve() == path.resolve()]
         if len(matches) != 1:
             raise ValueError("expected exactly one worktree registration")
         row = matches[0]
         if (row is records[0] or row.get("branch") != f"refs/heads/{branch}" or "bare" in row
                 or "detached" in row or Path(row["worktree"]).resolve() == repo):
             raise ValueError("worktree registration or branch mismatch")
-        if any(row.get("branch") == f"refs/heads/{branch}" and row.get("worktree") != str(path)
+        if any(row.get("branch") == f"refs/heads/{branch}"
+               and (row.get("worktree") is None or Path(row["worktree"]).resolve() != path.resolve())
                for row in records):
             raise ValueError("branch registered at another worktree")
         return row
@@ -185,7 +187,8 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
             verify()
             return {"result": "added", "path": str(path), "branch": branch}
         records = registrations()
-        if any(row.get("worktree") == str(path) for row in records):
+        if any(row.get("worktree") is not None and Path(row["worktree"]).resolve() == path.resolve()
+               for row in records):
             row = registration()
             if "locked" in row or path.exists() or path.is_symlink():
                 raise ValueError("cannot recover locked or existing worktree")
