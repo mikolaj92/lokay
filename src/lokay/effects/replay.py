@@ -81,17 +81,9 @@ def compatible_checks(actual, expected) -> Any:
 
 def compatible_state(actual: dict, expected: dict) -> dict:
     actual = actual.copy()
-    for key in ("check_inputs", "plan_schema", "fix_rounds", "fix_limit_hits"):
+    for key in ("check_inputs", "fix_rounds", "fix_limit_hits"):
         if key not in expected:
             actual.pop(key, None)
-    for key in ("plan_branches", "plan_synthesis"):
-        if isinstance(actual.get(key), dict) and isinstance(expected.get(key), dict):
-            if key == "plan_branches":
-                actual[key] = {name: compatible_state(branch, expected[key][name])
-                               if name in expected[key] else branch
-                               for name, branch in actual[key].items()}
-            else:
-                actual[key] = compatible_state(actual[key], expected[key])
     return compatible_checks(actual, expected)
 
 
@@ -322,8 +314,7 @@ def segment(path: Path, rows: list[dict]) -> None:
                 verdict, rounds = finish.complete_check(
                     picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
                     check_results, pr_number, rounds, check_notes, hashlib.sha256(diff.encode()).hexdigest(),
-                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log),
-                    plan_schema=saved.get("plan_schema"))
+                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
                 store.state_update(repo, issue, _event={"action": "verdict", "outcome": verdict})
             except Boundary:
                 outcome = transitions[-1]["event"]["outcome"]
@@ -336,8 +327,6 @@ def segment(path: Path, rows: list[dict]) -> None:
                            or row.get("effect", {}).get("argv", [])[:4] == ["git", "checkout", "--detach", "--force"]
                            for row in effects):
                     stack.enter_context(patch("lokay.effects.git.plan_checkout", lambda root: root))
-                stack.enter_context(patch.object(tick, "changes_before_merge", lambda worktree: []))
-                stack.enter_context(patch.object(tick, "abort_conflicted_merge", lambda worktree: False))
             event = tick.act(Run.from_state({**before, "repo": repo, "issue": issue}))
             outcome = event.outcome
             detail = event_record(event)

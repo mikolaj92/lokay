@@ -579,10 +579,8 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     prompt = prompt_for(saved.get("issue_title") or "", saved.get("issue_body")) + (
         "\n\nUwagi:\n" + dumps(history[-5:], ensure_ascii=False)[-20000:]
         + "\n\nLast state:\n" + dumps({key: value for key, value in saved.items()
-                                     if key not in ("plan_prompt", "plan_branches",
-                                                    "plan_history", "local_ci", "test_log",
+                                     if key not in ("plan_prompt", "plan_history", "local_ci",
                                                     "last_check", "check_inputs")}, ensure_ascii=False)[:20000]
-        + "\n\nTest log (tail):\n" + (saved.get("test_log") or "")[-4000:]
         + "\n\nFix history:\n" + dumps(saved.get("fix_history", []), ensure_ascii=False)[-20000:]
         + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
         + "\n\n" + reason + "\n"
@@ -1072,8 +1070,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix,
-            saved.get("plan_schema"))
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
         derived = graph.step(store.load(picked["repo"], picked["issue"]),
                              Checked(time.time(), outcome=verdict)).state
         pending = derived["node"]

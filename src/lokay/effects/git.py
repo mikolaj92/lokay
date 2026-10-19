@@ -376,29 +376,6 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
     return retry(push_once, attempts, transient, delay=lambda attempt: 0.2 * (attempt + 1))
 
 
-def abort_conflicted_merge(repo: Path) -> bool:
-    merge_head = repo / git(repo, "rev-parse", "--git-path", "MERGE_HEAD")
-    if merge_head.exists() and git(repo, "ls-files", "-u"):
-        git(repo, "merge", "--abort")
-        return True
-    return False
-
-
-def changes_before_merge(repo: Path) -> list[str]:
-    code, out, err = git_try(repo, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")
-    if code == 0:
-        return []
-    if code != 1:
-        raise RuntimeError((err or out).strip())
-    code, out, err = git_try(repo, "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames")
-    if code:
-        raise RuntimeError((err or out).strip())
-    entries = [entry for entry in out.split("\0") if entry]
-    if any("U" in entry[:2] or entry[:2] in ("AA", "DD") for entry in entries):
-        return []
-    return sorted({entry[3:] for entry in entries if entry[:2] not in ("??", "!!")})
-
-
 def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     def checked(args: list[str]) -> str:
         code, out, err = git_try(repo, "--literal-pathspecs", *args)

@@ -16,14 +16,12 @@ class CheckInput:
     repo: str
     issue: int
     sha: str
-    issue_title: str
     issue_body: str
     plan: str
     diff: str
     hunks: list[dict]
     ci: dict
     worktree: Path
-    plan_schema: int | None = None
 
 
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,

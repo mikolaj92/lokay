@@ -10,15 +10,6 @@ from lokay.safety import untrusted_issue_block
 DIFFICULTIES = ("easy", "medium", "hard", "too_big")
 
 
-def issue_kind(title: str | None) -> str | None:
-    if title is not None:
-        if title.startswith("[docs-audit]"):
-            return "docs_change"
-        if title.startswith(("[code-audit]", "[test-audit]")):
-            return "code"
-    return None
-
-
 def difficulty_questions(title: str, body: str | None) -> dict:
     return {"state": {"title": title, "body": body or ""}, "questions": [{
         "id": "difficulty", "type": "choice",

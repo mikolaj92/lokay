@@ -4,8 +4,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
-IssueKind: TypeAlias = Literal["code", "docs_change"]
-
 PLAN_RESET = {
     "plan_phase": "write",
     "plan_branches": {},
