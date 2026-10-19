@@ -84,6 +84,43 @@ def write_blob(directory: Path, raw: bytes) -> dict:
     return {"blob": "sha256:" + sha}
 
 
+def write_segment(directory: Path, source: Path, manifest: dict, rows: list[dict]) -> None:
+    from lokay.replay import unpack
+
+    def materialize(value) -> Any:
+        if isinstance(value, dict):
+            if set(value) == {"blob"}:
+                return materialize(unpack(value, source, source=source))
+            return {key: materialize(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [materialize(item) for item in value]
+        return value
+
+    files = set(manifest.get("files", {}).values())
+    if manifest.get("entry") == "check":
+        files.add(manifest["diff"])
+    for name in files:
+        origin = (source / name).resolve()
+        target = (directory / name).resolve()
+        if not origin.is_relative_to(source.resolve()) or not target.is_relative_to(directory.resolve()):
+            raise ValueError("fixture file escapes fixture directory")
+    directory.mkdir(parents=True, exist_ok=False)
+    for name in files:
+        write_artifact(directory / name, (source / name).read_text())
+    packed = []
+    for seq, row in enumerate(rows, 1):
+        row = {**materialize(row), "seq": seq}
+        for key in ("effect", "before", "event", "after", "output"):
+            if key not in row:
+                continue
+            raw = json.dumps(row[key], sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=json_default).encode()
+            if key == "effect" or len(raw) > 768:
+                row[key] = write_blob(directory, raw)
+        packed.append(json.dumps(row, ensure_ascii=False, default=json_default) + "\n")
+    write_artifact(directory / "segment.jsonl", "".join(packed))
+    write_json(directory / "segment.json", manifest)
+
+
 def log_event(kind: str, *, _env=None, **fields) -> None:
     global TICK, SEQ, CONTEXT
     try:
