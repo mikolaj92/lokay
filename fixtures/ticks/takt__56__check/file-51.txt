@@ -1,0 +1,1 @@
+gitdir: /Users/mini-m4-0/.nas-data/Developer/takt/main/.git/worktrees/main-wt-56

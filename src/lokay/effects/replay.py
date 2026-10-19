@@ -204,7 +204,12 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
             if argv and argv[0] == "curl" and requests:
                 response = requests.pop(0)
                 body = json.loads(argv[argv.index("-d") + 1])
-                if body != response["body"]:
+                expected_body = deepcopy(response["body"])
+                for wire in (body, expected_body):
+                    for message in wire.get("messages", []):
+                        if message.get("role") == "user":
+                            message["content"] = json.loads(message["content"])
+                if body != expected_body:
                     raise Mismatch(f"seq={request_seq} expected request={response['body']!r}, got request={body!r}")
                 if "error" in response:
                     raise Mismatch(f"seq={request_seq} unsupported recorded decision exception")

@@ -1,0 +1,15 @@
+## Cel
+Usunąć deklarację `Typing :: Typed`, której pakiet nie potwierdza markerem PEP 561. Zachować obecne działanie bindingu Python.
+
+### Kryteria
+- `pyproject.toml` i metadane nowo zbudowanego wheel nie zawierają `Typing :: Typed`. [źródła: minimal]
+- Lokalne kontrole w roboczym worktree przechodzą; nie powstają nowe funkcje testów jednostkowych. [źródła: minimal]
+- Dokumentacja opisuje działanie projektu; liczba dodanych linii dokumentacji nie przekracza liczby usuniętych. [źródła: minimal]
+
+### Kroki
+- W osobnym, zapisywalnym worktree ponownie odczytać zmieniane pliki; obecny checkout pozostawić bez zmian. [źródła: minimal]
+- Usunąć wyłącznie classifier `Typing :: Typed` z `pyproject.toml`; nie dodawać `py.typed`. [źródła: minimal]
+- Przeczytać cały `README.md`. W sekcji bindingu usunąć powtórzenie kontraktu `tools/takt_step.sh` i zdania „No dual engine”. Zachować wymaganie dostępności Mojo. [źródła: minimal]
+- Zbudować wheel, sprawdzić jego metadane i uruchomić istniejące kontrole. Usunąć przyczyny błędów przed zakończeniem pracy. [źródła: minimal]
+- Zachować wszystkie poprawki wymagane przez lokalne kontrole, także poza obszarem zgłoszenia, w tym ewentualne wyrównanie przypiętych wersji. [źródła: minimal]
+- Przy każdej kolejnej zmianie dokumentacji przeczytać cały dotykany dokument i usunąć nieaktualne lub powielone treści. Nie zwiększać liczby linii dokumentacji. [źródła: minimal]
