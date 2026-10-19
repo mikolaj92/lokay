@@ -50,8 +50,8 @@ def shell_errors(source):
             yield "file-backed argument bypass"
         if token.rsplit("/", 1)[-1] == "gh":
             following = tokens[index + 1: index + 3]
-            if following == ["auth", "token"]:
-                continue
+            if following == ["auth", "token"] or following[:2] == ["api", "user"]:
+                continue  # service may probe before minting GH_TOKEN (#2169)
             if following and re.fullmatch(r"[a-z][a-z-]*", following[0]):
                 yield "shell gh bypass"
 
