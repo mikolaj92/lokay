@@ -7,7 +7,8 @@ from lokay.effects.pi import TimeoutExpired
 
 from lokay.build import generated_cleanup
 from lokay.effects.git import git
-from lokay.effects.pi import pi_env, run_process, scrubbed_env
+from lokay.effects.pi import run_process, scrubbed_env
+from lokay.effects.tests import UV_CACHE_DIR
 from lokay.store import rounds_append
 
 
@@ -59,23 +60,19 @@ def prepare_dependencies(worktree: Path, repo: dict, issue: int) -> dict:
             venv = cwd / ".venv"
             ok = False
             try:
-                env = pi_env(dict(os.environ), worktree)
-                try:
-                    env["UV_PROJECT_ENVIRONMENT"] = str(venv.absolute())
-                    env["UV_LOCKED"] = "1"
+                env = {**scrubbed_env(os.environ), "UV_CACHE_DIR": str(UV_CACHE_DIR), "UV_LOCKED": "1",
+                       "UV_PROJECT_ENVIRONMENT": str(venv.absolute())}
+                proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
+                log = f"exit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
+                if proc.returncode != 0 and "not a valid Python environment" in log:
+                    repair_venvs(worktree)
                     proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
-                    log = f"exit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
-                    if proc.returncode != 0 and "not a valid Python environment" in log:
-                        repair_venvs(worktree)
-                        proc = run_process(argv, cwd=cwd, env=env, timeout=3600)
-                        log += f"\nRetry:\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
-                    if proc.returncode == 0 and (venv / "bin" / "playwright").exists():
-                        proc = run_process([str(venv / "bin" / "playwright"), "install", "chromium"],
-                                           cwd=cwd, env=env, timeout=3600)
-                        log += f"\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
-                    ok = proc.returncode == 0
-                finally:
-                    shutil.rmtree(env["LOKAY_STATE_DIR"], ignore_errors=True)
+                    log += f"\nRetry:\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
+                if proc.returncode == 0 and (venv / "bin" / "playwright").exists():
+                    proc = run_process([str(venv / "bin" / "playwright"), "install", "chromium"],
+                                       cwd=cwd, env=env, timeout=3600)
+                    log += f"\nexit={proc.returncode}\n{proc.stdout or ''}{proc.stderr or ''}"
+                ok = proc.returncode == 0
             except (OSError, TimeoutExpired) as exc:
                 log = f"failed: {exc}"
             log = f"Setup: {cwd.relative_to(worktree)}: {argv}\n{log}"
