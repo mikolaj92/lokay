@@ -571,7 +571,7 @@ def run_pi(
     return proc
 
 
-def harness_session(worktree, prompt, directory, *, install=None, timeout=3600):
+def harness_session(worktree, prompt, directory, *, install=None, timeout=3600, resume=False):
     child = pi_env(os.environ, worktree)
     if child["LOKAY_PI_GITDIR"] == str(worktree.resolve()):
         child["LOKAY_PI_GITDIR"] = str(Path(child["LOKAY_STATE_DIR"]) / "protected-git")
@@ -582,6 +582,12 @@ def harness_session(worktree, prompt, directory, *, install=None, timeout=3600):
         skills = install.staging_dir / "skills"
         if skills.is_dir():
             args += ["--skill", str(skills)]
+    if resume:
+        args += ["--continue"]
+        prompt = (
+            "Your previous run on this task was interrupted. Continue the same task from the current "
+            "state of the worktree; MISSION and instructions are unchanged."
+        )
     try:
         proc = run_pi(worktree, prompt + "\nNever commit, push, or use GitHub. Leave edits for lokay.",
                       env=child, cwd=worktree, extra_dir=directory, timeout=timeout,

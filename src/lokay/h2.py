@@ -137,18 +137,26 @@ class LokayAdapter:
     def _launch(self, task_ref, install, run_id, timeout):
         directory = install.staging_dir.parent
         worktree = directory / "worktree"
-        git.detached_worktree(self.root, worktree, self.start)
-        try:
-            proc = harness_session(worktree, self.prompt, directory, install=install, timeout=timeout)
-            store.write_artifact(directory / "final.md", proc.stdout or "")
-            store.write_artifact(directory / "trajectory.txt", (proc.stdout or "") + "\n[ERROR]\n" + (proc.stderr or ""))
-            if proc.returncode:
-                raise RuntimeError(proc.stderr or "pi failed")
-            store.write_artifact(directory / "patch.diff", git.worktree_patch(worktree))
-            store.write_json(directory / "complete.json", {"run_id": run_id, "start": self.start})
-            return directory
-        finally:
-            git.worktree_remove(self.root, worktree)
+        resume = False
+        if (worktree.is_dir() and not worktree.is_symlink() and not (directory / "resumed").exists()
+                and any(path.is_file() for path in (directory / "sessions").glob("*.jsonl"))):
+            records = git.git(self.root, "worktree", "list", "--porcelain", "-z").split("\0\0")
+            resume = any("detached" in record.split("\0")
+                         and f"worktree {worktree.resolve()}" in record.split("\0") for record in records)
+        if resume:
+            store.write_artifact(directory / "resumed", "")
+            store.log_event("pi_resume", directory=str(directory))
+        else:
+            git.detached_worktree(self.root, worktree, self.start)
+        proc = harness_session(worktree, self.prompt, directory, install=install, timeout=timeout, resume=resume)
+        store.write_artifact(directory / "final.md", proc.stdout or "")
+        store.write_artifact(directory / "trajectory.txt", (proc.stdout or "") + "\n[ERROR]\n" + (proc.stderr or ""))
+        if proc.returncode:
+            raise RuntimeError(proc.stderr or "pi failed")
+        store.write_artifact(directory / "patch.diff", git.worktree_patch(worktree))
+        store.write_json(directory / "complete.json", {"run_id": run_id, "start": self.start})
+        git.worktree_remove(self.root, worktree)
+        return directory
 
     def delivered(self, run_dir):
         path = run_dir / "patch.diff"
@@ -194,5 +202,15 @@ def run_issue(repo, issue, root, start, title, body, difficulty, *, findings=Non
         return {"result": "failed", "reason": "; ".join(result.errors) or result.status}
     directory = Path(chosen)
     complete = all((Path(row["run_dir"]) / "complete.json").is_file() for row in result.to_dict()["base"])
+    executions = (adapter.spec.runs_root / "executions").resolve()
+    for record in git.git(root, "worktree", "list", "--porcelain", "-z").split("\0\0"):
+        fields = record.split("\0")
+        if "detached" not in fields:
+            continue
+        for field in fields:
+            if field.startswith("worktree "):
+                path = Path(field.removeprefix("worktree "))
+                if path.name == "worktree" and path.parent.parent == executions:
+                    git.worktree_remove(root, path)
     return {"result": "done", "patch": directory / "patch.diff",
             "summary": (directory / "final.md").read_text(), "all_ran": complete}
