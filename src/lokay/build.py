@@ -168,13 +168,6 @@ def pr_body(worktree: Path, spec: str, issue: int, verdict: dict | None = None) 
     return body
 
 
-def fix_publish(worktree: Path, branch: str, expected: str | None) -> dict:
-    pushed = push(worktree, branch, expected)
-    if pushed["result"] != "pushed":
-        return {"result": pushed["result"], "sha": pushed.get("sha", "")}
-    return {"result": "pushed", "sha": pushed["sha"]}
-
-
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, spec: str) -> dict:
     from lokay.store import state_read
     from lokay.types import pr_number

@@ -420,55 +420,51 @@ def shared_file_lock(path: Path):
 def write_heartbeat(result: str | None = None, **fields) -> dict:
     path = HOME / "heartbeat.json"
     with shared_file_lock(path.with_suffix(".lock")):
-        return _write_heartbeat(path, result, **fields)
-
-
-def _write_heartbeat(path: Path, result: str | None, **fields) -> dict:
-    previous = json.loads(path.read_text()) if path.exists() else {}
-    worker = worker_index()
-    keys = ("time", "version", "result", "repo", "issue", "node", "node_since",
-            "failures", "last_error", "idle_reason", "issue_since", "queue_since",
-            "last_merge", "worker")
-    snapshots = previous.get("workers", {})
-    workers = {index: {key: snapshot[key] for key in keys if key in snapshot}
-               for index in ("0", "1", "2")
-               if isinstance(snapshots, dict) and isinstance(snapshot := snapshots.get(index), dict)}
-    previous = workers.get(worker, {}) if worker is not None else previous
-    previous = {key: previous[key] for key in keys if key in previous}
-    if worker is not None:
-        previous["worker"] = worker
-    previous.setdefault("failures", 0)
-    previous.setdefault("last_error", None)
-    previous.setdefault("idle_reason", None)
-    previous.setdefault("issue_since", None)
-    previous.update({key: fields[key] for key in keys if key in fields})
-    if fields.get("failures") == 0:
-        previous["last_error"] = None
-    if result is not None:
-        previous["result"] = result
-    if previous.get("idle_reason") == "no_work":
-        previous["queue_since"] = None
-    elif result == "merged":
-        previous["last_merge"] = time.time()
-        previous["queue_since"] = time.time()
-    elif fields.get("repo") and not previous.get("queue_since"):
-        previous["queue_since"] = fields.get("issue_since") or time.time()
-    try:
-        installed = version("lokay")
-    except PackageNotFoundError:
-        installed = "unknown"
-    previous.update(time=datetime.now(timezone.utc).isoformat(),
-                    version=os.environ.get("LOKAY_VERSION", installed))
-    if worker is not None:
-        workers[worker] = dict(previous)
-    if workers:
-        previous["workers"] = workers
-    previous["main_status"] = {
-        repo: {key: status[key] for key in ("status", "since", "culprit", "issue") if key in status}
-        for repo, status in main_status().items()
-    }
-    write_json(path, previous)
-    return previous
+        previous = json.loads(path.read_text()) if path.exists() else {}
+        worker = worker_index()
+        keys = ("time", "version", "result", "repo", "issue", "node", "node_since",
+                "failures", "last_error", "idle_reason", "issue_since", "queue_since",
+                "last_merge", "worker")
+        snapshots = previous.get("workers", {})
+        workers = {index: {key: snapshot[key] for key in keys if key in snapshot}
+                   for index in ("0", "1", "2")
+                   if isinstance(snapshots, dict) and isinstance(snapshot := snapshots.get(index), dict)}
+        previous = workers.get(worker, {}) if worker is not None else previous
+        previous = {key: previous[key] for key in keys if key in previous}
+        if worker is not None:
+            previous["worker"] = worker
+        previous.setdefault("failures", 0)
+        previous.setdefault("last_error", None)
+        previous.setdefault("idle_reason", None)
+        previous.setdefault("issue_since", None)
+        previous.update({key: fields[key] for key in keys if key in fields})
+        if fields.get("failures") == 0:
+            previous["last_error"] = None
+        if result is not None:
+            previous["result"] = result
+        if previous.get("idle_reason") == "no_work":
+            previous["queue_since"] = None
+        elif result == "merged":
+            previous["last_merge"] = time.time()
+            previous["queue_since"] = time.time()
+        elif fields.get("repo") and not previous.get("queue_since"):
+            previous["queue_since"] = fields.get("issue_since") or time.time()
+        try:
+            installed = version("lokay")
+        except PackageNotFoundError:
+            installed = "unknown"
+        previous.update(time=datetime.now(timezone.utc).isoformat(),
+                        version=os.environ.get("LOKAY_VERSION", installed))
+        if worker is not None:
+            workers[worker] = dict(previous)
+        if workers:
+            previous["workers"] = workers
+        previous["main_status"] = {
+            repo: {key: status[key] for key in ("status", "since", "culprit", "issue") if key in status}
+            for repo, status in main_status().items()
+        }
+        write_json(path, previous)
+        return previous
 
 
 def lock_path(owner: str, repo: str) -> Path:

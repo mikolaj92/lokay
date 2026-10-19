@@ -299,8 +299,8 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
                             fix_step, pushed_pr, needs_help, refresh_body)
     from lokay import graph, h2
     from lokay.types import Run, Progress
-    from lokay.build import fix_publish, tidy_and_commit
-    from lokay.effects.git import apply_patch, git_try
+    from lokay.build import tidy_and_commit
+    from lokay.effects.git import apply_patch, git_try, push
     import hashlib
 
     escalated = escalate(picked, verdict.get("uwagi"))
@@ -384,7 +384,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     fixed = fix_step(picked, "harness2", fix_action, sha)
     if fixed["result"] == "failed":
         return "return", fixed
-    pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+    pushed = fix_step(picked, "fix_publish", lambda: push(worktree, branch, sha), sha)
     if pushed["result"] == "failed":
         return "return", pushed
     if pushed["result"] == "remote_moved" and pushed.get("sha"):

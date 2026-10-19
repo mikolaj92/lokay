@@ -5,7 +5,7 @@ from lokay.config import load_repos
 from lokay.scope import kind as change_kind
 from lokay.store import write_json
 from lokay.types import pr_number
-from lokay.effects.gh import dashboard_request as gh
+from lokay.effects.gh import gh_json
 
 import argparse
 import copy
@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -198,10 +199,10 @@ class Dashboard:
     def refresh(self):
         repos = enabled_repos()
         try:
-            limits = gh("api", "rate_limit")
+            limits = gh_json(["api", "rate_limit"])
             if number(limits["resources"]["core"]["remaining"]) < 200:
                 raise RuntimeError("Refresh skipped: core rate limit remaining < 200")
-        except (RuntimeError, KeyError, TypeError) as error:
+        except (RuntimeError, ValueError, subprocess.TimeoutExpired, OSError, KeyError, TypeError) as error:
             message = redact(str(error))
             with self.lock:
                 self.cache["error"] = message
@@ -213,7 +214,7 @@ class Dashboard:
             if index and self.stop.wait(1):
                 return
             try:
-                merged_data = gh("pr", "list", "-R", repo, "--state", "merged", "--search", "head:lokay/", "--limit", "100", "--json", "number,title,url,mergedAt,headRefName,additions,deletions,files")
+                merged_data = gh_json(["pr", "list", "-R", repo, "--state", "merged", "--search", "head:lokay/", "--limit", "100", "--json", "number,title,url,mergedAt,headRefName,additions,deletions,files"])
                 if not isinstance(merged_data, list):
                     raise RuntimeError("gh returned an invalid PR list")
                 for pr in merged_data:
@@ -223,7 +224,7 @@ class Dashboard:
                     with self.lock:
                         details = self.cache["pr_details"].get(key)
                     if details is None and (not pr.get("files") or number(pr.get("additions")) + number(pr.get("deletions")) == 0):
-                        details = gh("pr", "view", str(number(pr.get("number"))), "-R", repo, "--json", "additions,deletions,files")
+                        details = gh_json(["pr", "view", str(number(pr.get("number"))), "-R", repo, "--json", "additions,deletions,files"])
                         if not isinstance(details, dict):
                             raise RuntimeError("gh returned invalid PR details")
                         details = select(details, ("additions", "deletions", "files"))
@@ -232,14 +233,14 @@ class Dashboard:
                     if details is not None:
                         pr.update(details)
                 merged = prs(merged_data, True)
-                opened = prs(gh("pr", "list", "-R", repo, "--state", "open", "--limit", "100", "--json", "number,title,url,createdAt,headRefName,additions,deletions"), False)
-                issues = gh("issue", "list", "-R", repo, "--state", "open", "--limit", "1000", "--json", "number")
+                opened = prs(gh_json(["pr", "list", "-R", repo, "--state", "open", "--limit", "100", "--json", "number,title,url,createdAt,headRefName,additions,deletions"]), False)
+                issues = gh_json(["issue", "list", "-R", repo, "--state", "open", "--limit", "1000", "--json", "number"])
                 if not isinstance(issues, list):
                     raise RuntimeError("gh returned an invalid issue list")
                 item = {"merged": merged, "open": opened, "open_issues": len(issues), "last_refresh": time.time(), "error": None}
                 with self.lock:
                     self.cache["repos"][repo] = item
-            except RuntimeError as error:
+            except (RuntimeError, ValueError, subprocess.TimeoutExpired, OSError) as error:
                 with self.lock:
                     self.cache["repos"].setdefault(repo, {})["error"] = redact(str(error))
         with self.lock:

@@ -18,7 +18,7 @@ from dataclasses import replace
 from lokay.types import Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
-from lokay.effects.git import base_branch, worktree_remove
+from lokay.effects.git import base_branch, push, worktree_remove
 from lokay.effects.git import git, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
@@ -872,7 +872,7 @@ def _resume(picked: dict) -> tuple | dict:
             ] or [{"pytanie": "conflict", "plik": "", "log": "Complete the pending merge (MERGE_HEAD exists)."}]}
         state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "fix"}}, result="fix", sha=sha, verdict=verdict)
         return worktree, branch, sha, repo.get("test") or [], 1
-    from lokay.build import fix_publish, tidy_and_commit
+    from lokay.build import tidy_and_commit
 
     tidy_and_commit(worktree, "lokay resume")
     code, out, err = git_try(worktree, "fetch", "origin", branch)
@@ -896,7 +896,7 @@ def _resume(picked: dict) -> tuple | dict:
                 reason = "sha diverged: conflict" if behind != 0 else f"resume ff: {err.strip() or out.strip()}"
                 return needs_help(picked, reason, sha)
         if behind != 0:
-            published = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+            published = fix_step(picked, "fix_publish", lambda: push(worktree, branch, sha), sha)
             if published.get("result") != "pushed":
                 if published.get("result") == "failed":
                     return published
@@ -919,7 +919,6 @@ def _resume(picked: dict) -> tuple | dict:
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.review import hunks
-    from lokay.build import fix_publish
     from lokay.effects.git import git_try
     from lokay.effects.gh import check_comment, pr_files
     from lokay import finish
@@ -998,7 +997,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     _retry(picked, "check", lambda: check_comment(picked["repo"], conflict_pr_number,
                            rounds + 1, conflict_verdict, {"result": "conflict"}))
             else:
-                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+                pushed = fix_step(picked, "fix_publish", lambda: push(worktree, branch, sha), sha)
                 if pushed["result"] == "failed":
                     return pushed
                 if pushed["result"] == "remote_moved" and pushed.get("sha"):
