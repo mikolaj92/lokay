@@ -23,8 +23,14 @@ export LOKAY2_DECISION_BASE_URL="${LOKAY2_DECISION_BASE_URL-http://192.168.1.52:
 export LOKAY2_DECISION_MODEL="${LOKAY2_DECISION_MODEL-GLM-5.3-Flash-EXL3}"
 export LOKAY_TICK_SECONDS="${LOKAY_TICK_SECONDS-60}"
 ROOT="$LOKAY_ROOT"
+# Mint GH_TOKEN only when it authenticates. A revoked token in the process
+# env overrides keyring/hosts.yml for the life of the service (see #2169).
 if [[ -z "${GH_TOKEN:-}" ]]; then
-  export GH_TOKEN="$(gh auth token 2>/dev/null || true)"
+  _tok="$(gh auth token 2>/dev/null || true)"
+  if [[ -n "${_tok}" ]] && GH_TOKEN="${_tok}" gh api user -q .login >/dev/null 2>&1; then
+    export GH_TOKEN="${_tok}"
+  fi
+  unset _tok
 fi
 if [[ ! -x "$ROOT/.venv/bin/lokay" ]]; then
   printf 'lokay executable unavailable: %s/.venv/bin/lokay\n' "$ROOT" >&2
