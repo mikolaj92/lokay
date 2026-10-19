@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lokay.config import repo as repo_config
 from lokay.effects.gh import gh_json, gh_ok, fit_body
-from lokay.effects.git import git_try, base_branch
+from lokay.effects.git import git, base_branch
 from lokay.store import main_status, save_main_status
 from lokay.types import Finding, parse_finding
 
@@ -58,15 +58,9 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     if config is None:
         config = repo_config(repo)
 
-    def checked(path, args):
-        code, out, err = git_try(path, *args)
-        if code:
-            raise RuntimeError(err or out)
-        return out.strip()
-
     base = base or base_branch(clone_path)
-    checked(clone_path, ["fetch", "origin", base])
-    sha = checked(clone_path, ["rev-parse", f"origin/{base}"])
+    git(clone_path, "fetch", "origin", base, timeout=60)
+    sha = git(clone_path, "rev-parse", f"origin/{base}", timeout=60)
     previous = main_status().get(repo, {})
     baseline = previous.get("baseline", {})
     argv = config.get("test") or []
@@ -76,7 +70,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
             or baseline.get("ci", {}).get("tested") is not True):
         with tempfile.TemporaryDirectory(prefix="lokay-main-") as temporary:
             worktree = Path(temporary) / "checkout"
-            checked(clone_path, ["worktree", "add", "--detach", str(worktree), sha])
+            git(clone_path, "worktree", "add", "--detach", str(worktree), sha, timeout=60)
             try:
                 from lokay.setup import prepare_dependencies
 
@@ -90,7 +84,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 baseline = {"sha": sha, "argv": argv, "guard_version": GUARD_VERSION,
                             "ci": ci, "lockfile": asdict(lock)}
             finally:
-                checked(clone_path, ["worktree", "remove", "--force", str(worktree)])
+                git(clone_path, "worktree", "remove", "--force", str(worktree), timeout=60)
     ci = baseline["ci"]
     tested = ci.get("tested") is True
     lock = baseline["lockfile"]
@@ -103,7 +97,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
               "checked_at": time.time()}
     if status == "red":
         save_main_status(repo, result)
-        diff = checked(clone_path, ["show", "--format=fuller", "--first-parent", merge_sha]) if merge_sha else ""
+        diff = git(clone_path, "show", "--format=fuller", "--first-parent", merge_sha, timeout=60) if merge_sha else ""
         lock_log = "\n".join(
             f"{item.plik}:{item.linia_od}: {item.zmiana}" for raw in lock["findings"]
             if isinstance(item := parse_finding(raw), Finding))

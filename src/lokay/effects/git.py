@@ -24,22 +24,16 @@ def base_branch(path: Path, *, branch: str | None = None) -> str:
     from lokay.effects.gh import _gh, open_pr_for
     import json
 
-    def checked(args):
-        code, out, err = git_try(path, *args)
-        if code:
-            raise RuntimeError(err or out)
-        return out.strip()
-
-    root = Path(checked(["rev-parse", "--show-toplevel"]))
+    root = Path(git(path, "rev-parse", "--show-toplevel", timeout=60))
     root_key = (root, branch)
     if root_key not in BASE_BRANCHES:
-        common = (path / checked(["rev-parse", "--git-common-dir"])).resolve()
+        common = (path / git(path, "rev-parse", "--git-common-dir", timeout=60)).resolve()
         if common not in REPOSITORIES:
             code, out, err = _gh(["repo", "view", "--json", "nameWithOwner,defaultBranchRef"], cwd=root)
             if code == 0:
                 REPOSITORIES[common] = json.loads(out)
         repo = REPOSITORIES.get(common, {})
-        head = branch if branch is not None else checked(["branch", "--show-current"])
+        head = branch if branch is not None else git(path, "branch", "--show-current", timeout=60)
         pr = open_pr_for(repo["nameWithOwner"], head) if head and repo else None
         base = (pr or {}).get("baseRefName") or (repo.get("defaultBranchRef") or {}).get("name")
         if not base:
