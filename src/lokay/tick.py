@@ -19,7 +19,7 @@ from lokay.types import Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked,
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, push, worktree_remove
-from lokay.effects.git import git, head as git_head
+from lokay.effects.git import git, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
@@ -300,6 +300,20 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 continue
                             state_update(name, issue, _event={"action": "closed"})
                             states[issue] = state_read(name, issue)
+                    finally:
+                        release_lock(held)
+        closed = [issue for issue, saved in states.items() if saved.get("result") == "closed"]
+        root = Path(repo["clone_path"]).expanduser()
+        if closed and root.is_dir():
+            code, out, _ = git_try(root, "for-each-ref", "--format=%(refname)", "refs/heads/lokay/")
+            branches = set(out.splitlines())
+            cleanup_issues = [issue for issue in closed
+                              if _repo_paths(repo, issue)[1].exists() or f"refs/heads/lokay/{issue}" in branches]
+            if code == 0 and cleanup_issues:
+                held = acquire_lock(lock_path(name.split("/")[0], name))
+                if held["result"] == "held":
+                    try:
+                        for issue in cleanup_issues:
                             root, worktree = _repo_paths(repo, issue)
                             cleanup = worktree_remove(root, worktree, safe=True, branch=f"lokay/{issue}")
                             store.log_event("closed_cleanup", repo=name, issue=issue, outcome=cleanup)
