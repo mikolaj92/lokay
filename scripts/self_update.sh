@@ -24,6 +24,7 @@ git merge --ff-only origin/main >&2
 head=$(git rev-parse HEAD)
 if [[ "$head" != "$before" ]]; then
   if command -v uv >/dev/null 2>&1; then
+    export UV_CACHE_DIR="${UV_CACHE_DIR:-$HOME/.lokay/uv-cache}"
     uv sync >&2
   fi
   result=updated
