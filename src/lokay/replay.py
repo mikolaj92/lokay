@@ -58,6 +58,7 @@ def main(argv: list[str]) -> int:
                    if path.name.endswith((".jsonl", ".jsonl.gz"))) if source.is_dir() else [source]
     count = 0
     ticks = 0
+    retired = 0
     row = {}
     try:
         if not paths:
@@ -72,6 +73,15 @@ def main(argv: list[str]) -> int:
                     rows = [json.loads(line) for line in stream]
                 if any(value is not None and rows[0].get(key) != value for key, value in
                        (("repo", filters.repo), ("issue", filters.issue))):
+                    continue
+                reason = {
+                    "anonimizator3000__74__plan": "#2165 replaced the recorded Plan/Build contract with harness2",
+                    "anonimizator3000__74__build": "#2165 replaced the recorded Plan/Build contract with harness2",
+                    "datasource-kit__96__check": "#2165: Check no longer reads plan.md (lens input, pr_body Cel, plan_target, scope lists); recorded effects include those reads",
+                }.get(path.parent.name)
+                if reason:
+                    retired += 1
+                    print(f"replay: retired {path.parent.name}: {reason}")
                     continue
                 try:
                     segment(path, rows)
@@ -115,6 +125,6 @@ def main(argv: list[str]) -> int:
               f"event={row.get('event')} error={exc}", file=sys.stderr)
         return 1
     print(f"replay: {count}/{count} transitions ok")
-    if ticks:
-        print(f"replay: {ticks}/{ticks} tick segments ok")
+    if ticks or retired:
+        print(f"replay: {ticks}/{ticks} tick segments ok, {retired} retired")
     return 0

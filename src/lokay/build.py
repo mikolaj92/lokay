@@ -1,22 +1,16 @@
 from __future__ import annotations
 
 import os
-import re
 import hashlib
-import shutil
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast
 
 from lokay import store
 
-from lokay.effects.git import base_branch, git_try, commit_paths, git, head as git_head, push
-from lokay.effects.gh import checks_table, open_pr_for, pr_create
-from lokay.effects.pi import pi_env, run_pi
+from lokay.effects.git import base_branch, git_try, commit_paths, git, push
+from lokay.effects.gh import checks_table, pr_create
 from lokay.effects.tests import check_uv_lock
-from lokay.safety import untrusted_issue_block
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
-from lokay.types import IssueKind
 
 LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
@@ -164,164 +158,14 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     return committed, junk
 
 
-def pr_body(worktree: Path, plan_path: Path, issue: int, verdict: dict | None = None) -> str:
-    try:
-        plan = plan_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise RuntimeError(f"cannot read plan {plan_path}: {exc}") from exc
-    goal = re.search(r"^## Cel[^\n]*\n.*?(?=^## |\Z)", plan, re.MULTILINE | re.DOTALL)
+def pr_body(worktree: Path, spec: str, issue: int, verdict: dict | None = None) -> str:
     base = f"origin/{base_branch(worktree)}"
     stat = git(worktree, "diff", "--stat", f"{base}...HEAD")
-    body = f"Issue #{issue}\n\n" + (goal.group().strip() if goal else "## Cel")
+    body = f"Issue #{issue}\n\n" + spec
     body += f"\n\n## Zmienione pliki\n\n```text\n{stat}\n```\n"
     if verdict and verdict.get("checks"):
         body += f"\n## Checks\n\nSHA: `{verdict.get('sha', '')}`\n\n" + checks_table(verdict["checks"])
     return body
-
-
-def recover_no_changes(worktree: Path, outcome: dict, branch: str | None, *, picked: dict | None = None) -> dict:
-    if picked is None:
-        upstream = (git(worktree, "for-each-ref", "--format=%(upstream:short)", f"refs/heads/{branch}") if branch else "")
-        if branch is not None and upstream == f"origin/{branch}":
-            git(worktree, "fetch", "origin", branch)
-            if int(git(worktree, "rev-list", "--count", f"{upstream}..HEAD")) > 0:
-                return {"result": "done", "artifact": outcome["head"], "pi_response": outcome["pi_tail"]}
-        return {
-            "result": "failed",
-            "reason": "no_changes",
-            "explanation": f"pi exited 0 but made no commits in {worktree}. pi said:\n" + outcome["pi_tail"],
-            "artifact": str(worktree),
-        }
-    if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
-        pr = open_pr_for(picked["repo"], cast(str, branch))
-        if pr:
-            base = base_branch(worktree)
-            git(worktree, "fetch", "origin", base)
-            if int(git(worktree, "rev-list", "--count", f"origin/{base}..HEAD")) > 0:
-                store.rounds_append(picked["repo"], picked["issue"],
-                                   "no_changes: fix already on branch, checking existing PR")
-                outcome = {**outcome, "result": "done", "reason": None,
-                           "artifact": git_head(worktree)}
-        if outcome.get("result") == "no_changes":
-            outcome = {**outcome, "result": "failed", "reason": "no_changes"}
-    return outcome
-
-
-def build_code(
-    worktree: Path,
-    plan: str,
-    title: str,
-    body: str | None,
-    env: dict[str, str],
-    expected_branch: str | None = None,
-    clone_path: Path | str | None = None,
-    build_note: str | None = None,
-    previous_head: str | None = None,
-    kind: IssueKind = "code",
-) -> dict:
-    previous_head = previous_head or git_head(worktree)
-    clean = pi_env(env, worktree)
-    try:
-        clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
-        exclude_caches(worktree)
-        before = worktree_status(worktree)
-        prompt = (
-            Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
-            + "\n\nPlan:\n" + plan
-            + "\n\n" + untrusted_issue_block(title, body)
-            + ("\n\n" + build_note if build_note else "")
-        )
-        if kind == "docs_change":
-            prompt += "\n\n" + Path(__file__).resolve().parents[2].joinpath("prompts/build_docs_change.md").read_text()
-        proc = run_pi(
-            worktree,
-            prompt,
-            clone_path,
-            env=clean,
-            cwd=worktree,
-            timeout=3600,
-        )
-    finally:
-        shutil.rmtree(clean["LOKAY_STATE_DIR"], ignore_errors=True)
-    if isinstance(proc, dict):
-        return proc
-    if proc.returncode != 0:
-        tidy_and_commit(worktree, "lokay build", before)
-        explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
-        return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}
-    from lokay.scope import is_test
-
-    base = f"origin/{base_branch(worktree)}"
-    added = set()
-    for args in (["diff", "--name-status", "--diff-filter=A", f"{base}..HEAD"],
-                 ["diff", "--name-status", "--diff-filter=A", "HEAD"],
-                 ["diff", "--cached", "--name-status", "--diff-filter=A"]):
-        added.update(line.split("\t", 1)[1] for line in git(worktree, *args).splitlines() if "\t" in line)
-    added.update(git(worktree, "ls-files", "--others", "--exclude-standard").splitlines())
-    removed = sorted(path for path in added if is_test(path))
-    for path in removed:
-        git(worktree, "rm", "-f", "--ignore-unmatch", "--", path)
-        file = worktree / path
-        if file.exists() or file.is_symlink():
-            store.remove_file(file)
-    tidy_and_commit(worktree, "lokay build", before)
-    if removed:
-        remaining = git(worktree, "diff", "--name-only", base, "HEAD").splitlines()
-        deleted = set(git(worktree, "diff", "--name-only", "--diff-filter=D", previous_head, "HEAD").splitlines())
-        if not any(not is_test(path) for path in remaining) and not (deleted & set(removed)):
-            return {"result": "failed", "reason": "tests_only",
-                    "explanation": "Build added only tests: " + ", ".join(removed) + ". Implement the production change."}
-    branch_now = git(worktree, "rev-parse", "--abbrev-ref", "HEAD")
-    log = git(worktree, "log", "--oneline", f"{previous_head}..HEAD")
-    head = git_head(worktree)
-    wrong = expected_branch is not None and branch_now != expected_branch
-    pi_tail = (proc.stdout or proc.stderr or "")[-1500:]
-    if wrong:
-        where = expected_branch or "lokay/<issue>"
-        explanation = (
-            f"commit is outside the issue worktree {worktree}: "
-            f"HEAD {head} on {branch_now}, expected branch {where}. pi said:\n" + pi_tail
-        )
-        return {
-            "result": "failed",
-            "reason": "outside_worktree",
-            "explanation": explanation,
-            "artifact": str(worktree),
-        }
-    if not log:
-        return recover_no_changes(worktree, {"head": head, "pi_tail": pi_tail}, expected_branch)
-    return {"result": "done", "artifact": head, "pi_response": pi_tail}
-
-
-def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
-    before = worktree_status(worktree)
-    clean = pi_env(env, worktree)
-    try:
-        clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
-        proc = run_pi(
-            worktree,
-            prompt,
-            clone_path,
-            env=clean,
-            cwd=worktree,
-            timeout=3600,
-            missing_is_failure=True,
-        )
-    finally:
-        shutil.rmtree(clean["LOKAY_STATE_DIR"], ignore_errors=True)
-    if isinstance(proc, dict):
-        return proc
-    tidy_and_commit(worktree, "lokay fix", before)
-    if proc.returncode != 0:
-        return {"result": "failed", "artifact": ""}
-    code, out, err = git_try(worktree, "rev-parse", "HEAD", timeout=30)
-    if code:
-        raise RuntimeError(err.strip())
-    sha = out.strip()
-    if sha == previous:
-        return {"result": "failed", "reason": "no_changes", "artifact": "",
-                "pi_response": proc.stdout or proc.stderr or ""}
-    return {"result": "done", "artifact": sha, "pi_response": (proc.stdout or proc.stderr or "")[-1500:]}
 
 
 def fix_publish(worktree: Path, branch: str, expected: str | None) -> dict:
@@ -331,12 +175,12 @@ def fix_publish(worktree: Path, branch: str, expected: str | None) -> dict:
     return {"result": "pushed", "sha": pushed["sha"]}
 
 
-def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
+def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, spec: str) -> dict:
     from lokay.store import state_read
     from lokay.types import pr_number
 
     saved = state_read(repo_name, issue)
-    body = pr_body(worktree, plan_path, issue, saved.get("last_check") or saved.get("verdict"))
+    body = pr_body(worktree, spec, issue, saved.get("last_check") or saved.get("verdict"))
     pushed = push(worktree, branch, expected)
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}

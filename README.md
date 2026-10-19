@@ -3,10 +3,11 @@
 Plan, Build, Check, Fix, Merge. Merge is the only end.
 
 `lokay start` runs the graph in Python (`src/lokay/tick.py`), the only runtime.
-Plan revisions return to Plan checking; Fix returns to Check. Failed steps retry.
-
-Analiza przypiętej rewizji: [maszyna stanów](STATE_MACHINE.md),
-[ryzyka R1–R25](RISKS.md) i [weryfikacja incydentów](INCIDENTS.md).
+Plan classifies difficulty. harness2 runs Build and Fix through `pi -p`;
+Fix returns to Check. Failed steps retry. The issue body is the specification.
+Changed existing tests must be explicitly named in that body. There are no plan file lists or `plan_target` check.
+Harness libraries persist per repository under `~/.lokay/harness2/library/agg/`;
+runs live under `~/.lokay/harness2/runs/`. See [the state machine](STATE_MACHINE.md).
 
 Install the LaunchAgents with `bash scripts/install_service.sh` from a checkout with
 `.venv/bin/lokay`. The template is `scripts/ai.mikolaj.lokay2.plist`.
@@ -52,7 +53,7 @@ It must be a numeric string representing finite positive seconds; invalid values
 stop the tick before queue selection. For example, `LOKAY_TICK_BUDGET=0.25`
 sets a quarter-second budget. A shared monotonic deadline starts before queue
 selection. Plan, Check/Fix, Merge and process retries stop starting work at the
-deadline. The saved node, SHA, findings and Plan phase resume on the next tick;
+deadline. The saved node, SHA and findings resume on the next tick;
 the tick owner releases its lock even if saving fails.
 
 Process calls use the minimum of their operation timeout, 3600 seconds and the
@@ -110,8 +111,9 @@ an unavailable dependency fails the check. It then isolates the home, temporary
 directory and uv cache inside the checkout and runs
 `uv run lokay replay fixtures/replay/` offline, without syncing dependencies.
 An unexpected GitHub CLI call fails without logging its arguments.
-Replay checks recorded transitions and stops at the first mismatch.
-Blobs may be plain or gzip-compressed.
+Replay checks recorded transitions and stops at the first mismatch. Blobs may be plain or gzip-compressed.
+Rule #2165 logs retirement of exactly `anonimizator3000__74__plan` and `anonimizator3000__74__build`.
+The Check segment remains, with an explicit legacy recorded contract; fixtures stay unchanged.
 
 ### Checkout configuration is not host configuration
 
@@ -127,16 +129,12 @@ replace **only** that repo's `test` with `["bash", "scripts/check.sh"]`.
 Preserve the old value for rollback and leave every other entry unchanged.
 Host edits and agent restarts require separate authorization.
 
-After authorization, let the existing runner resume PR #1784 with
-`LOKAY2_REPO=mikolaj92/lokay` and `LOKAY2_ISSUE=1759`. Do not open another PR.
-`resume()` reloads the repo configuration and reads the PR's current head SHA.
+`resume()` reloads repository configuration and the PR's current head SHA.
 Persisted local CI is reusable only when both SHA and exact test argv match.
 A changed argv or legacy state without argv forces a new local check, even on
 an unchanged SHA. The new result replaces the cache through normal state writes;
 round logs remain intact. No extra commit is needed to invalidate this cache.
-An already running `_finish()` holds its test argv locally; its internal Check
-retry does not reload that list. Use a new runner invocation/resume after the
-active invocation ends, not a concurrent runner or a manual state edit.
+A running Check keeps its test argv. Resume after it ends; do not run concurrently or edit state manually.
 `lokay start --check` only probes host readiness; it does not execute the suite.
 Require the runner's Check log to show `bash scripts/check.sh` and the full
 summary on the final PR SHA. A manual green suite is not that evidence.
