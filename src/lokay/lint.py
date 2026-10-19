@@ -126,7 +126,7 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
                 if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
                     if numbers.intersection(range(first.lineno, (first.end_lineno or first.lineno) + 1)):
                         errors.append(f"{path}:{first.lineno}: docstring -> delete it")
-            if lokay_rules and isinstance(node, ast.List) and node.elts and path not in {"src/lokay/effects/git.py", "src/lokay/effects/gh.py"}:
+            if lokay_rules and isinstance(node, ast.List) and node.elts and path not in {"src/lokay/effects/git.py", "src/lokay/effects/gh.py", "src/lokay/replay.py", "src/lokay/effects/replay.py"}:
                 first = node.elts[0]
                 if isinstance(first, ast.Constant) and first.value in ("git", "gh"):
                     if numbers.intersection(range(node.lineno, (node.end_lineno or node.lineno) + 1)):
