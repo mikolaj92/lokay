@@ -47,10 +47,125 @@ def unpack(value, home: Path, *, source: Path | None = None):
     return json.loads(raw)
 
 
+def extract(source: Path, directory: Path, repo: str, issue: int, prefix: str) -> None:
+    from tempfile import TemporaryDirectory
+    from lokay import store
+
+    opener = gzip.open if source.suffix == ".gz" else open
+    with opener(source, "rt") as stream:
+        rows = [row for line in stream if (row := json.loads(line)).get("repo") == repo
+                and row.get("issue") == issue and row.get("tick", "").startswith(prefix)]
+    if len({row["tick"] for row in rows}) != 1:
+        raise ValueError("tick prefix must select exactly one tick/repo/issue")
+    if any(row.get("call") == "pi" for row in rows):
+        raise ValueError("choose a tick without pi calls")
+    rows.sort(key=lambda row: row["seq"])
+    if len({row["seq"] for row in rows}) != len(rows):
+        raise ValueError("duplicate tick sequence")
+    for row in rows:
+        for key in ("effect", "before", "event", "after"):
+            if key in row:
+                row[key] = unpack(row[key], source.parent, source=source.parent)
+    transitions = [row for row in rows if row["kind"] == "transition"]
+    first = next((row for row in transitions if row["before"].get("node") == "check"
+                  and row["event"].get("fields", {}).get("tested") is False
+                  and "local_ci" in row["event"].get("fields", {})), None)
+    if first is None:
+        raise ValueError("no Check local-test boundary")
+    last = next((row for row in transitions if row["seq"] > first["seq"]
+                 and row["event"].get("action") == "verdict"), None)
+    if last is None or last["event"]["outcome"].get("result") not in ("fix", "merge"):
+        raise ValueError("no Check fix or merge verdict")
+    calls = [row["effect"] for row in rows if row["kind"] == "call" and row["seq"] <= last["seq"]]
+    if any("requests" not in effect and "argv" not in effect for effect in calls):
+        raise ValueError("unsupported recorded call")
+    ci = next(row["event"]["fields"]["local_ci"] for row in transitions
+              if first["seq"] < row["seq"] <= last["seq"]
+              and row["event"].get("fields", {}).get("local_ci"))
+    tests = ci["argv"]
+    worktree = Path(ci["tested_cwds"][0])
+    roots = [effect["attempts"][-1]["stdout"].strip() for effect in calls
+             if effect.get("argv") == ["git", "rev-parse", "--show-toplevel"]]
+    root = next(Path(value) for value in roots if value != str(worktree))
+    diffs = [effect for effect in calls if effect.get("argv", [])[:2] == ["git", "diff"]
+             and len(effect["argv"]) == 3 and "...HEAD" in effect["argv"][2]]
+    diff = diffs[-1]["attempts"][-1]["stdout"]
+    base = diffs[-1]["argv"][2].removeprefix("origin/").removesuffix("...HEAD")
+    gh = next(effect["argv"][0] for effect in calls if Path(effect.get("argv", [""])[0]).name == "gh")
+    decision_effect = next(effect for effect in calls if "requests" in effect)
+    decision = decision_effect["input"]["state"]
+    wire = decision_effect["requests"][0]["body"]
+    run = Path(decision["diff_path"]).parent
+    home = run.parents[2]
+    diff_path = str(run / "check-input.patch")
+    test_outputs = [row["effect"]["attempts"][-1] for row in rows
+                    if first["seq"] < row["seq"] < last["seq"] and row.get("call")
+                    and row["effect"].get("argv") == tests]
+    test_log = "\n".join(attempt["stdout"] + attempt["stderr"] for attempt in test_outputs)
+    if not ci["log"].endswith("\n" + test_log):
+        raise ValueError("local-test log does not match recorded output")
+    setup = {"log": ci["log"][:-(len(test_log) + 1)], "failed": []}
+    contents = {}
+    for effect in calls:
+        argv = effect.get("argv", [])
+        if not argv or argv[0] != "git":
+            continue
+        output = effect["attempts"][-1]
+        if output["returncode"]:
+            continue
+        if argv[1:] == ["ls-files", "-z"] or argv[1:5] == ["ls-tree", "-r", "--name-only", "-z"]:
+            for name in output["stdout"].split("\0"):
+                if name:
+                    contents.setdefault(str(worktree / name), "")
+        if argv[1:2] == ["show"] and len(argv) == 3 and argv[2].startswith("HEAD:"):
+            contents[str(worktree / argv[2][5:])] = output["stdout"]
+    from lokay.lint import diff_lines
+
+    lock_lines = {}
+    for name, number, kind, text in diff_lines(diff):
+        if kind == "+" and Path(name).name == "uv.lock":
+            lock_lines.setdefault(str(worktree / name), []).append(text)
+    for target, lines in lock_lines.items():
+        if not contents.get(target):
+            contents[target] = "\n".join(lines) + "\n"
+    contents[diff_path] = diff
+    contents[str(root / ".git/HEAD")] = f"ref: refs/heads/{base}\n"
+    contents[str(worktree / ".git")] = f"gitdir: {root}/.git/worktrees/{worktree.name}\n"
+    for effect in calls:
+        argv = effect.get("argv", [])
+        if argv[1:3] == ["pr", "edit"] and "--body" in argv:
+            body = argv[argv.index("--body") + 1]
+            contents[str(run / "plan.md")] = body.split("\n\n", 1)[1].split("\n\n## Zmienione pliki", 1)[0]
+            break
+    selected = [row for row in rows if first["seq"] <= row["seq"] <= last["seq"]
+                and row["kind"] in ("call", "transition")]
+    manifest = {"entry": "check", "api": "chat" if "messages" in wire else "tensorfold" if "input" in wire else "mini",
+                "model": wire.get("model", ""), "repo": {"name": repo, "clone_path": str(root), "test": tests,
+                "merge": "on", "syntax_only": ci.get("syntax_only", False)}, "issue": issue,
+                "gh": gh, "time": first["event"]["ts"], "paths": {str(home): "home/.lokay",
+                str(root.parent): "worktree"}, "before": first["before"], "base": base,
+                "setup": setup, "diff_path": diff_path, "outcome": last["event"]["outcome"],
+                "diff": "diff.patch", "uv": next((effect["argv"][0] for effect in calls
+                if Path(effect.get("argv", [""])[0]).name == "uv"), "uv")}
+    with TemporaryDirectory(prefix="lokay-extract-") as temporary:
+        staging = Path(temporary)
+        files = {}
+        for index, (target, text) in enumerate(contents.items()):
+            if not any(Path(target).is_relative_to(old) for old in manifest["paths"]):
+                raise ValueError("recorded file escapes sandbox paths")
+            name = "diff.patch" if target == diff_path else f"file-{index}.txt"
+            store.write_artifact(staging / name, text)
+            files[target] = name
+        store.write_segment(directory, staging, {**manifest, "files": files}, selected)
+
+
 def main(argv: list[str]) -> int:
     replay = argparse.ArgumentParser(prog="lokay replay")
     replay.add_argument("path", type=Path, nargs="?", default=Path("fixtures"))
-    replay.add_argument("--rerecord", type=Path)
+    mode = replay.add_mutually_exclusive_group()
+    mode.add_argument("--rerecord", type=Path)
+    mode.add_argument("--extract", type=Path)
+    replay.add_argument("--tick")
     replay.add_argument("--repo")
     replay.add_argument("--issue", type=int)
     filters = replay.parse_args(argv)
@@ -61,6 +176,14 @@ def main(argv: list[str]) -> int:
     ticks = 0
     row = {}
     try:
+        if filters.extract is not None:
+            if not filters.repo or filters.issue is None or not filters.tick or source.is_dir():
+                raise ValueError("--extract requires a log file, --repo, --issue and --tick")
+            extract(source, filters.extract, filters.repo, filters.issue, filters.tick)
+            print(f"replay: extracted {filters.extract}")
+            return 0
+        if filters.tick is not None:
+            raise ValueError("--tick requires --extract")
         if filters.rerecord is not None and (source.is_dir() or not source.with_suffix(".json").is_file()):
             raise ValueError("--rerecord requires a single segment path")
         if filters.rerecord is not None and filters.rerecord.exists():
@@ -115,7 +238,7 @@ def main(argv: list[str]) -> int:
                             fromfile="expected", tofile="got", lineterm="")), file=sys.stderr)
                         return 1
                     count += 1
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, StopIteration, IndexError) as exc:
         print(f"replay: seq={row.get('seq')} node={row.get('node')} "
               f"event={row.get('event')} error={exc}", file=sys.stderr)
         return 1
