@@ -192,9 +192,6 @@ def weakened_tests(x: CheckInput) -> CheckResult:
     if result.get("result") == "green":
         return CheckResult("weakened_tests", "pass",
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
-    if result.get("result") == "red" and result.get("executed", 0) > 0:
-        return CheckResult("weakened_tests", "pass",
-                           "base versions of changed tests fail on the new code but the issue names those tests: " + ", ".join(paths), ())
     return _count_weakened_tests(x)
 
 
