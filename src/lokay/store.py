@@ -9,6 +9,7 @@ import shutil
 import time
 import uuid
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 from json import dumps as dumps
 from tempfile import NamedTemporaryFile
@@ -21,7 +22,7 @@ from typing import Any
 from lokay import graph
 from lokay.config import HOME
 from lokay.redact import redact_text
-from lokay.types import CheckResult, Event, Run, event_record, parse_event, pr_number
+from lokay.types import PLAN_RESET, CheckResult, Event, Run, event_record, parse_event, pr_number
 
 RUNS = HOME / "runs"
 LOCKS = HOME / "locks"
@@ -204,8 +205,7 @@ def escalation_fields(state: dict) -> dict:
         "difficulty": levels[min(levels.index(difficulty) + 1, 3)],
         "node": "plan", "result": "pending", "retry_at": 0, "awaiting": None,
         "no_progress": 0, "fix_history": [], "fix_counts": [],
-        "plan_prompt": None, "plan_branches": {}, "plan_synthesis": {},
-        "plan_accepted_sha": None, "plan_phase": "write", "plan_notes": [],
+        **deepcopy(PLAN_RESET), "plan_prompt": None, "plan_notes": [],
         "wait_escape": None, "verdict": None, "failures": 0, "last_error": None,
         "reason": None, "ladder_since": time.time(),
     }
@@ -365,6 +365,12 @@ def write_json(path: Path, value: object, *, indent: int | None = None,
 
 
 def normalize_state(state: dict) -> None:
+    if state.get("node") == "plan" and state.get("difficulty") == "hard" and (state.get("plan_branches") or state.get("plan_synthesis")):
+        state.update(deepcopy(PLAN_RESET), node="plan", result="pending", retry_at=0,
+                     awaiting=None, failures=0, reason=None, last_error=None, plan_rounds=0,
+                     plan_prompt=None, plan_notes=[], fix_history=[], fix_counts=[])
+    if state.get("plan_phase") is not None and state["plan_phase"] not in ("write", "check"):
+        state["plan_phase"] = "write"
     if "pr" in state:
         state["pr"] = pr_number(state["pr"])
     if "awaiting" in state and state["awaiting"] not in (None, "children"):

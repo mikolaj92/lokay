@@ -220,15 +220,6 @@ def render_synthesis(data: dict) -> str:
             f"### Odrzucone\n{rejected}\n")
 
 
-def synthesize(paths: dict[str, Path], issue: str, art: Path, *, cwd: Path | None = None) -> dict:
-    prompt = (PROMPTS / "plan_synthesis.md").read_text() + "\n" + issue
-    for perspective, path in paths.items():
-        if perspective not in PERSPECTIVES:
-            raise ValueError("unknown synthesis input")
-        prompt += f"\n\nAccepted branch: {perspective}\n{path.read_text()}"
-    return write_synthesis(prompt, art, set(paths), cwd=cwd)
-
-
 def write_synthesis(prompt: str, art: Path, accepted: set[str], *, cwd: Path | None = None) -> dict:
     artifact = art.with_suffix(".json")
     prompt += f"\nWrite JSON only to {artifact}. Do not write Markdown.\n"
@@ -273,7 +264,7 @@ def difficulty_questions(title: str, body: str | None) -> dict:
         "id": "difficulty", "type": "choice",
         "instructions": "Rate implementation difficulty for one PR.",
         "options": dict(zip(DIFFICULTIES, ("one plan", "compare two plans",
-                                          "synthesize three plans", "split into smaller tasks"))),
+                                          "one plan alternating minimal and gates perspectives on each write", "split into smaller tasks"))),
     }]}
 
 

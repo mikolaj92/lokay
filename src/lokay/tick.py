@@ -613,7 +613,7 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
         "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
         + "\n\nUwagi:\n" + dumps(history[-5:], ensure_ascii=False)[-20000:]
         + "\n\nLast state:\n" + dumps({key: value for key, value in saved.items()
-                                     if key not in ("plan_prompt", "plan_branches", "plan_synthesis",
+                                     if key not in ("plan_prompt", "plan_branches",
                                                     "plan_history", "local_ci", "test_log",
                                                     "last_check", "check_inputs")}, ensure_ascii=False)[:20000]
         + "\n\nTest log (tail):\n" + (saved.get("test_log") or "")[-4000:]
@@ -648,10 +648,10 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
         saved = state_read(repo, issue)
         context = saved.get("plan_prompt") or plan.prompt_for(title, body)
         branches = saved.get("plan_branches") or {}
-        synthesis = saved.get("plan_synthesis") or {}
         rounds = saved.get("plan_rounds", 0)
         difficulty = saved["difficulty"]
-        if difficulty == "easy":
+        if difficulty in ("easy", "hard"):
+            perspective = "gates" if difficulty == "hard" and rounds % 2 else "minimal"
             phase = saved.get("plan_phase") or "write"
             state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase=phase, plan_prompt=context)
 
@@ -663,7 +663,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 rounds_append(repo, issue, f"Plan single {rounds}: write")
 
             outcome = _retry(picked, "plan", lambda: plan.plan_one(
-                "minimal", context, art, cwd=cwd, phase=phase,
+                perspective, context, art, cwd=cwd, phase=phase,
                 on_written=single_written, single=True, plan_schema=2), "done", plan_branch=True)
             rounds_append(repo, issue, f"Plan single {rounds}: Decision {outcome['next']}")
             if outcome["next"] == "ok":
@@ -678,7 +678,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
             state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt, plan_notes=[])
             continue
         paths = {}
-        for perspective in plan.PERSPECTIVES[:2 if difficulty == "medium" else 3]:
+        for perspective in plan.PERSPECTIVES[:2]:
             branch_art = art.parent / "plans" / f"{perspective}.md"
             store.ensure_directory(branch_art.parent)
             branch = branches.setdefault(perspective, {
@@ -700,7 +700,7 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                 if escalated := escalate(picked):
                     raise Escalated(escalated)
                 state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase="write", plan_prompt=context,
-                             plan_branches=branches, plan_synthesis=synthesis)
+                             plan_branches=branches)
                 check_deadline()
                 def written():
                     nonlocal rounds
@@ -734,69 +734,23 @@ def _plan_graph(picked: dict, art: Path, title: str, body: str | None, *, cwd: P
                               + "\n\nUwagi:\n" + dumps(outcome["uwagi"], ensure_ascii=False))
                 state_update(repo, issue, plan_branches=branches)
                 retry_sleep(20)
-        if len(paths) != (2 if difficulty == "medium" else 3):
+        if len(paths) != 2:
             reasons = [{"perspective": name, "reason": branch.get("reason")} for name, branch in branches.items()]
             prompt = replan_prompt(picked, "Not all required plans were accepted", reasons)
             state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt)
             retry_sleep(20)
             continue
-        if difficulty == "medium":
-            comparison = _retry(picked, "plan", lambda: decide(plan.comparison_questions(paths, context)))
-            choice = comparison["next"]["choice"]
-            if choice not in paths:
-                raise RuntimeError("invalid plan comparison choice")
-            store.write_artifact(art, paths[choice].read_text())
-            state_update(repo, issue, _event={"action": "synthesis", "outcome": {"next": "ok"}},
-                         plan_comparison=comparison, plan_kind=branches[choice].get("kind", "code"),
-                         plan_schema=branches[choice].get("plan_schema"), plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
-                         plan_notes=[], fix_history=[], fix_counts=[],
-                         **store.round_fields(state_read(repo, issue), accepted_plan=True))
-            return rounds
-        synthesis = synthesis or {"phase": "write", "fingerprint": None, "uwagi": [], "rounds": 0}
-        fresh = False
-        while True:
-            if escalated := escalate(picked):
-                raise Escalated(escalated)
-            state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": "plan"}}, plan_phase="write", plan_synthesis=synthesis)
-            check_deadline()
-            if synthesis["phase"] == "write" or not plan.valid_plan(art, synthesis.get("plan_schema")):
-                failed = {name: branch.get("reason") for name, branch in branches.items() if branch["phase"] == "failed"}
-                prompt = context + "\n\nFailed branches:\n" + dumps(failed, ensure_ascii=False)
-                prompt += "\n\nUwagi:\n" + dumps(synthesis["uwagi"], ensure_ascii=False)
-                _retry(picked, "plan", lambda: plan.synthesize(paths, prompt, art, cwd=cwd), "done")
-                rounds += 1
-                synthesis.update(phase="check", rounds=synthesis["rounds"] + 1, plan_schema=2)
-                state_update(repo, issue, plan_synthesis=synthesis, plan_rounds=rounds)
-                rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: write")
-            check_deadline()
-            text = art.read_text()
-            kind = plan.issue_kind(title)
-            outcome = (plan.path_verdict(art, synthesis.get("plan_schema"),
-                                         plan.base_paths(cwd) if synthesis.get("plan_schema") == 2 else None)
-                       or plan.verdict(decide(plan.plan_questions(text, title, body)), text, kind))
-            if outcome.get("next") not in ("ok", "revise"):
-                raise RuntimeError(f"unknown plan verdict: {outcome.get('next')}")
-            rounds_append(repo, issue, f"Synteza {synthesis['rounds']}: Decision {outcome['next']}")
-            if outcome["next"] == "ok":
-                synthesis["phase"] = "accepted"
-                state_update(repo, issue, _event={"action": "synthesis", "outcome": outcome},
-                             plan_synthesis=synthesis, plan_kind=outcome.get("kind", "code"),
-                             plan_schema=synthesis.get("plan_schema"), plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
-                             plan_notes=outcome.get("notes", []), fix_history=[], fix_counts=[],
-                             **store.round_fields(state_read(repo, issue), accepted_plan=True))
-                return rounds
-            state_update(repo, issue, **store.round_fields(state_read(repo, issue)))
-            fingerprint = hashlib.sha256(dumps(outcome["uwagi"], sort_keys=True).encode()).hexdigest()
-            if synthesis["fingerprint"] == fingerprint:
-                prompt = replan_prompt(picked, "Repeated synthesis rejection", outcome["uwagi"])
-                state_update(repo, issue, **deepcopy(PLAN_RESET), plan_prompt=prompt)
-                fresh = True
-            else:
-                synthesis.update(phase="write", fingerprint=fingerprint, uwagi=outcome["uwagi"])
-                state_update(repo, issue, plan_synthesis=synthesis)
-            retry_sleep(20)
-            if fresh:
-                break
+        comparison = _retry(picked, "plan", lambda: decide(plan.comparison_questions(paths, context)))
+        choice = comparison["next"]["choice"]
+        if choice not in paths:
+            raise RuntimeError("invalid plan comparison choice")
+        store.write_artifact(art, paths[choice].read_text())
+        state_update(repo, issue, _event={"action": "synthesis", "outcome": {"next": "ok"}},
+                     plan_comparison=comparison, plan_kind=branches[choice].get("kind", "code"),
+                     plan_schema=branches[choice].get("plan_schema"), plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest(),
+                     plan_notes=[], fix_history=[], fix_counts=[],
+                     **store.round_fields(state_read(repo, issue), accepted_plan=True))
+        return rounds
 
 
 def _prepare(picked: dict) -> tuple | dict:
