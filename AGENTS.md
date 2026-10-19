@@ -3,8 +3,8 @@
 | Plan → Build → Check → Fix → Merge; only Merge ends a run | `graph.step`, `tick.act` |
 | Decisions return probabilities, not prose | `effects.decide._check` |
 | LLM and code steps return `result`; decisions return `next` | `tick`, `plan.verdict`, `review.verdict` |
-| Retry failed steps, recheck revised plans, return Fix to Check | `tick._retry`, `tick._plan_graph`, `graph.step` |
-| `pi -p` writes production code | `build.build_code`, `fix.fix_code` |
+| Retry failed steps; Plan classifies difficulty; harness2 runs Build/Fix and persists a per-repo library; Fix returns to Check | `tick._retry`, `h2.run_issue`, `graph.step` |
+| Issue body is the spec; changed existing tests must be explicitly named there; no plan file lists | `checks.weakened_tests`, `h2.LokayAdapter` |
 | Only `store.py` writes persisted state | `store.save`, `store.write_json` |
 | Subprocess execution stays in `effects/` | `lokay lint` |
 | No new comments, docstrings, unit tests, or blanket staging | `lokay lint`, `checks.run_checks` |

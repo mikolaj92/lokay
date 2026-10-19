@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from lokay.lint import diff_lines, lint_diff, unit_test_hints
-from lokay.scope import ASSERTION, is_artifact, is_cache, is_test, kind as change_kind, legacy_planned_files, matches_path, plan_file_lists, planned_code_touch_reason, planned_files, required_files
+from lokay.scope import ASSERTION, is_artifact, is_test, kind as change_kind
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -161,7 +161,6 @@ def weakened_tests(x: CheckInput) -> CheckResult:
     from lokay.effects.tests import base_tests_on_head
 
     changed = set()
-    deleted = set()
     for block in x.diff.split("diff --git ")[1:]:
         header = block.split("\n@@ ", 1)[0].splitlines()
         if any(line.startswith("new file mode ") for line in header):
@@ -178,22 +177,13 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         lines = [text for _, _, kind, text in diff_lines("diff --git " + block) if kind in {"-", "+"}]
         if is_test(path, lines):
             changed.add(path)
-            if "+++ /dev/null" in header:
-                deleted.add(path)
-    if x.plan_schema == 2:
-        lists = plan_file_lists(x.plan)
-        planned = lists["Wymagane"] if lists is not None else set()
-        conditional = lists.get("Warunkowe", set()) if lists is not None else set()
-        outside = sorted(path for path in changed
-                         if not any(matches_path(path, target) for target in planned | conditional))
-        if outside:
-            reason = "existing test changed outside the plan: " + ", ".join(outside) + "; revert the test change (scope creep) unless the issue's acceptance criteria require it"
-            findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in outside)
-            return CheckResult("weakened_tests", "fail", reason, findings)
-    else:
-        planned = planned_files(x.plan, [], sorted(deleted))
-        changed = {path for path in changed
-                   if path not in deleted or not any(matches_path(path, target) for target in planned)}
+    unapproved = sorted(path for path in changed if not re.search(
+        r"(?<![\w./-])" + re.escape(path) + r"(?![\w./-])", x.issue_body)
+        and not re.search(r"(?<![\w./-])" + re.escape(Path(path).name) + r"(?![\w./-])", x.issue_body))
+    if unapproved:
+        reason = "existing test changed but the issue body does not name it: " + ", ".join(unapproved)
+        findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in unapproved)
+        return CheckResult("weakened_tests", "fail", reason, findings)
     if not changed:
         return CheckResult("weakened_tests", "pass", "no existing tests changed", ())
     config = repo_config(x.repo)
@@ -205,28 +195,12 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         return CheckResult("weakened_tests", "pass",
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
     if result.get("result") == "red" and result.get("executed", 0) > 0:
-        reason = "base version of this test fails on the new code"
-        if x.plan_schema == 2:
-            unapproved = [path for path in paths if not re.search(
-                r"(?<![\w.-])" + re.escape(Path(path).name) + r"(?![\w.-])", x.issue_body)]
-            if not unapproved:
-                return CheckResult("weakened_tests", "pass",
-                                   "base versions of changed tests fail on the new code but the issue names those tests: " + ", ".join(paths), ())
-            paths = unapproved
-            reason = "base version of this test fails on the new code and the issue does not name it; revert the production change that breaks it (scope creep) or keep the old behaviour."
-        findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in paths)
-        log = result.get("log", "")[-800:]
-        return CheckResult("weakened_tests", "fail", reason + (": " + log if log else ""), findings)
+        return CheckResult("weakened_tests", "pass",
+                           "base versions of changed tests fail on the new code but the issue names those tests: " + ", ".join(paths), ())
     return _count_weakened_tests(x)
 
 
 def _count_weakened_tests(x: CheckInput) -> CheckResult:
-    deleted = set()
-    for block in x.diff.split("diff --git ")[1:]:
-        header = block.split("\n@@ ", 1)[0].splitlines()
-        if "+++ /dev/null" in header:
-            deleted.update(path for path, _, _, _ in diff_lines("diff --git " + block))
-    planned = planned_files(x.plan, [], sorted(deleted))
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
         if kind in {"-", "+"} and ASSERTION.match(text):
@@ -235,8 +209,6 @@ def _count_weakened_tests(x: CheckInput) -> CheckResult:
     findings = []
     reasons = []
     for path, change in changes.items():
-        if path in deleted and any(matches_path(path, target) for target in planned):
-            continue
         removed = len(change["-"]) - len(change["+"])
         if removed > 0 and is_test(path, [text for lines in change.values() for _, text in lines]):
             reason = f"Removes {removed} test assertions: {path}"
@@ -369,70 +341,8 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
-def plan_target(x: CheckInput) -> CheckResult:
-    changed = set()
-    deletions_only = True
-    for block in x.diff.split("diff --git ")[1:]:
-        lines = block.splitlines()
-        header = re.fullmatch(r'("a/(?:\\.|[^"])*"|a/.*?) ("b/(?:\\.|[^"])*"|b/.*)', lines[0])
-        if header is None:
-            raise ValueError("invalid diff path")
-        paths = [(path, True) for path in header.groups()]
-        for line in lines[1:]:
-            if line.startswith(("--- ", "+++ ")):
-                paths.append((line[4:].split("\t", 1)[0], True))
-            elif line.startswith(("rename from ", "rename to ")):
-                paths.append((line.split(" ", 2)[2], False))
-        for path, prefixed in paths:
-            if path.startswith('"'):
-                path = ast.literal_eval(path)
-            if prefixed and path.startswith(("a/", "b/")):
-                path = path[2:]
-            if path != "/dev/null" and not Path(path).is_absolute() and ".." not in Path(path).parts:
-                changed.add(path)
-        removed = any(line.startswith("-") and not line.startswith("--- ") for line in lines[1:])
-        added = any(line.startswith("+") and not line.startswith("+++ ") for line in lines[1:])
-        deleted = any(line.startswith("deleted file mode ") for line in lines[1:])
-        metadata = any(line.startswith(("rename ", "copy ", "old mode ", "new mode ",
-                                        "Binary files ", "GIT binary patch")) for line in lines[1:])
-        if not deleted and (not removed or added or metadata):
-            deletions_only = False
-    repo_files = []
-    for directory, dirs, files in os.walk(x.worktree, followlinks=False):
-        dirs[:] = sorted(name for name in dirs if name != ".git" and not is_cache(name)
-                         and not (Path(directory) / name).is_symlink())
-        repo_files.extend((Path(directory) / name).relative_to(x.worktree).as_posix() for name in files)
-    parser = planned_files if x.plan_schema == 2 else legacy_planned_files
-    planned = parser(x.plan, repo_files, sorted(changed))
-    code = {path for path in planned if not is_test(path) and not path.startswith("docs/")
-            and Path(path).suffix.lower() not in (".md", ".rst", ".txt")}
-    missing = sorted(target for target in required_files(x.plan, repo_files, sorted(changed))
-                     if not any(matches_path(path, target) for path in changed)) if x.plan_schema == 2 else []
-    goal = re.search(r"^## Cel\s*\n(.*?)(?=^## |\Z)", x.plan, re.M | re.S)
-    addition = re.search(r"\b(?:add(?:s|ed|ing)?|doda[cć]\w*|dodaj\w*|uzupełni\w*)\b",
-                         goal[1] if goal else "", re.IGNORECASE)
-    reasons = []
-    if not changed:
-        reasons.append("Empty diff")
-    if x.plan_schema == 2:
-        from lokay.plan import valid_plan_text
-
-        if not valid_plan_text(x.plan, x.plan_schema):
-            reasons.append("PLAN ERROR: invalid version-2 files list; redo Plan")
-        if missing:
-            reasons.append("Required planned files missing from the diff: " + ", ".join(missing))
-    elif touch_reason := planned_code_touch_reason(changed, code):
-        reasons.append(touch_reason)
-    if changed and deletions_only and addition:
-        reasons.append("Deletions-only diff does not implement planned additions")
-    reason = "; ".join(reasons) if reasons else "diff touches planned files"
-    path = next(iter(missing or sorted(code) or sorted(planned) or sorted(changed)), "plan.md")
-    findings = (Finding(path, 1, 1, reason, "plan_target"),) if reasons else ()
-    return CheckResult("plan_target", "fail" if reasons else "pass", reason, findings)
-
-
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, weakened_tests, encoded_rewrite, docs, plan_target]
+          no_new_comments, no_unit_tests, weakened_tests, encoded_rewrite, docs]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:

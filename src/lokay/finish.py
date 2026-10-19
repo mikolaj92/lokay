@@ -6,6 +6,8 @@ import json
 import time
 from pathlib import Path
 
+from typing import Literal
+
 from lokay import store
 from lokay.store import rounds_append, run_dir, state_read, state_update
 from lokay.types import (PLAN_RESET, Finding, parse_finding, to_dict, finding_summary,
@@ -161,13 +163,12 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
             raise RuntimeError(err or "diff stat failed")
         return out
 
-    plan_path = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-    plan_text = plan_path.read_text() if plan_path.is_file() else ""
+    plan_text = saved.get("issue_body") or ""
     check_input = CheckInput(
         repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
         issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
         plan=plan_text, diff=diff or "", hunks=rows, ci=ci, worktree=worktree,
-        plan_schema=saved.get("plan_schema"),
+        plan_schema=None,
     )
     check_results = run_checks(check_input)
     checks_failed = any(result.status == "fail" for result in check_results)
@@ -251,23 +252,10 @@ def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks
                    plan_schema=None):
     from lokay.tick import _retry, dumps, refresh_body
     from lokay.review import validate_sha, verdict as check_verdict
-    from lokay.effects.git import git_try
     from lokay.effects.gh import pr_files, check_comment
 
     validate_sha(sha, ci, decisions)
-    from lokay.scope import code_scope_issue
-
-    code, changed, err = git_try(worktree, "diff", "--name-only", f"origin/{base}...HEAD")
-    if code != 0:
-        raise RuntimeError(err or "scope diff failed")
-    files = changed.splitlines()
-    code, tracked, err = git_try(worktree, "ls-files", "-z")
-    if code != 0:
-        raise RuntimeError(err or "scope paths lookup failed")
-    repo_files = list(filter(None, tracked.split("\0")))
-    scope = code_scope_issue(files, plan_text, repo_files, plan_schema)
-    if not checks_failed and scope and dismissed_key(scope) not in dismissed_keys:
-        rounds_append(picked["repo"], picked["issue"], "Check scope: " + scope["log"])
+    scope = None
     verdict = check_verdict(sha, ci, decisions, check_results, scope, dismissed_keys)
     saved_merge = state_read(picked["repo"], picked["issue"])
     if verdict["result"] == "merge" and merge_blocked(saved_merge, sha):
@@ -308,18 +296,14 @@ def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks
 
 
 def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
-        clone_path, base, read_diff, sync_head):
-    from lokay.tick import (escalate, dumps, fix_to_build, gh_json,
-                            _retry, replan_prompt, fix_step, pushed_pr,
-                            needs_help, refresh_body)
-    from lokay import graph
+        clone_path, base, read_diff, sync_head) -> tuple[Literal["return"], dict] | tuple[Literal["continue"], tuple]: 
+    from lokay.tick import (escalate, dumps, gh_json, _retry, replan_prompt,
+                            fix_step, pushed_pr, needs_help, refresh_body)
+    from lokay import graph, h2
     from lokay.types import Run, Progress
-    from lokay.review import QUESTIONS
-    from lokay.effects.decide import decide
-    from lokay.build import fix_code, fix_publish
-    from lokay.effects.git import git_try
+    from lokay.build import fix_publish, tidy_and_commit
+    from lokay.effects.git import apply_patch, git_try
     import hashlib
-    import os
 
     escalated = escalate(picked, verdict.get("uwagi"))
     if escalated:
@@ -352,19 +336,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         "hunk_fingerprint": hunk_fingerprint, "counts": counts,
     })).no_progress
     test_log = ((saved.get("local_ci") or {}).get("log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
-    art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-    ci = saved.get("local_ci") or {}
-    lens_kinds = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
-    can_dispute = (head == sha == verdict.get("sha") == ci.get("sha")
-                   and ci.get("result") == "green"
-                   and ci.get("ci") in ("green", "no_ci")
-                   and all(row.get("warstwa") == "scope"
-                           or (parse_finding(row).lens in lens_kinds and "warstwa" not in row)
-                           for row in uwagi))
-    if stalled and not can_dispute:
-        redirected = fix_to_build(picked, worktree)
-        if redirected:
-            return "return", redirected
+    if stalled:
         rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
         title, body = saved.get("issue_title"), saved.get("issue_body")
         if not title:
@@ -382,120 +354,38 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         state_update(picked["repo"], picked["issue"], _event={"action": "replan"}, plan_prompt=prompt)
         pending = "plan"
         return "continue", (sha, pending, verdict)
-    prompt = (
-        Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
-        + "\n\nSHA:\n" + sha
-        + "\n\nIssue:\n" + (saved.get("issue_title") or "")
-        + "\n" + (saved.get("issue_body") or "")[:6000]
-        + "\n\nUwagi:\n" + dumps(uwagi)
-        + "\n\nDiff:\n" + (diff or "")[:20000]
-        + "\n\nTest log:\n" + test_log
-        + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
-        + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
-    )
-    if stalled:
-        prompt += ("\n\nThese findings repeat after previous fix attempts. "
-                   "Either make a concrete change that resolves them, or, if a finding is wrong "
-                   "or not actionable, make no commit and explain why in a '## Dispute' section.")
-    from lokay.setup import prepare_dependencies
-
-    prepare_dependencies(worktree, repo, int(picked["issue"]))
     def fix_action():
-        outcome = fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path)
-        if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
-            response = outcome.get("pi_response") or outcome.get("explanation") or ""
-            retry_response = ""
-            state_update(picked["repo"], picked["issue"], pi_response=response)
-            if can_dispute and sha not in state_read(picked["repo"], picked["issue"]).get("dispute_rechecks", []):
-                justification = (response.split("## Dispute", 1)[1].strip()
-                                 if "## Dispute" in response else response[-2000:])
-                upheld = {}
-                rejected = []
-                def category(row):
-                    return parse_finding(row).lens or ("scope" if row.get("warstwa") == "scope" else "")
-
-                for kind in sorted({category(row) for row in uwagi}):
-                    findings = [row for row in uwagi if category(row) == kind]
-                    request = {
-                        "questions": [{
-                            "id": "valid", "type": "bool",
-                            "instructions": "Given the developer's justification, the diff and the issue goal, "
-                                            "is this review finding still valid and actionable?",
-                            "options": {"true": "finding still valid, must be fixed", "false": "finding rejected"},
-                        }],
-                        "state": {"issue_title": saved.get("issue_title") or "",
-                                  "issue_body": (saved.get("issue_body") or "")[:4000],
-                                  "findings": findings, "justification": justification[:3000],
-                                  "diff": (diff or "")[:20000]},
-                    }
-                    answer = _retry(picked, "check", lambda: decide(request))["valid"]
-                    valid = answer["choice"] == "true"
-                    probabilities = answer["probabilities"]
-                    rounds_append(picked["repo"], picked["issue"],
-                                  f"Dispute: {kind} {'upheld' if valid else 'rejected'} "
-                                  f"(p={dumps(probabilities)})")
-                    current = state_read(picked["repo"], picked["issue"])
-                    check_history = current.get("check_history", [])
-                    if check_history and check_history[-1]["sha"] == sha:
-                        check_history[-1].setdefault("dispute", {})[kind] = "upheld" if valid else "rejected"
-                        state_update(picked["repo"], picked["issue"], check_history=check_history)
-                    if valid:
-                        upheld[kind] = probabilities
-                    else:
-                        for row in findings:
-                            item = parse_finding(row)
-                            change = item.zmiana if isinstance(item, Finding) else ""
-                            rejected.append({**row, "zmiana": change + "\nDispute: " + justification})
-                if rejected:
-                    current = state_read(picked["repo"], picked["issue"])
-                    dismissed = current.get("dispute_dismissed") or {}
-                    keys = dismissed.get("keys", []) if dismissed.get("sha") == sha else []
-                    keys += [dismissed_key(row) for row in rejected]
-                    state_update(picked["repo"], picked["issue"],
-                                 check_notes=current.get("check_notes", []) + rejected,
-                                 dispute_dismissed={"sha": sha, "keys": keys})
-                    _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
-                if not upheld:
-                    current = state_read(picked["repo"], picked["issue"])
-                    state_update(picked["repo"], picked["issue"],
-                                 dispute_rechecks=current.get("dispute_rechecks", []) + [sha])
-                    return {"result": "done", "dispute_rejected": True}
-                remaining = [row for row in uwagi if category(row) in upheld]
-                retry_prompt = prompt.replace("\n\nUwagi:\n" + dumps(uwagi),
-                                              "\n\nUwagi:\n" + dumps(remaining))
-                retry_prompt += "\n\nThe finding was upheld after your dispute. Reason to treat it as valid: "
-                retry_prompt += dumps(upheld) + "; your dispute was: " + justification
-                retry_prompt += ". Make a concrete change.\nRemaining findings:\n"
-                retry_prompt += dumps(remaining)
-                outcome = fix_code(worktree, sha, retry_prompt, dict(os.environ), clone_path=clone_path)
-                retry_response = outcome.get("pi_response") or outcome.get("explanation") or ""
-                state_update(picked["repo"], picked["issue"], pi_response=retry_response)
-            if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
-                if "## Dispute" in response or "## Dispute" in retry_response:
-                    current = state_read(picked["repo"], picked["issue"])
-                    rechecks = current.get("dispute_rechecks", [])
-                    if sha not in rechecks:
-                        state_update(picked["repo"], picked["issue"],
-                                     dispute_rechecks=rechecks + [sha])
-                        return {"result": "done", "dispute_recheck": True}
-                redirected = fix_to_build(picked, worktree)
-                if redirected:
-                    return redirected
+        current = state_read(picked["repo"], picked["issue"])
+        identity = [sha, saved.get("fix_rounds", 0), fingerprint]
+        if current.get("h2_fix_identity") == identity and current.get("h2_fix_committed"):
+            return {"result": "done"}
+        outcome = h2.run_issue(
+            picked["repo"], int(picked["issue"]), clone_path, sha,
+            saved.get("issue_title") or "", saved.get("issue_body") or "",
+            saved.get("difficulty") or "medium", findings=verdict["uwagi"],
+            fix_round=saved.get("fix_rounds", 0),
+        )
+        if outcome["result"] != "done":
+            return outcome
+        state_update(picked["repo"], picked["issue"], pi_response=outcome.get("summary") or "")
+        patch = Path(outcome["patch"])
+        if not patch.read_bytes().strip():
+            return {"result": "failed", "reason": "no_changes"}
+        state_update(picked["repo"], picked["issue"], h2_fix_identity=identity,
+                     h2_fix_patch=str(patch), h2_fix_committed=None)
+        apply_patch(worktree, patch)
+        tidy_and_commit(worktree, f"Fix #{picked['issue']}")
+        code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
+        if code:
+            raise RuntimeError(err or "fix HEAD lookup failed")
+        if fixed_head.strip() == sha:
+            return {"result": "failed", "reason": "no_changes"}
+        state_update(picked["repo"], picked["issue"], h2_fix_committed=fixed_head.strip())
         return outcome
-    fixed = fix_step(picked, "fix_code", fix_action, sha)
-    if fixed.get("dispute_recheck"):
-        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None,
-                     local_ci=None, fix_reason=None, result="check")
-        rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
-        return "return", {"result": "check", "sha": sha}
-    if fixed.get("dispute_rejected"):
-        state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, verdict=None, result="check")
-        return "return", {"result": "check", "sha": sha}
-    if fixed.get("next") in ("build", "plan"):
-        return "return", fixed
+
+    fixed = fix_step(picked, "harness2", fix_action, sha)
     if fixed["result"] == "failed":
         return "return", fixed
-    state_update(picked["repo"], picked["issue"], pi_response=fixed.get("pi_response") or "")
     pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
     if pushed["result"] == "failed":
         return "return", pushed

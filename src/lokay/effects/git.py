@@ -6,6 +6,7 @@ from subprocess import CompletedProcess
 from typing import Any
 from pathlib import Path
 
+from lokay import store
 from lokay.effects.pi import run_process
 from lokay.effects.retry import retry
 from lokay.safety import validate_argv
@@ -212,6 +213,30 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
         return {"result": "added", "path": str(path), "branch": branch}
     except (OSError, ValueError, RuntimeError) as exc:
         return {"result": "failed", "error": str(exc)}
+
+
+def detached_worktree(root: Path, path: Path, start: str) -> None:
+    if path.exists():
+        worktree_remove(root, path)
+    store.ensure_directory(path.parent)
+    git(root, "worktree", "add", "--detach", str(path), start, timeout=300)
+
+
+def worktree_patch(worktree: Path) -> str:
+    names = git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")
+    for name in filter(None, names):
+        git(worktree, "--literal-pathspecs", "add", "--intent-to-add", "--", name)
+    code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
+    if code:
+        raise RuntimeError(err or "patch export failed")
+    return out
+
+
+def apply_patch(worktree: Path, patch: Path) -> None:
+    code, _, _ = git_try(worktree, "apply", "--reverse", "--check", str(patch))
+    if code == 0:
+        return
+    git(worktree, "apply", "--index", str(patch), timeout=300)
 
 
 def plan_checkout(root: Path) -> Path:

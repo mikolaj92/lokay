@@ -548,8 +548,9 @@ def run_pi(
     guarded: bool = True,
     json_mode: bool = False,
     missing_is_failure: bool = False,
+    harness_args: Sequence[str] = (),
 ) -> subprocess.CompletedProcess[Any] | dict:
-    argv = ["pi", "-p"]
+    argv = ["pi", "-p", *harness_args]
     if json_mode:
         argv += ["--mode", "json"]
     argv += ["--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt]
@@ -568,6 +569,28 @@ def run_pi(
         if guarded:
             cleanup_worktree_caches(worktree)
     return proc
+
+
+def harness_session(worktree, prompt, directory, *, install=None, timeout=3600):
+    child = pi_env(os.environ, worktree)
+    if child["LOKAY_PI_GITDIR"] == str(worktree.resolve()):
+        child["LOKAY_PI_GITDIR"] = str(Path(child["LOKAY_STATE_DIR"]) / "protected-git")
+    args = ["--session-dir", str(directory / "sessions")]
+    if install is not None:
+        prompt += f"\nHarness helper files live at {install.staging_dir}. Resolve helper script paths there, never copy them into the product."
+        args += ["--append-system-prompt", str(install.staging_dir / "AGENTS.md")]
+        skills = install.staging_dir / "skills"
+        if skills.is_dir():
+            args += ["--skill", str(skills)]
+    try:
+        proc = run_pi(worktree, prompt + "\nNever commit, push, or use GitHub. Leave edits for lokay.",
+                      env=child, cwd=worktree, extra_dir=directory, timeout=timeout,
+                      guarded=False, harness_args=args)
+        if isinstance(proc, dict):
+            raise RuntimeError(str(proc))
+        return proc
+    finally:
+        shutil.rmtree(child["LOKAY_STATE_DIR"], ignore_errors=True)
 
 
 def pi_step(
