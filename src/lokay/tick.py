@@ -604,7 +604,7 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_publish, tidy_and_commit
     from lokay import plan
     from lokay.h2 import run_issue
-    from lokay.effects.git import apply_patch, plan_checkout
+    from lokay.effects.git import apply_patch, git_try, plan_checkout
 
     saved = state_read(picked["repo"], picked["issue"])
     if "issue_title" not in saved or "issue_body" not in saved:
@@ -679,6 +679,14 @@ def _prepare(picked: dict) -> tuple | dict:
     if not saved.get("h2_patch"):
         git(worktree, "fetch", "origin", base, timeout=300)
         if not saved.get("h2_start"):
+            if git(worktree, "status", "--porcelain", "--untracked-files=no"):
+                code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
+                if code:
+                    raise RuntimeError(err or "patch export failed")
+                artifact = run_dir(name, issue) / f"build-leftover-{git_head(worktree)[:12]}-{time.time_ns()}.patch"
+                store.write_artifact(artifact, out)
+                rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
+                git(worktree, "reset", "--hard", "HEAD", timeout=300)
             git(worktree, "merge", "--no-edit", f"origin/{base}", timeout=300)
             state_update(name, issue, h2_start=git_head(worktree))
         built = run_issue(name, issue, root, start=state_read(name, issue)["h2_start"], title=title,
