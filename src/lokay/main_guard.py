@@ -86,7 +86,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 ci["log"] = setup.get("log", "") + "\n" + ci["log"]
                 if setup.get("failed"):
                     ci.update(result="red", tested=False, failed=[*setup["failed"], *ci["failed"]])
-                lock = lockfile(CheckInput(repo, pr or 0, sha, "", "", "", "", [], ci, worktree))
+                lock = lockfile(CheckInput(repo, pr or 0, sha, "", "", "", [], ci, worktree))
                 baseline = {"sha": sha, "argv": argv, "guard_version": GUARD_VERSION,
                             "ci": ci, "lockfile": asdict(lock)}
             finally:

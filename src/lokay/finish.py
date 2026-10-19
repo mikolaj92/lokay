@@ -166,9 +166,8 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     plan_text = saved.get("issue_body") or ""
     check_input = CheckInput(
         repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
-        issue_title=saved.get("issue_title") or "", issue_body=saved.get("issue_body") or "",
+        issue_body=saved.get("issue_body") or "",
         plan=plan_text, diff=diff or "", hunks=rows, ci=ci, worktree=worktree,
-        plan_schema=None,
     )
     check_results = run_checks(check_input)
     checks_failed = any(result.status == "fail" for result in check_results)
@@ -248,8 +247,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
 
 
 def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix,
-                   plan_schema=None):
+                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
     from lokay.tick import _retry, dumps, refresh_body
     from lokay.review import validate_sha, verdict as check_verdict
     from lokay.effects.gh import pr_files, check_comment
