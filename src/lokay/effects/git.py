@@ -277,9 +277,35 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             expected = repo.parent / f"{repo.name}-wt-{match[1]}"
             if path != expected or path.is_symlink() or path == repo:
                 raise ValueError("expected non-symlink sibling worktree path")
-            if not path.exists():
-                return {"result": "kept", "path": str(path)}
             ref = f"refs/heads/{branch}"
+            if not path.exists():
+                if Path(checked(repo, ["rev-parse", "--show-toplevel"])).resolve() != repo:
+                    raise ValueError("repository top-level mismatch")
+                records = checked(repo, ["worktree", "list", "--porcelain", "-z"]).split("\0\0")
+                matches = [record.split("\0") for record in records
+                           if f"worktree {path}" in record.split("\0")]
+                if any(f"branch {ref}" in record.split("\0")
+                       and f"worktree {path}" not in record.split("\0") for record in records):
+                    return {"result": "kept", "path": str(path), "reason": "branch checked out"}
+                if matches:
+                    if (len(matches) != 1 or f"branch {ref}" not in matches[0]
+                            or any(field.startswith("locked") for field in matches[0])):
+                        raise ValueError("worktree registration mismatch or locked")
+                    checked(repo, ["worktree", "prune", "--expire=now"])
+                    records = checked(repo, ["worktree", "list", "--porcelain", "-z"]).split("\0\0")
+                if any(f"branch {ref}" in record.split("\0") for record in records):
+                    return {"result": "kept", "path": str(path), "reason": "branch checked out"}
+                code, head, err = git_try(repo, "rev-parse", "--verify", "--quiet", ref)
+                if code == 1:
+                    return {"result": "removed", "path": str(path)}
+                if code:
+                    raise RuntimeError(err.strip() or head.strip() or "cleanup lookup failed")
+                head = head.strip()
+                if not checked(repo, ["for-each-ref", f"--contains={head}",
+                                      "--format=%(refname)", "refs/remotes/origin/"]):
+                    return {"result": "kept", "path": str(path), "reason": "unpushed"}
+                checked(repo, ["update-ref", "-d", ref, head])
+                return {"result": "removed", "path": str(path)}
             if (Path(checked(repo, ["rev-parse", "--show-toplevel"])).resolve() != repo
                     or not (path / ".git").is_file() or (path / ".git").is_symlink()
                     or Path(checked(path, ["rev-parse", "--show-toplevel"])).resolve() != path
