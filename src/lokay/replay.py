@@ -50,6 +50,7 @@ def unpack(value, home: Path, *, source: Path | None = None):
 def main(argv: list[str]) -> int:
     replay = argparse.ArgumentParser(prog="lokay replay")
     replay.add_argument("path", type=Path, nargs="?", default=Path("fixtures"))
+    replay.add_argument("--rerecord", type=Path)
     replay.add_argument("--repo")
     replay.add_argument("--issue", type=int)
     filters = replay.parse_args(argv)
@@ -58,9 +59,12 @@ def main(argv: list[str]) -> int:
                    if path.name.endswith((".jsonl", ".jsonl.gz"))) if source.is_dir() else [source]
     count = 0
     ticks = 0
-    retired = 0
     row = {}
     try:
+        if filters.rerecord is not None and (source.is_dir() or not source.with_suffix(".json").is_file()):
+            raise ValueError("--rerecord requires a single segment path")
+        if filters.rerecord is not None and filters.rerecord.exists():
+            raise ValueError("--rerecord directory already exists")
         if not paths:
             raise ValueError("no replay files")
         for path in paths:
@@ -74,17 +78,8 @@ def main(argv: list[str]) -> int:
                 if any(value is not None and rows[0].get(key) != value for key, value in
                        (("repo", filters.repo), ("issue", filters.issue))):
                     continue
-                reason = {
-                    "anonimizator3000__74__plan": "#2165 replaced the recorded Plan/Build contract with harness2",
-                    "anonimizator3000__74__build": "#2165 replaced the recorded Plan/Build contract with harness2",
-                    "datasource-kit__96__check": "#2165: Check no longer reads plan.md (lens input, pr_body Cel, plan_target, scope lists); recorded effects include those reads",
-                }.get(path.parent.name)
-                if reason:
-                    retired += 1
-                    print(f"replay: retired {path.parent.name}: {reason}")
-                    continue
                 try:
-                    segment(path, rows)
+                    segment(path, rows, rerecord=filters.rerecord)
                 except Mismatch as exc:
                     raise ValueError(f"{path}: {exc}") from None
                 ticks += 1
@@ -125,6 +120,6 @@ def main(argv: list[str]) -> int:
               f"event={row.get('event')} error={exc}", file=sys.stderr)
         return 1
     print(f"replay: {count}/{count} transitions ok")
-    if ticks or retired:
-        print(f"replay: {ticks}/{ticks} tick segments ok, {retired} retired")
+    if ticks:
+        print(f"replay: {ticks}/{ticks} tick segments ok, 0 retired")
     return 0

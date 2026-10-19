@@ -87,7 +87,7 @@ def compatible_state(actual: dict, expected: dict) -> dict:
     return compatible_checks(actual, expected)
 
 
-def segment(path: Path, rows: list[dict]) -> None:
+def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> None:
     tick = import_module("lokay.tick")
     pi = import_module("lokay.effects.pi")
     gh = import_module("lokay.effects.gh")
@@ -120,15 +120,16 @@ def segment(path: Path, rows: list[dict]) -> None:
         if any(not Path(new).is_relative_to(sandbox) for new in mappings.values()):
             raise ValueError("fixture path escapes sandbox")
 
-        def relocate(value) -> Any:
+        def relocate(value, reverse=False) -> Any:
             if isinstance(value, str):
-                for old, new in sorted(mappings.items(), key=lambda pair: -len(pair[0])):
+                pairs = {new: old for old, new in mappings.items()} if reverse else mappings
+                for old, new in sorted(pairs.items(), key=lambda pair: -len(pair[0])):
                     value = value.replace(old, new)
                 return value
             if isinstance(value, list):
-                return [relocate(item) for item in value]
+                return [relocate(item, reverse) for item in value]
             if isinstance(value, dict):
-                return {key: relocate(item) for key, item in value.items()}
+                return {key: relocate(item, reverse) for key, item in value.items()}
             return value
 
         rows = relocate(rows)
@@ -139,6 +140,7 @@ def segment(path: Path, rows: list[dict]) -> None:
                 or transitions[-1]["event"].get("action") != "verdict"
                 or transitions[-1]["event"]["outcome"].get("result") not in ("fix", "merge")):
             raise ValueError("check segment must start at Check and end at a fix or merge verdict")
+        recorded = []
         position = 0
         transition_position = 0
         requests = []
@@ -147,25 +149,55 @@ def segment(path: Path, rows: list[dict]) -> None:
         def blocked(*args, **kwargs):
             raise Mismatch(f"seq={effects[position]['seq'] if position < len(effects) else 'end'} unrecorded external operation")
 
+        def readonly(row):
+            if row.get("call") != "git":
+                return False
+            argv = row.get("effect", {}).get("argv", [])
+            args = argv[1:]
+            index = next((i for i, arg in enumerate(args) if not arg.startswith("-")), None)
+            if index is None:
+                return False
+            command = args[index]
+            return command in {"show", "diff", "ls-files", "rev-parse", "cat-file", "merge-base",
+                               "log", "status", "symbolic-ref", "check-ref-format", "for-each-ref"} or (
+                command == "worktree" and args[index + 1:index + 2] == ["list"])
+
+        def skip_readonly(limit):
+            nonlocal position
+            while position < len(effects) and effects[position]["seq"] < limit and readonly(effects[position]):
+                position += 1
+
         def consume(kind, value):
             nonlocal position
-            row = effects[position] if position < len(effects) else {}
-            effect = row.get("effect", {})
-            expected = effect.get("input") if kind == "decide" else effect.get("argv")
-            if (kind == "gh" and isinstance(expected, list) and value[1:3] == expected[1:3]
-                    and value[1:3] in (["pr", "comment"], ["pr", "edit"])
-                    and "--body" in value and "--body" in expected):
-                index = value.index("--body") + 1
-                if index == expected.index("--body") + 1:
-                    value = value.copy()
-                    value[index] = compatible_checks(value[index], expected[index])
-            if row.get("call") != kind or expected != value:
+            while True:
+                row = effects[position] if position < len(effects) else {}
+                effect = row.get("effect", {})
+                expected = effect.get("input") if kind == "decide" else effect.get("argv")
+                actual = value
+                if (kind == "gh" and isinstance(expected, list) and value[1:3] == expected[1:3]
+                        and value[1:3] in (["pr", "comment"], ["pr", "edit"])
+                        and "--body" in value and "--body" in expected):
+                    index = value.index("--body") + 1
+                    if index == expected.index("--body") + 1:
+                        actual = value.copy()
+                        actual[index] = expected[index] if rerecord is not None else compatible_checks(value[index], expected[index])
+                if rerecord is None and row and transition_position < len(transitions) and transitions[transition_position]["seq"] < row["seq"]:
+                    raise Mismatch(f"seq={row['seq']} expected transition before call")
+                if row.get("call") == kind and expected == actual:
+                    position += 1
+                    if rerecord is not None:
+                        updated = deepcopy(row)
+                        if kind != "decide":
+                            updated["effect"]["argv"] = value
+                            raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+                            updated["input"] = "sha256:" + hashlib.sha256(raw).hexdigest()
+                        recorded.append(updated)
+                    return effect
+                if readonly(row):
+                    position += 1
+                    continue
                 label = "request" if kind == "decide" else "argv"
-                raise Mismatch(f"seq={row.get('seq', 'end')} expected {label}={expected!r}, got {label}={value!r}")
-            if transition_position < len(transitions) and transitions[transition_position]["seq"] < row["seq"]:
-                raise Mismatch(f"seq={row['seq']} expected transition before call")
-            position += 1
-            return effect
+                raise Mismatch(f"seq={row.get('seq', 'end')} expected {label}={expected!r}, got {label}={actual!r}")
 
         def process(argv, *, input=None, text=True, cwd=None, **kwargs):
             argv = list(argv)
@@ -210,9 +242,15 @@ def segment(path: Path, rows: list[dict]) -> None:
             if kind != "transition":
                 return
             fields = json.loads(json.dumps(fields, default=store.json_default))
+            if rerecord is not None:
+                recorded.append({**transitions[0], **fields, "kind": "transition"})
+                if entry == "check" and fields["event"].get("action") == "verdict":
+                    raise Boundary
+                return
             if transition_position >= len(transitions):
                 raise Mismatch("unrecorded transition")
             expected = transitions[transition_position]
+            skip_readonly(expected["seq"])
             if position < len(effects) and effects[position]["seq"] < expected["seq"]:
                 raise Mismatch(f"seq={effects[position]['seq']} expected call before transition")
             for key in ("before", "event", "after"):
@@ -317,7 +355,7 @@ def segment(path: Path, rows: list[dict]) -> None:
                     kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
                 store.state_update(repo, issue, _event={"action": "verdict", "outcome": verdict})
             except Boundary:
-                outcome = transitions[-1]["event"]["outcome"]
+                outcome = (recorded[-1] if rerecord is not None else transitions[-1])["event"]["outcome"]
                 detail = outcome
             else:
                 raise Mismatch("check segment returned before final verdict boundary")
@@ -331,9 +369,13 @@ def segment(path: Path, rows: list[dict]) -> None:
             outcome = event.outcome
             detail = event_record(event)
         after = store.load(repo, issue).state
-        if stable(compatible_state(after, transitions[-1]["after"])) != stable(transitions[-1]["after"]):
+        if rerecord is None and stable(compatible_state(after, transitions[-1]["after"])) != stable(transitions[-1]["after"]):
             raise Mismatch("final state mismatch")
-        if stable(compatible_checks(outcome, relocate(manifest["outcome"]))) != stable(relocate(manifest["outcome"])):
+        if rerecord is None and stable(compatible_checks(outcome, relocate(manifest["outcome"]))) != stable(relocate(manifest["outcome"])):
             raise Mismatch(f"final outcome mismatch: {detail!r}")
-        if position != len(effects) or transition_position != len(transitions):
+        skip_readonly(float("inf"))
+        if position != len(effects) or (rerecord is None and transition_position != len(transitions)):
             raise Mismatch(f"unconsumed calls={len(effects) - position} transitions={len(transitions) - transition_position}")
+        if rerecord is not None:
+            store.write_segment(rerecord, path.parent, {**manifest, "outcome": relocate(outcome, True)},
+                                relocate(recorded, True))

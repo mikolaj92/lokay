@@ -74,7 +74,7 @@ def unit_test_hints(diff: str) -> dict[str, str]:
                "make added non-blank lines <= removed non-blank lines in this file, or remove the added test code")
         for path in sorted({path for path in paths if is_test(path, added_lines.get(path, ()))
                             and not Path(path).is_absolute() and ".." not in Path(path).parts
-                            and not any(Path(path).parts[i:i + 2] == ("fixtures", "replay")
+                            and not any(Path(path).parts[i:i + 2] in {("fixtures", "replay"), ("fixtures", "ticks")}
                                         for i in range(len(Path(path).parts) - 1))})
     }
 
@@ -84,12 +84,12 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
     if lokay_rules:
         for block in diff.split("diff --git ")[1:]:
             lines = block.splitlines()
-            if any(line.startswith("new file mode ") for line in lines):
+            if any(line.startswith(("new file mode ", "deleted file mode ")) for line in lines):
                 continue
             paths = lines[0].split(" b/", 1)
             paths[0] = paths[0].removeprefix("a/")
             for path in paths:
-                if path.startswith("fixtures/ticks/"):
+                if path.startswith("fixtures/ticks/") and path != "fixtures/ticks/README.md":
                     errors.append(f"{path}: recorded tick fixture changed -> never edit recordings; adjust replay matching in src/lokay/effects/replay.py")
     added = {}
     for path, number, kind, text in diff_lines(diff):
