@@ -278,6 +278,8 @@ def state_read(repo: str, issue: int) -> dict:
 
 def state_update(repo: str, issue: int, **fields) -> Path:
     event = {"ts": time.time(), **fields.pop("_event", {}), "fields": fields}
+    if "node" in fields:
+        raise ValueError("node must be set through an enter_node event")
     run = load(repo, issue)
     event = parse_event(event)
     run = graph.step(run, event)
