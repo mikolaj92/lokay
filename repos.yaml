@@ -17,7 +17,7 @@ repos:
   test: ["sh", "-c", "for p in packages/*/; do [ -f \"${p}pyproject.toml\" ] || continue; (cd \"$p\" && echo \"LOKAY_TEST_CWD=$PWD\" && uv run --locked pytest) || exit; done; echo \"LOKAY_TEST_CWD=$PWD\"; uv run --locked pytest tests"]
   merge: 'on'
 - name: mikolaj92/msds-portal
-  clone_path: ~/Developer/msds-portal/main
+  clone_path: ~/.lokay/clones/msds-portal/main
   # Makefile: worker, portal, root and VLM suites.
   test: ["make", "test"]
   merge: 'on'
@@ -35,7 +35,7 @@ repos:
   test: ["uv", "run", "--locked", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/Docxtor
-  clone_path: ~/Developer/Docxtor/main
+  clone_path: ~/.lokay/clones/Docxtor/main
   # pyproject.toml: tool.lokay.test.
   test: ["sh", "-c", "uv run --extra dev ruff check . && uv run --extra dev pytest -q"]
   merge: 'on'
@@ -104,7 +104,7 @@ repos:
   test: ["sh", "-c", "pixi run core-smoke && uv run pytest"]
   merge: 'on'
 - name: mikolaj92/swift-openapi-dynamic
-  clone_path: ~/Developer/swift-openapi-dynamic/main
+  clone_path: ~/.lokay/clones/swift-openapi-dynamic/main
   test: ["sh", "-c", "swift test && uv run --locked --extra dev pytest -q"]
   merge: 'on'
 - name: mikolaj92/OpenAPITransportKit
