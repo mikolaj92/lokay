@@ -396,5 +396,8 @@ def verdict(sha: str, ci: dict, decisions: list[dict], results: tuple[CheckResul
         result = "fix" if located else "merge"
     if checks_failed:
         result = "fix"
-    return {**outcome, **checked, "result": result, "uwagi": [*located, *findings],
+    uwagi = [*located, *findings]
+    if result == "fix" and not uwagi:
+        uwagi = unlocated
+    return {**outcome, **checked, "result": result, "uwagi": uwagi,
             "notes": notes, "replan": [], "unlocated_findings": unlocated}
