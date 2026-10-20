@@ -103,6 +103,7 @@ def scrubbed_env(base: Mapping[str, str]) -> dict[str, str]:
 
 def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     from lokay.effects.git import git_try
+    from lokay.effects.tests import UV_CACHE_DIR
 
     worktree = Path(worktree).resolve()
     code, out, _ = git_try(worktree, "rev-parse", "--git-common-dir", timeout=30)
@@ -115,9 +116,9 @@ def pi_env(base: Mapping[str, str], worktree: str | Path) -> dict[str, str]:
     cache = (Path(env.get("HOME") or Path.home()) / ".cache").resolve()
     if cache.is_relative_to(worktree):
         cache = Path(state) / "cache"
-    for key, default in (("XDG_CACHE_HOME", cache), ("UV_CACHE_DIR", cache / "uv")):
-        directory = (worktree / env[key]).resolve() if env.get(key) else default
-        env[key] = str(default if directory.is_relative_to(worktree) else directory)
+    directory = (worktree / env["XDG_CACHE_HOME"]).resolve() if env.get("XDG_CACHE_HOME") else cache
+    env["XDG_CACHE_HOME"] = str(cache if directory.is_relative_to(worktree) else directory)
+    env["UV_CACHE_DIR"] = str(UV_CACHE_DIR)
     env.update({
         "GH_CONFIG_DIR": state,
         "LOKAY_STATE_DIR": state,

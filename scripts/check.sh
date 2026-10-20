@@ -36,5 +36,51 @@ chmod +x "$sandbox/bin/gh"
 export HOME="$sandbox/home" TMPDIR="$sandbox/tmp" UV_CACHE_DIR="$sandbox/cache"
 export UV_NO_SYNC=1 UV_PYTHON_DOWNLOADS=never UV_OFFLINE=1 PATH="$sandbox/bin:$PATH"
 .venv/bin/python -m lokay.gh_boundary
+(
+    fail() { printf '%s\n' "pi sandbox check failed: $*" >&2; exit 1; }
+    protected="$sandbox/protected"
+    shim="$PWD/sandbox/bin/git"
+    /usr/bin/git init -q "$protected" || fail init
+    /usr/bin/git -C "$protected" -c user.name=x -c user.email=x@x commit --allow-empty -qm x || fail seed
+    LOKAY_PI_WORKTREE=$(CDPATH= cd -- "$protected" && pwd -P)
+    LOKAY_PI_GITDIR=$(CDPATH= cd -- "$protected/.git" && pwd -P)
+    allowed() {
+        LOKAY_PI_WORKTREE="$LOKAY_PI_WORKTREE" LOKAY_PI_GITDIR="$LOKAY_PI_GITDIR" "$shim" "$@" >/dev/null 2>&1 || fail "allowed $*"
+    }
+    blocked() {
+        if LOKAY_PI_WORKTREE="$LOKAY_PI_WORKTREE" LOKAY_PI_GITDIR="$LOKAY_PI_GITDIR" "$shim" "$@" >"$sandbox/blocked" 2>&1; then
+            fail "blocked $*"
+        else
+            [ "$?" -eq 1 ] || fail "blocking status $*"
+            [ "$(head -n 2 "$sandbox/blocked")" = 'git: command blocked for pi' ] || fail "blocking message $*"
+        fi
+    }
+    cd "$protected"
+    allowed clone "$protected" "$sandbox/foreign"
+    allowed -C "$sandbox/foreign" fetch origin
+    allowed -c user.name=x -c user.email=x@x -C "$sandbox/foreign" commit --allow-empty -m x
+    blocked fetch
+    blocked push
+    blocked -c user.name=x -c user.email=x@x commit --allow-empty -m x
+    blocked reset --hard
+    cd "$sandbox"
+    blocked -C "$protected" fetch
+    GIT_DIR="$protected/.git" blocked fetch
+) || exit 1
+.venv/bin/python - "$sandbox/protected" <<'PY'
+import os
+import shutil
+import sys
+
+from lokay.effects.pi import pi_env
+from lokay.effects.tests import UV_CACHE_DIR
+
+env = pi_env(os.environ, sys.argv[1])
+try:
+    if env["UV_CACHE_DIR"] != str(UV_CACHE_DIR):
+        raise SystemExit("pi sandbox check failed: UV_CACHE_DIR")
+finally:
+    shutil.rmtree(env["LOKAY_STATE_DIR"])
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
