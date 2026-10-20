@@ -176,7 +176,10 @@ def pick(snapshot: Snapshot) -> Pick | None:
             if pending and last_activity(state) + 300 > snapshot.now and retry_at <= 0:
                 continue
             if not (state.get("waiting_on") in ("ci", "retry_at") or retry_at > 0
-                    or (pending and last_activity(state) + 300 <= snapshot.now)):
+                    or (pending and last_activity(state) + 300 <= snapshot.now)
+                    or (state.get("result") == "failed" and retry_at <= 0
+                        and state.get("node") in ("check", "fix", "merge") and state.get("pr")
+                        and last_activity(state) + 300 <= snapshot.now)):
                 continue
             due.append((retry_at, last_attempt, repo.name, issue, state))
     if due:

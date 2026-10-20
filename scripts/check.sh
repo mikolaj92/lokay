@@ -199,6 +199,16 @@ for age, waiting_on in ((10, "ci"), (400, "ready")):
     picked = graph.pick(snapshot)
     assert (picked is None) if age == 10 else (picked is not None and picked.issue == 1 and picked.kind == "issue")
     assert derive_waiting_on(state, now) == waiting_on
+for node, pr, age in (("fix", 7, 400), ("plan", 7, 400), ("fix", None, 400), ("fix", 7, 10)):
+    state = {"result": "failed", "node": node, "pr": pr, "retry_at": 0,
+             "updated_at": datetime.fromtimestamp(now - age, timezone.utc).isoformat()}
+    snapshot = Snapshot(repos=(RepoSnapshot(name="owner/repo", prs=(), issues=(), states={1: state}),), now=now)
+    picked = graph.pick(snapshot)
+    if node == "fix" and pr and age == 400:
+        assert picked is not None and picked.issue == 1 and picked.kind == "pr", picked
+        assert picked.target["number"] == 7, picked
+    else:
+        assert picked is None, picked
 print("poll interval checks: green")
 PY
 .venv/bin/python - <<'PY'
