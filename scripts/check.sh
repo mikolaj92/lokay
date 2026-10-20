@@ -228,5 +228,25 @@ result = graph.step(Run.from_state({"node": "fix"}), Failed(0, outcome={"reason"
 assert result.state["node"] == "plan", result.state
 print("Fix assertion checks: green")
 PY
+.venv/bin/python - <<'PY'
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, weakened_tests
+
+diff = "diff --git a/tests/test_x.py b/tests/test_x.py\n--- a/tests/test_x.py\n+++ b/tests/test_x.py\n@@ -1,2 +1 @@\n-assert x\n-assert y\n+assert (x, y) == (True, True)\n"
+with patch("lokay.config.repo", return_value={"test": ["pytest"]}), \
+        patch("lokay.effects.tests.base_tests_on_head", return_value={"result": "green"}):
+    for added, expected in (("", "fail"), ("+assert y\n", "pass")):
+        for checks in ("green", "red"):
+            change = diff if not added else diff.replace("+1 @@", "+1,2 @@") + added
+            x = CheckInput("owner/repo", 1, "head", "tests/test_x.py", "", change, [],
+                           {"result": checks, "ci": checks, "sha": "head"}, Path.cwd())
+            result = weakened_tests(x)
+            assert result.status == expected, result
+            if expected == "fail":
+                assert "Removes 1 test assertions" in result.reason, result
+print("weakened test assertion checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
