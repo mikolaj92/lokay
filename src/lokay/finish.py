@@ -300,7 +300,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     from lokay import graph, h2
     from lokay.types import Run, Progress
     from lokay.build import tidy_and_commit
-    from lokay.effects.git import apply_patch, git_try, push
+    from lokay.effects.git import apply_patch, git_try, push, restore_paths
     import hashlib
 
     escalated = escalate(picked, verdict.get("uwagi"))
@@ -334,7 +334,17 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         "hunk_fingerprint": hunk_fingerprint, "counts": counts,
     })).no_progress
     test_log = ((saved.get("local_ci") or {}).get("log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
-    if stalled:
+    restore = []
+    remaining = []
+    for row in uwagi:
+        finding = parse_finding(row)
+        if (isinstance(finding, Finding) and finding.lens == "weakened_tests"
+                and finding.zmiana.startswith("existing test changed but the issue body does not name it")):
+            restore.append(finding.plik)
+        else:
+            remaining.append(row)
+    restore = sorted(set(restore))
+    if stalled and not restore:
         rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
         title, body = saved.get("issue_title"), saved.get("issue_body")
         if not title:
@@ -357,30 +367,42 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         identity = [sha, saved.get("fix_rounds", 0), fingerprint]
         if current.get("h2_fix_identity") == identity and current.get("h2_fix_committed"):
             return {"result": "done"}
-        outcome = h2.run_issue(
-            picked["repo"], int(picked["issue"]), clone_path, sha,
-            saved.get("issue_title") or "", saved.get("issue_body") or "",
-            findings=verdict["uwagi"],
-            fix_round=saved.get("fix_rounds", 0),
-        )
-        if outcome["result"] != "done":
-            return outcome
-        summary = outcome.get("summary") or ""
-        patch = Path(outcome["patch"])
-        state_update(picked["repo"], picked["issue"], pi_response=summary,
-                     h2_fix_identity=identity, h2_fix_patch=str(patch), h2_fix_committed=None)
-        fixed_head = sha
-        if patch.read_bytes().strip():
-            apply_patch(worktree, patch)
-            tidy_and_commit(worktree, f"Fix #{picked['issue']}")
-            code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
+        if restore_paths(worktree, base, restore):
+            tidy_and_commit(worktree, f"Fix #{picked['issue']}: restore unapproved test changes")
+            rounds_append(picked["repo"], picked["issue"], "Fix: restored unapproved tests: " + ", ".join(restore))
+        start = sha
+        if restore:
+            code, start, err = git_try(worktree, "rev-parse", "HEAD")
             if code:
                 raise RuntimeError(err or "fix HEAD lookup failed")
+        fixed_head = start
+        outcome = {"result": "done"}
+        summary = ""
+        if remaining:
+            outcome = h2.run_issue(
+                picked["repo"], int(picked["issue"]), clone_path, start.strip(),
+                saved.get("issue_title") or "", saved.get("issue_body") or "",
+                findings=remaining,
+                fix_round=saved.get("fix_rounds", 0),
+            )
+            if outcome["result"] != "done":
+                return outcome
+            summary = outcome.get("summary") or ""
+            patch = Path(outcome["patch"])
+            state_update(picked["repo"], picked["issue"], pi_response=summary,
+                         h2_fix_identity=identity, h2_fix_patch=str(patch), h2_fix_committed=None)
+            if patch.read_bytes().strip():
+                apply_patch(worktree, patch)
+                tidy_and_commit(worktree, f"Fix #{picked['issue']}")
+                code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
+                if code:
+                    raise RuntimeError(err or "fix HEAD lookup failed")
         if fixed_head.strip() == sha:
             rounds_append(picked["repo"], picked["issue"],
                           "Fix: no changes, recheck" + (f": {summary.splitlines()[0]}" if summary else ""))
             return {"result": "done", "no_changes": True}
-        state_update(picked["repo"], picked["issue"], h2_fix_committed=fixed_head.strip())
+        state_update(picked["repo"], picked["issue"], h2_fix_identity=identity,
+                     h2_fix_committed=fixed_head.strip())
         return outcome
 
     fixed = fix_step(picked, "harness2", fix_action, sha)
