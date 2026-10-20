@@ -83,28 +83,6 @@ def merge_base_or_restart(worktree: Path, base: str) -> list[str]:
     return conflicts
 
 
-def restore_paths(worktree: Path, base: str, paths: list[str]) -> bool:
-    if any(not path or Path(path).is_absolute() or ".." in Path(path).parts for path in paths):
-        raise ValueError("expected relative file paths within the worktree")
-    if not paths:
-        return False
-    ref = f"origin/{base}"
-    existing = set(git(worktree, "--literal-pathspecs", "ls-tree", "-r", "--name-only", "-z",
-                       ref, "--", *paths).split("\0"))
-    paths = sorted(set(paths) & existing)
-    if not paths:
-        return False
-    changed = False
-    for options in ((), ("--cached",)):
-        code, out, err = git_try(worktree, "--literal-pathspecs", "diff", "--quiet", *options,
-                                ref, "--", *paths)
-        if code not in (0, 1):
-            raise RuntimeError((err or out).strip())
-        changed = changed or code == 1
-    git(worktree, "--literal-pathspecs", "checkout", ref, "--", *paths)
-    return changed
-
-
 def head(path: Path) -> str:
     return git(path, "rev-parse", "HEAD")
 
