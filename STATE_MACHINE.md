@@ -129,7 +129,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Warunek needs_help | Zapis / działanie | Wznowienie | Źródło |
 | --- | --- | --- | --- |
 | reason pasuje do timeout/network/connection/HTTP 5xx/host probe | failures+1; `min(3600, 60 × 2^min(failures−1, 6))` sekund; zachowany node | Pick po retry_at | [S3] |
-| błąd nietransientny, niepowtórzony, nie fix_code i bez fix_removes_assertions | failures+1, retry_at=0, zachowany node i last_error | kolejny tick | [S3] |
+| błąd nietransientny, niepowtórzony, nie fix_code i bez fix_removes_assertions | failures+1, retry_at=0, zachowany node i last_error | dla PR w Check/Fix/Merge: kolejny tick po ≥300 s od ostatniej aktywności | [S3] |
 | nietransientny i powtórzony, zaczyna się fix_code albo zawiera fix_removes_assertions | node=plan, prompt z dowodami, hash=None, last_error=None, retry_at=0 | Plan w kolejnym ticku | [S3] |
 | _retry sukces | failures=0, retry_at=0, reason=None | kontynuacja tego ticka | [S2] |
 
