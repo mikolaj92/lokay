@@ -39,6 +39,22 @@ chmod +x "$sandbox/bin/gh"
 export HOME="$sandbox/home" TMPDIR="$sandbox/tmp" UV_CACHE_DIR="$sandbox/cache"
 export UV_NO_SYNC=1 UV_PYTHON_DOWNLOADS=never UV_OFFLINE=1 PATH="$sandbox/bin:$PATH"
 .venv/bin/python -m lokay.gh_boundary
+.venv/bin/python - <<'PY'
+from unittest.mock import patch
+
+from lokay.effects.gh import pr_checks
+
+cancelled = {"__typename": "CheckRun", "workflowName": "workflow", "name": "checks",
+             "status": "COMPLETED", "conclusion": "CANCELLED"}
+success = dict(cancelled, conclusion="SUCCESS")
+running = dict(cancelled, status="IN_PROGRESS", conclusion=None)
+for rollup, expected in (([success, cancelled], "green"), ([cancelled], "red"),
+                         ([cancelled, running], "pending")):
+    with patch("lokay.effects.gh.gh_json", return_value={"headRefOid": "head", "statusCheckRollup": rollup}):
+        result = pr_checks("owner/repo", 1, "head")
+    assert result["result"] == expected, result
+print("superseded checks: green")
+PY
 (
     fail() { printf '%s\n' "pi sandbox check failed: $*" >&2; exit 1; }
     protected="$sandbox/protected"

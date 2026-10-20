@@ -140,7 +140,7 @@ Poza harness2 proces ma limit minimum z timeout operacji, 3600 s i pozostałego 
 Nie ma limitu liczby rund. Jest limit czasu rozpoczynania operacji i oczekiwania na procesy.
 Operacje plikowe i sprzątanie guardów nie mają twardego wspólnego limitu czasu.[S7]
 
-`test: []` daje local green z tested=false i notatką. Brak GitHub checks daje no_ci, nie green.
+`test: []` daje local green z tested=false i notatką. Brak GitHub checks daje no_ci, nie green; anulowany CheckRun jest pomijany tylko przy nieanulowanym CheckRun z tym samym workflowName i name.
 Oba wyniki mogą dopuścić Merge przy braku uwag. To świadoma granica dowodu w tej implementacji,
 nie dowód wykonania testów lub sukcesu wymaganych kontroli.[S6][S15]
 Review jest osobny na lens, ale może mieć wiele partii i follow-upów. Hunki są ograniczone do 1500 znaków na plik.
