@@ -19,11 +19,14 @@ import importlib
 import pkgutil
 
 import lokay
+import lokay.h2
 import yaml
 
 expected = (Path.cwd() / 'src/lokay').resolve()
 if lokay.__file__ is None or Path(lokay.__file__).resolve().parent != expected:
     raise SystemExit(f'wrong lokay location: {lokay.__file__}; expected {expected}')
+assert 'tick_deadline.get' not in Path(lokay.h2.__file__).read_text()
+
 def import_failed(name):
     raise ImportError(f'cannot import {name}')
 
