@@ -1,33 +1,42 @@
 #!/bin/sh
 check_command() {
-    outside=0
-    if [ -n "${LOKAY_PI_WORKTREE-}" ] && [ -n "${LOKAY_PI_GITDIR-}" ]; then
-        directory=$(pwd -P) || return 1
-        case "$directory" in
-            "$LOKAY_PI_WORKTREE"|"${LOKAY_PI_WORKTREE%/}/"*|"$LOKAY_PI_GITDIR"|"${LOKAY_PI_GITDIR%/}/"*) ;;
-            *) outside=1 ;;
-        esac
-    fi
+    check_arguments "$@"
+    restricted=$?
+    [ "$restricted" -ne 2 ] || return 1
+    [ "$restricted" -ne 0 ] || return 0
+    [ -n "${LOKAY_PI_GITDIR-}" ] || return 1
+    total=$#
+    count=$global_count
+    for option do
+        [ "$count" -gt 0 ] || break
+        set -- "$@" "$option"
+        count=$((count - 1))
+    done
+    while [ "$total" -gt 0 ]; do
+        shift
+        total=$((total - 1))
+    done
+    target=$(/usr/bin/git "$@" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+    target=$(CDPATH= cd -- "$target" && pwd -P) || return 0
+    [ "$target" != "$LOKAY_PI_GITDIR" ]
+}
+check_arguments() {
+    original_count=$#
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            -C|--git-dir|--work-tree|--namespace) [ "$#" -ge 2 ] || return 1; outside=0; shift 2 ;;
-            --git-dir=*|--work-tree=*|--namespace=*) outside=0; shift ;;
-            -c) [ "$#" -ge 2 ] || return 1; shift 2 ;;
+            -C|--git-dir|--work-tree|--namespace|-c) [ "$#" -ge 2 ] || return 2; shift 2 ;;
+            --git-dir=*|--work-tree=*|--namespace=*) shift ;;
             --no-pager|--paginate|--literal-pathspecs|--no-optional-locks) shift ;;
-            -*) return 1 ;;
+            --version) [ "$original_count" -eq 1 ] && return 0; return 2 ;;
+            -*) return 2 ;;
             *) break ;;
         esac
     done
+    global_count=$((original_count - $#))
     command=${1-}
     [ "$#" -eq 0 ] || shift
-    if [ "$outside" -eq 1 ]; then
-        case "$command" in
-            fetch|clone|ls-remote|rev-parse|cat-file|checkout) return 0 ;;
-            reset) [ "${1-}" != "--hard" ] || return 0 ;;
-        esac
-    fi
     case "$command" in
-        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|clone|remote|config|switch|symbolic-ref|worktree|notes|replace) return 1 ;;
+        commit|push|reset|rebase|merge|tag|update-ref|cherry-pick|am|stash|pull|fetch|remote|config|switch|symbolic-ref|worktree|notes|replace) return 1 ;;
         branch) [ "$#" -eq 0 ] || return 1 ;;
         checkout)
             case "${1-}" in
