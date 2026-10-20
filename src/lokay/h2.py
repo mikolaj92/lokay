@@ -170,13 +170,13 @@ class LokayAdapter:
         return None
 
 
-def run_issue(repo, issue, root, start, title, body, difficulty, *, findings=None, fix_round=0):
+def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round=0):
     token = tick_deadline.set(None)
     try:
         adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
         adapter.substrate.preflight()
         tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
-        result = run_task(adapter.task_id, {"easy": 1, "medium": 2, "hard": 3}[difficulty],
+        result = run_task(adapter.task_id, k=1,
                           adapter=cast(BenchmarkAdapter, adapter), prop=PiProposer(adapter.spec.channels["proposer"], audit_dir=adapter.spec.runs_root / "proposer"),
                           runs_root=adapter.spec.runs_root, modes=("agg",), library=adapter.library, tag=tag)
         selection = result.selections.get("agg") or {}

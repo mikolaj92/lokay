@@ -704,7 +704,7 @@ def _prepare(picked: dict) -> tuple | dict:
             git(worktree, "merge", "--no-edit", f"origin/{base}", timeout=300)
             state_update(name, issue, h2_start=git_head(worktree))
         built = run_issue(name, issue, root, start=state_read(name, issue)["h2_start"], title=title,
-                          body=body, difficulty=saved["difficulty"])
+                          body=body)
         if built.get("result") != "done":
             return needs_help(picked, built.get("reason") or "harness2 failed")
         state_update(name, issue, h2_patch=str(built["patch"]), h2_summary=built.get("summary") or "",
