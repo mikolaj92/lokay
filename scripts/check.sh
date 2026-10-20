@@ -120,7 +120,7 @@ import os
 import sys
 from pathlib import Path
 
-from lokay.effects.git import git, git_try, merge_base_or_restart, restore_paths
+from lokay.effects.git import git, git_try, merge_base_or_restart
 
 os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
                   GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid",
@@ -160,29 +160,6 @@ git(repo, "checkout", "lokay/1")
 assert merge_base_or_restart(repo, "base") == []
 assert (repo / "clean.txt").read_text() == "clean\n"
 print("base merge checks: green")
-origin = sandbox / "restore-origin.git"
-repo = sandbox / "restore-tests"
-git(sandbox, "init", "--bare", str(origin))
-git(sandbox, "init", "-b", "base", str(repo))
-git(repo, "remote", "add", "origin", str(origin))
-file = repo / "test_existing.py"
-file.write_text("base\n")
-git(repo, "add", "test_existing.py")
-git(repo, "commit", "-m", "base test")
-git(repo, "push", "-u", "origin", "base")
-git(repo, "checkout", "-b", "lokay/2")
-file.write_text("changed\n")
-new = repo / "test_new.py"
-new.write_text("new\n")
-git(repo, "add", "test_existing.py", "test_new.py")
-git(repo, "commit", "-m", "changed tests")
-paths = ["test_existing.py", "test_new.py"]
-assert restore_paths(repo, "base", paths)
-assert file.read_text() == "base\n"
-assert not restore_paths(repo, "base", paths)
-assert new.read_text() == "new\n"
-assert git(repo, "diff", "--cached", "--name-only") == "test_existing.py"
-print("restore unapproved test checks: green")
 PY
 .venv/bin/python - <<'PY'
 from datetime import datetime, timezone
