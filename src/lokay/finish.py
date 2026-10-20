@@ -365,19 +365,21 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         )
         if outcome["result"] != "done":
             return outcome
-        state_update(picked["repo"], picked["issue"], pi_response=outcome.get("summary") or "")
+        summary = outcome.get("summary") or ""
         patch = Path(outcome["patch"])
-        if not patch.read_bytes().strip():
-            return {"result": "failed", "reason": "no_changes"}
-        state_update(picked["repo"], picked["issue"], h2_fix_identity=identity,
-                     h2_fix_patch=str(patch), h2_fix_committed=None)
-        apply_patch(worktree, patch)
-        tidy_and_commit(worktree, f"Fix #{picked['issue']}")
-        code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
-        if code:
-            raise RuntimeError(err or "fix HEAD lookup failed")
+        state_update(picked["repo"], picked["issue"], pi_response=summary,
+                     h2_fix_identity=identity, h2_fix_patch=str(patch), h2_fix_committed=None)
+        fixed_head = sha
+        if patch.read_bytes().strip():
+            apply_patch(worktree, patch)
+            tidy_and_commit(worktree, f"Fix #{picked['issue']}")
+            code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
+            if code:
+                raise RuntimeError(err or "fix HEAD lookup failed")
         if fixed_head.strip() == sha:
-            return {"result": "failed", "reason": "no_changes"}
+            rounds_append(picked["repo"], picked["issue"],
+                          "Fix: no changes, recheck" + (f": {summary.splitlines()[0]}" if summary else ""))
+            return {"result": "done", "no_changes": True}
         state_update(picked["repo"], picked["issue"], h2_fix_committed=fixed_head.strip())
         return outcome
 

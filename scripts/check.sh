@@ -178,5 +178,18 @@ for age, waiting_on in ((10, "ci"), (400, "ready")):
     assert derive_waiting_on(state, now) == waiting_on
 print("poll interval checks: green")
 PY
+.venv/bin/python - <<'PY'
+from lokay import graph
+from lokay.types import Fixed, Run
+
+sha = "unchanged-head"
+event = Fixed(0, outcome={"result": "pushed", "sha": sha, "previous_sha": sha})
+first = graph.step(Run.from_state({"node": "fix", "sha": sha}), event)
+assert first.state["node"] == "check", first.state
+assert sha in first.state["dispute_rechecks"], first.state
+second = graph.step(Run.from_state({**first.state, "node": "fix"}), event)
+assert second.state["node"] == "plan", second.state
+print("Fix dispute checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

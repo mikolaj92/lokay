@@ -114,7 +114,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Fix | uwagi puste | unieważnienie cache/fingerprint | node=check, result=check | check, koniec ticka | [S4] |
 | Fix | diff bez zmiany, fingerprint+hunk bez zmiany albo liczba uwag nie maleje w trzech rundach; brak możliwości dispute | fix_to_build albo świeży Plan z historią | counts/history; node=build albo plan | Build jako next, albo Plan w ticku | [S4] |
 | Fix → Build | local_ci red dla aktualnego HEAD; FAILED wskazuje jednoznacznie nowy plik testu PR | build_note z logiem | node=build, failures=0, retry_at=0 | next=build, koniec ticka | [S3][S4] |
-| Fix | zgodne head/sha/verdict/ci; local green i remote green/no_ci; wyłącznie lens/scope | przy no_changes weryfikacja dispute osobno na kategorię | rejected związane z SHA; notes/history | wszystkie rejected → Merge; upheld → ponowny fix_code | [S4] |
+| Fix | pusty patch harness2 albo HEAD bez zmiany po commit | done z no_changes; publikacja bez zmiany SHA i fix_complete | pi_response; rounds; pierwszy raz SHA w dispute_rechecks, node=check; ponownie ten sam SHA: node=plan, PLAN_RESET | Check albo Plan | [S4] |
 | Fix | outside_worktree | świeży Plan z wyjaśnieniem | node=plan, phase=write, hash=None, retry_at=0 | next=plan | [S3][S4] |
 | Fix | fix_code ≠ done albo wyjątek | needs_help; deterministyczny fix_code prowadzi do Plan | failures/reason; możliwy prompt Plan | failed, koniec ticka | [S3][S4] |
 | Fix | done i publish pushed/remote_moved | sync remote gdy potrzebne, kontrola SHA po pushed, opis PR | sha, fingerprint/hunk/diff, node=check, verdict=None | Check w ticku | [S4] |
