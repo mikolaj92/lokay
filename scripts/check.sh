@@ -55,6 +55,20 @@ for rollup, expected in (([success, cancelled], "green"), ([cancelled], "red"),
     assert result["result"] == expected, result
 print("superseded checks: green")
 PY
+.venv/bin/python - <<'PY'
+from lokay.review import verdict
+from lokay.types import CheckResult
+
+log = "ruff check: Found 43 errors"
+failure = {"warstwa": "GitHub CI", "plik": "", "log": log}
+ci = {"sha": "head", "result": "red", "ci": "red", "failed": [failure]}
+result = verdict("head", ci, [], (CheckResult("ci_green", "fail", log, ()),))
+assert result["result"] == "fix", result
+assert result["uwagi"] == [failure], result
+assert result["uwagi"][0]["log"] == log, result
+assert result["unlocated_findings"] == [failure], result
+print("unlocated failure checks: green")
+PY
 (
     fail() { printf '%s\n' "pi sandbox check failed: $*" >&2; exit 1; }
     protected="$sandbox/protected"
