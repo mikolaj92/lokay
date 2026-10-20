@@ -360,7 +360,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         outcome = h2.run_issue(
             picked["repo"], int(picked["issue"]), clone_path, sha,
             saved.get("issue_title") or "", saved.get("issue_body") or "",
-            saved.get("difficulty") or "medium", findings=verdict["uwagi"],
+            findings=verdict["uwagi"],
             fix_round=saved.get("fix_rounds", 0),
         )
         if outcome["result"] != "done":

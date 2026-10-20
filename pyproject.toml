@@ -19,7 +19,7 @@ build-backend = "hatchling.build"
 packages = ["src/lokay"]
 
 [tool.uv.sources]
-harness2 = { git = "https://github.com/mikolaj92/harness2", rev = "f6bf86f51b945491d6c84a5a4ccae01aaca22711" }
+harness2 = { git = "https://github.com/mikolaj92/harness2", rev = "7a1139702bfdb05f7e2b6ecd5c83305065cd48eb" }
 
 [dependency-groups]
 dev = [
