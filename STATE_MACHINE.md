@@ -44,7 +44,7 @@ flowchart TD
     Fix -->|wszystkie uwagi odrzucone w dispute| Merge
     Merge -->|guard zmienił diff, konflikt albo SHA| Check
     Merge -->|merge potwierdzony| Done["merged: zapis i sprzątanie"]
-    Plan & Build & Check & Fix & Merge -->|wyczerpany budżet| Yield
+    Plan & Check & Merge -->|wyczerpany budżet| Yield
     Plan & Build & Check & Fix & Merge -->|pozostały błąd| Retry["failed: needs_help"]
     Retry -->|deterministyczny powtórzony lub fix_code| Plan
     Retry -->|następny tick, retry_at minął| Tick
@@ -136,7 +136,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 Stan JSON zastępuje plik przez plik tymczasowy. Rounds są dopisywane osobno.
 Nie jest to transakcja obejmująca Git, GitHub, stan i logi.[S12]
 Budżet domyślny to 2700 s. Deadline zaczyna się przed wyborem pracy.
-Proces ma limit minimum z timeout operacji, 3600 s i pozostałego budżetu; sprzątanie procesu ma dodatkowe 5 s.[S2][S7][S8]
+Poza harness2 proces ma limit minimum z timeout operacji, 3600 s i pozostałego budżetu; harness2 Build/Fix nie podlega deadline ticka, ale zachowuje timeout każdego procesu do 3600 s; sprzątanie procesu ma dodatkowe 5 s.[S2][S7][S8]
 Nie ma limitu liczby rund. Jest limit czasu rozpoczynania operacji i oczekiwania na procesy.
 Operacje plikowe i sprzątanie guardów nie mają twardego wspólnego limitu czasu.[S7]
 
