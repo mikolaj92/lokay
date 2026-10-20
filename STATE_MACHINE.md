@@ -39,14 +39,14 @@ flowchart TD
     Check -->|GitHub pending| Yield["pending: koniec ticka"]
     Check -->|CI green i brak uwag| Merge["Merge"]
     Fix -->|zmiana i push, albo brak uwag| Check
-    Fix -->|brak postępu lub błąd fix_code| Plan
+    Fix -->|brak postępu, błąd fix_code lub fix_removes_assertions| Plan
     Fix -->|nowy czerwony test PR| Build
     Fix -->|wszystkie uwagi odrzucone w dispute| Merge
     Merge -->|guard zmienił diff, konflikt albo SHA| Check
     Merge -->|merge potwierdzony| Done["merged: zapis i sprzątanie"]
     Plan & Check & Merge -->|wyczerpany budżet| Yield
     Plan & Build & Check & Fix & Merge -->|pozostały błąd| Retry["failed: needs_help"]
-    Retry -->|deterministyczny powtórzony lub fix_code| Plan
+    Retry -->|deterministyczny powtórzony, fix_code lub fix_removes_assertions| Plan
     Retry -->|następny tick, retry_at minął| Tick
     Idle & Yield & Done --> Wait["Usługa: sleep 60 s domyślnie"]
     Wait --> Service
@@ -116,7 +116,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Fix → Build | local_ci red dla aktualnego HEAD; FAILED wskazuje jednoznacznie nowy plik testu PR | build_note z logiem | node=build, failures=0, retry_at=0 | next=build, koniec ticka | [S3][S4] |
 | Fix | pusty patch harness2 albo HEAD bez zmiany po commit | done z no_changes; publikacja bez zmiany SHA i fix_complete | pi_response; rounds; pierwszy raz SHA w dispute_rechecks, node=check; ponownie ten sam SHA: node=plan, PLAN_RESET | Check albo Plan | [S4] |
 | Fix | outside_worktree | świeży Plan z wyjaśnieniem | node=plan, phase=write, hash=None, retry_at=0 | next=plan | [S3][S4] |
-| Fix | fix_code ≠ done albo wyjątek | needs_help; deterministyczny fix_code prowadzi do Plan | failures/reason; możliwy prompt Plan | failed, koniec ticka | [S3][S4] |
+| Fix | fix_code ≠ done, wyjątek lub patch usuwa więcej asercji niż dodaje w pliku testowym | needs_help; fix_code lub fix_removes_assertions prowadzi do Plan; odrzucony patch jest cofany do HEAD | failures/reason; możliwy prompt Plan | failed, koniec ticka | [S3][S4] |
 | Fix | done i publish pushed/remote_moved | sync remote gdy potrzebne, kontrola SHA po pushed, opis PR | sha, fingerprint/hunk/diff, node=check, verdict=None | Check w ticku | [S4] |
 | Fix | publish błąd albo PR nie potwierdza push SHA | needs_help | failures, reason, retry_at | failed | [S3][S4] |
 | Merge | PR SHA niezgodny lub wynik merge ≠ merged | sync przy nowym SHA; sleep 60 poza conflict | node=check, verdict=None | Check w ticku | [S4][S19] |
@@ -129,8 +129,8 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Warunek needs_help | Zapis / działanie | Wznowienie | Źródło |
 | --- | --- | --- | --- |
 | reason pasuje do timeout/network/connection/HTTP 5xx/host probe | failures+1; `min(3600, 60 × 2^min(failures−1, 6))` sekund; zachowany node | Pick po retry_at | [S3] |
-| błąd nietransientny, niepowtórzony, nie fix_code | failures+1, retry_at=0, zachowany node i last_error | kolejny tick | [S3] |
-| nietransientny i powtórzony albo zaczyna się fix_code | node=plan, prompt z dowodami, hash=None, last_error=None, retry_at=0 | Plan w kolejnym ticku | [S3] |
+| błąd nietransientny, niepowtórzony, nie fix_code i bez fix_removes_assertions | failures+1, retry_at=0, zachowany node i last_error | kolejny tick | [S3] |
+| nietransientny i powtórzony, zaczyna się fix_code albo zawiera fix_removes_assertions | node=plan, prompt z dowodami, hash=None, last_error=None, retry_at=0 | Plan w kolejnym ticku | [S3] |
 | _retry sukces | failures=0, retry_at=0, reason=None | kontynuacja tego ticka | [S2] |
 
 Stan JSON zastępuje plik przez plik tymczasowy. Rounds są dopisywane osobno.

@@ -272,6 +272,10 @@ def apply_patch(worktree: Path, patch: Path) -> None:
     git(worktree, "apply", "--index", str(patch), timeout=300)
 
 
+def restore_head(worktree: Path) -> None:
+    git(worktree, "reset", "--hard", "HEAD", timeout=300)
+
+
 def plan_checkout(root: Path) -> Path:
     root = root.resolve()
     path = root.parent / f"{root.name}-plan"
