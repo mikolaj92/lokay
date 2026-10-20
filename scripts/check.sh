@@ -85,5 +85,51 @@ try:
 finally:
     shutil.rmtree(env["LOKAY_STATE_DIR"])
 PY
+.venv/bin/python - "$sandbox" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+from lokay.effects.git import git, git_try, merge_base_or_restart
+
+os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                  GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid",
+                  GIT_AUTHOR_DATE="2025-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2025-01-01T00:00:00+00:00")
+sandbox = Path(sys.argv[1])
+origin = sandbox / "origin.git"
+repo = sandbox / "base-merge"
+git(sandbox, "init", "--bare", str(origin))
+git(sandbox, "init", "-b", "base", str(repo))
+git(repo, "remote", "add", "origin", str(origin))
+file = repo / "file.txt"
+file.write_text("initial\n")
+git(repo, "add", "file.txt")
+git(repo, "commit", "-m", "initial")
+git(repo, "push", "-u", "origin", "base")
+git(repo, "checkout", "-b", "lokay/1")
+file.write_text("issue\n")
+git(repo, "commit", "-am", "issue")
+git(repo, "push", "-u", "origin", "lokay/1")
+old_head = git(repo, "rev-parse", "HEAD")
+git(repo, "checkout", "base")
+file.write_text("base\n")
+git(repo, "commit", "-am", "base")
+git(repo, "push", "origin", "base")
+git(repo, "checkout", "lokay/1")
+assert merge_base_or_restart(repo, "base") == ["file.txt"]
+assert git(repo, "rev-parse", "HEAD^{tree}") == git(repo, "rev-parse", "origin/base^{tree}")
+assert git_try(repo, "merge-base", "--is-ancestor", old_head, "HEAD")[0] == 0
+assert git_try(repo, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")[0] == 1
+git(repo, "push", "origin", "lokay/1")
+git(repo, "checkout", "base")
+(repo / "clean.txt").write_text("clean\n")
+git(repo, "add", "clean.txt")
+git(repo, "commit", "-m", "clean base update")
+git(repo, "push", "origin", "base")
+git(repo, "checkout", "lokay/1")
+assert merge_base_or_restart(repo, "base") == []
+assert (repo / "clean.txt").read_text() == "clean\n"
+print("base merge checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
