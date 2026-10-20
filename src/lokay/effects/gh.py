@@ -212,6 +212,16 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
             return {"result": "pending", "sha": sha, "failed": [], "pending": ["GitHub workflows"]}
         return {"result": "no_ci", "sha": sha, "failed": [],
                 "notes": [{"warstwa": "GitHub CI", "log": "no GitHub checks configured"}]}
+    active_checks = {
+        (item.get("workflowName"), item.get("name"))
+        for item in rollup
+        if item.get("__typename") == "CheckRun" and item.get("conclusion") != "CANCELLED"
+    }
+    rollup = [
+        item for item in rollup
+        if not (item.get("__typename") == "CheckRun" and item.get("conclusion") == "CANCELLED"
+                and (item.get("workflowName"), item.get("name")) in active_checks)
+    ]
     failed = []
     failed_logs = {}
     pending = []
