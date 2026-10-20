@@ -5,7 +5,7 @@ Plan, Build, Check, Fix, Merge. Merge is the only end.
 `lokay start` runs the graph in Python (`src/lokay/tick.py`), the only runtime.
 Plan classifies difficulty. harness2 runs Build and Fix through `pi -p`;
 Fix returns to Check. Failed steps retry. The issue body is the specification.
-Changed existing tests must be explicitly named in that body. There are no plan file lists or `plan_target` check.
+Changed existing tests must be explicitly named in that body; fewer assertions fail `weakened_tests` even when base tests pass and checks are green. There are no plan file lists or `plan_target` check.
 Harness libraries persist per repository under `~/.lokay/harness2/library/agg/`;
 runs live under `~/.lokay/harness2/runs/`. See [the state machine](STATE_MACHINE.md).
 

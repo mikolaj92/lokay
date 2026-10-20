@@ -190,6 +190,9 @@ def weakened_tests(x: CheckInput) -> CheckResult:
     paths = sorted(changed)
     result = base_tests_on_head(x.worktree, x.sha, paths, config, x.issue)
     if result.get("result") == "green":
+        counted = _count_weakened_tests(x)
+        if counted.status == "fail":
+            return counted
         return CheckResult("weakened_tests", "pass",
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
     return _count_weakened_tests(x)
