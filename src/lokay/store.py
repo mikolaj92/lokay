@@ -248,6 +248,14 @@ def escalation_fields(state: dict) -> dict:
     }
 
 
+def last_activity(state: dict) -> float:
+    try:
+        updated_at = datetime.fromisoformat(state.get("updated_at")).timestamp()
+    except (TypeError, ValueError, OverflowError, OSError):
+        updated_at = 0
+    return max(state.get("last_attempt", 0), updated_at)
+
+
 def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
     if state.get("result") == "closed":
         return None
@@ -261,7 +269,7 @@ def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
     if state.get("retry_at", 0) > now:
         return "retry_at"
     if (state.get("result") == "pending" and state.get("node") in ("check", "build")
-            and state.get("last_attempt", 0) > now - 300):
+            and last_activity(state) > now - 300):
         return "ci"
     return "ready"
 
