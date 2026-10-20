@@ -35,7 +35,8 @@ def step(run: Run, event: Event) -> Run:
                 r"timeout|timed out|connection|could not resolve host|network|HTTP 5\d\d|host probe",
                 reason, re.IGNORECASE))
             to_plan = not event.plan_branch and not transient and (
-                current.get("last_error") == reason or reason.startswith("fix_code"))
+                current.get("last_error") == reason or reason.startswith("fix_code")
+                or "fix_removes_assertions" in reason)
             delay = min(3600, 60 * 2 ** min(failures - 1, 6)) if transient else 0
             fields.update(node="plan" if to_plan else current.get("node") or "check",
                           result="failed", reason=reason, last_error=None if to_plan else reason,

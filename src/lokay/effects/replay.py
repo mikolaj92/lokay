@@ -21,7 +21,9 @@ from lokay.types import Run, event_record
 
 
 CHECK_HINTS = (
-    (r"\d+ more non-blank lines added than removed; blank lines do not count; make added non-blank lines <= removed non-blank lines in this file, or remove the added test code",
+    ("remove the added test code; never remove, merge or weaken existing assertions",
+     "make added non-blank lines <= removed non-blank lines in this file, or remove the added test code"),
+    (r"\d+ more non-blank lines added than removed; blank lines do not count; (?:remove the added test code; never remove, merge or weaken existing assertions|make added non-blank lines <= removed non-blank lines in this file, or remove the added test code)",
      "keep the test change inside existing test functions with no net added lines, or remove the added test code"),
     ("new test file -> remove it; new test files are not allowed",
      "keep the test change inside existing test functions with no net added lines, or remove the added test code"),

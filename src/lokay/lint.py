@@ -71,7 +71,7 @@ def unit_test_hints(diff: str) -> dict[str, str]:
     return {
         path: ("new test file -> remove it; new test files are not allowed" if path in new_paths else
                f"{changes[path]} more non-blank lines added than removed; blank lines do not count; "
-               "make added non-blank lines <= removed non-blank lines in this file, or remove the added test code")
+               "remove the added test code; never remove, merge or weaken existing assertions")
         for path in sorted({path for path in paths if is_test(path, added_lines.get(path, ()))
                             and not Path(path).is_absolute() and ".." not in Path(path).parts
                             and not any(Path(path).parts[i:i + 2] in {("fixtures", "replay"), ("fixtures", "ticks")}

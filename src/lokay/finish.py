@@ -293,6 +293,20 @@ def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks
     return verdict, rounds
 
 
+def removed_assertions(patch: str) -> dict[str, int]:
+    from lokay.lint import diff_lines
+    from lokay.scope import ASSERTION, is_test
+
+    lines = {}
+    counts = {}
+    for path, _, kind, text in diff_lines(patch):
+        lines.setdefault(path, []).append(text)
+        if kind in {"-", "+"} and ASSERTION.match(text):
+            counts[path] = counts.get(path, 0) + (1 if kind == "-" else -1)
+    return {path: count for path, count in counts.items()
+            if count > 0 and is_test(path, lines[path])}
+
+
 def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
         clone_path, base, read_diff, sync_head) -> tuple[Literal["return"], dict] | tuple[Literal["continue"], tuple]: 
     from lokay.tick import (escalate, dumps, gh_json, _retry, replan_prompt,
@@ -300,7 +314,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     from lokay import graph, h2
     from lokay.types import Run, Progress
     from lokay.build import tidy_and_commit
-    from lokay.effects.git import apply_patch, git_try, push, restore_paths
+    from lokay.effects.git import apply_patch, git_try, push, restore_paths, restore_head
     import hashlib
 
     escalated = escalate(picked, verdict.get("uwagi"))
@@ -393,6 +407,13 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
                          h2_fix_identity=identity, h2_fix_patch=str(patch), h2_fix_committed=None)
             if patch.read_bytes().strip():
                 apply_patch(worktree, patch)
+                removed = removed_assertions(patch.read_text())
+                if removed:
+                    restore_head(worktree)
+                    for path, count in removed.items():
+                        rounds_append(picked["repo"], picked["issue"],
+                                      f"Fix rejected: removes {count} test assertions in {path}")
+                    return {"result": "failed", "reason": f"fix_removes_assertions: {next(iter(removed))}"}
                 tidy_and_commit(worktree, f"Fix #{picked['issue']}")
                 code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
                 if code:

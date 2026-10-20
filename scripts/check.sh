@@ -214,5 +214,19 @@ second = graph.step(Run.from_state({**first.state, "node": "fix"}), event)
 assert second.state["node"] == "plan", second.state
 print("Fix dispute checks: green")
 PY
+.venv/bin/python - <<'PY'
+from lokay import graph
+from lokay.finish import removed_assertions
+from lokay.types import Failed, Run
+
+patch = "--- a/tests/test_x.py\n+++ b/tests/test_x.py\n@@ -1,2 +1 @@\n-assert x\n-assert y\n+assert (x, y) == (True, True)\n"
+assert removed_assertions(patch) == {"tests/test_x.py": 1}
+assert removed_assertions("--- a/tests/test_x.py\n+++ b/tests/test_x.py\n@@ -0,0 +1 @@\n+assert x\n") == {}
+assert removed_assertions(patch.replace("tests/test_x.py", "src/x.py")) == {}
+reason = "harness2: {'result': 'failed', 'reason': 'fix_removes_assertions: tests/test_x.py'}"
+result = graph.step(Run.from_state({"node": "fix"}), Failed(0, outcome={"reason": reason}))
+assert result.state["node"] == "plan", result.state
+print("Fix assertion checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
