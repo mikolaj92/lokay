@@ -52,12 +52,13 @@ manual runs use the installed package version.
 It must be a numeric string representing finite positive seconds; invalid values
 stop the tick before queue selection. For example, `LOKAY_TICK_BUDGET=0.25`
 sets a quarter-second budget. A shared monotonic deadline starts before queue
-selection. Plan, Check/Fix, Merge and process retries stop starting work at the
-deadline. The saved node, SHA and findings resume on the next tick;
+selection. Plan, Check, Merge and process retries outside harness2 stop starting
+work at the deadline; harness2 Build/Fix runs finish independently of it. The saved node, SHA and findings resume on the next tick;
 the tick owner releases its lock even if saving fails.
 
-Process calls use the minimum of their operation timeout, 3600 seconds and the
-remaining tick budget. GitHub calls use 60 seconds; setup/local CI use 600 seconds.
+Process calls outside harness2 use the minimum of their operation timeout,
+3600 seconds and the remaining tick budget; harness2 calls retain their own
+process timeout, capped at 3600 seconds. GitHub calls use 60 seconds; setup/local CI use 600 seconds.
 Timed-out process groups are killed. Output draining and process reaping share
 a five-second cleanup budget. Tick expiry saves `pending`, without failure
 backoff; an operation timeout remains an ordinary error. Retry waits stop at the

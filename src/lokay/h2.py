@@ -62,17 +62,6 @@ class PiSubstrate:
 
 
 class PiProposer(Proposer):
-    def __post_init__(self):
-        super().__post_init__()
-        self.deadline = tick_deadline.get()
-
-    def call(self, *args, **kwargs):
-        token = tick_deadline.set(self.deadline)
-        try:
-            return super().call(*args, **kwargs)
-        finally:
-            tick_deadline.reset(token)
-
     def _pi(self, cwd, mission, system, wall):
         store.write_artifact(cwd / "MISSION.md", (f"{system}\n\n---\n\n" if system else "") + mission)
         store.ensure_directory(cwd / "output")
@@ -97,7 +86,6 @@ class LokayAdapter:
         self.prompt = untrusted_issue_block(title, body)
         if findings is not None:
             self.prompt += "\n\nCheck findings:\n" + json.dumps(findings, ensure_ascii=False)
-        self.deadline = tick_deadline.get()
         self.substrate = PiSubstrate(self._launch)
         self.library = Library(HOME / "harness2/library/agg", self.domain, PI_SURFACE)
         channel = ChannelSpec("pi", f"{os.environ.get('LOKAY2_PROVIDER', '')}/{os.environ.get('LOKAY2_MODEL', '')}")
@@ -120,19 +108,15 @@ class LokayAdapter:
         return None
 
     def execute(self, task_id, harness_dir, run_id, *, timeout=None):
-        token = tick_deadline.set(self.deadline)
-        try:
-            directory = self.spec.runs_root / "executions" / hashlib.sha256(run_id.encode()).hexdigest()
-            if (directory / "complete.json").is_file():
-                completed = json.loads((directory / "complete.json").read_text())
-                if completed.get("start") != self.start:
-                    raise RuntimeError("completed rollout belongs to a different starting SHA")
-                return directory
-            install = self.substrate.materialise(harness_dir or self.base_harness(), self.spec,
-                                                 {"staging_dir": str(directory / "config")})
-            return self.substrate.execute(task_id, install, [run_id], timeout or 3600)[0]
-        finally:
-            tick_deadline.reset(token)
+        directory = self.spec.runs_root / "executions" / hashlib.sha256(run_id.encode()).hexdigest()
+        if (directory / "complete.json").is_file():
+            completed = json.loads((directory / "complete.json").read_text())
+            if completed.get("start") != self.start:
+                raise RuntimeError("completed rollout belongs to a different starting SHA")
+            return directory
+        install = self.substrate.materialise(harness_dir or self.base_harness(), self.spec,
+                                             {"staging_dir": str(directory / "config")})
+        return self.substrate.execute(task_id, install, [run_id], timeout or 3600)[0]
 
     def _launch(self, task_ref, install, run_id, timeout):
         directory = install.staging_dir.parent
@@ -187,30 +171,34 @@ class LokayAdapter:
 
 
 def run_issue(repo, issue, root, start, title, body, difficulty, *, findings=None, fix_round=0):
-    adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
-    adapter.substrate.preflight()
-    tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
-    result = run_task(adapter.task_id, {"easy": 1, "medium": 2, "hard": 3}[difficulty],
-                      adapter=cast(BenchmarkAdapter, adapter), prop=PiProposer(adapter.spec.channels["proposer"], audit_dir=adapter.spec.runs_root / "proposer"),
-                      runs_root=adapter.spec.runs_root, modes=("agg",), library=adapter.library, tag=tag)
-    selection = result.selections.get("agg") or {}
-    chosen = selection.get("chosen_run_dir")
-    empty_selection = (result.status == "partial" and selection.get("ok")
-                       and (result.modes.get("agg") or {}).get("ok") and chosen
-                       and result.errors == [f"agg: selected run {selection.get('chosen_run_id')} produced no deliverable"])
-    if (result.status not in ("ok", "skipped") and not empty_selection) or not chosen:
-        return {"result": "failed", "reason": "; ".join(result.errors) or result.status}
-    directory = Path(chosen)
-    complete = all((Path(row["run_dir"]) / "complete.json").is_file() for row in result.to_dict()["base"])
-    executions = (adapter.spec.runs_root / "executions").resolve()
-    for record in git.git(root, "worktree", "list", "--porcelain", "-z").split("\0\0"):
-        fields = record.split("\0")
-        if "detached" not in fields:
-            continue
-        for field in fields:
-            if field.startswith("worktree "):
-                path = Path(field.removeprefix("worktree "))
-                if path.name == "worktree" and path.parent.parent == executions:
-                    git.worktree_remove(root, path)
-    return {"result": "done", "patch": directory / "patch.diff",
-            "summary": (directory / "final.md").read_text(), "all_ran": complete}
+    token = tick_deadline.set(None)
+    try:
+        adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
+        adapter.substrate.preflight()
+        tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
+        result = run_task(adapter.task_id, {"easy": 1, "medium": 2, "hard": 3}[difficulty],
+                          adapter=cast(BenchmarkAdapter, adapter), prop=PiProposer(adapter.spec.channels["proposer"], audit_dir=adapter.spec.runs_root / "proposer"),
+                          runs_root=adapter.spec.runs_root, modes=("agg",), library=adapter.library, tag=tag)
+        selection = result.selections.get("agg") or {}
+        chosen = selection.get("chosen_run_dir")
+        empty_selection = (result.status == "partial" and selection.get("ok")
+                           and (result.modes.get("agg") or {}).get("ok") and chosen
+                           and result.errors == [f"agg: selected run {selection.get('chosen_run_id')} produced no deliverable"])
+        if (result.status not in ("ok", "skipped") and not empty_selection) or not chosen:
+            return {"result": "failed", "reason": "; ".join(result.errors) or result.status}
+        directory = Path(chosen)
+        complete = all((Path(row["run_dir"]) / "complete.json").is_file() for row in result.to_dict()["base"])
+        executions = (adapter.spec.runs_root / "executions").resolve()
+        for record in git.git(root, "worktree", "list", "--porcelain", "-z").split("\0\0"):
+            fields = record.split("\0")
+            if "detached" not in fields:
+                continue
+            for field in fields:
+                if field.startswith("worktree "):
+                    path = Path(field.removeprefix("worktree "))
+                    if path.name == "worktree" and path.parent.parent == executions:
+                        git.worktree_remove(root, path)
+        return {"result": "done", "patch": directory / "patch.diff",
+                "summary": (directory / "final.md").read_text(), "all_ran": complete}
+    finally:
+        tick_deadline.reset(token)
