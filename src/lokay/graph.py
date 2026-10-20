@@ -142,7 +142,7 @@ def _kind(row: dict, pr: bool = False) -> int:
 
 
 def pick(snapshot: Snapshot) -> Pick | None:
-    from lokay.store import derive_waiting_on
+    from lokay.store import derive_waiting_on, last_activity
 
     snapshot = replace(snapshot, repos=tuple(
         replace(repo, states={issue: {**state, "waiting_on": derive_waiting_on(state, snapshot.now)}
@@ -172,10 +172,10 @@ def pick(snapshot: Snapshot) -> Pick | None:
             pending = state.get("result") == "pending" and state.get("node") in ("build", "check")
             if retry_at > snapshot.now:
                 continue
-            if pending and last_attempt + 300 > snapshot.now and retry_at <= 0:
+            if pending and last_activity(state) + 300 > snapshot.now and retry_at <= 0:
                 continue
             if not (state.get("waiting_on") in ("ci", "retry_at") or retry_at > 0
-                    or (pending and last_attempt + 300 <= snapshot.now)):
+                    or (pending and last_activity(state) + 300 <= snapshot.now)):
                 continue
             due.append((retry_at, last_attempt, repo.name, issue, state))
     if due:

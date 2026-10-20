@@ -147,5 +147,22 @@ assert merge_base_or_restart(repo, "base") == []
 assert (repo / "clean.txt").read_text() == "clean\n"
 print("base merge checks: green")
 PY
+.venv/bin/python - <<'PY'
+from datetime import datetime, timezone
+
+from lokay import graph
+from lokay.store import derive_waiting_on
+from lokay.types import RepoSnapshot, Snapshot
+
+now = 1_792_512_000
+state = {"result": "pending", "node": "check", "last_attempt": now - 3000}
+for age, waiting_on in ((10, "ci"), (400, "ready")):
+    state["updated_at"] = datetime.fromtimestamp(now - age, timezone.utc).isoformat()
+    snapshot = Snapshot(repos=(RepoSnapshot(name="owner/repo", prs=(), issues=(), states={1: state}),), now=now)
+    picked = graph.pick(snapshot)
+    assert (picked is None) if age == 10 else (picked is not None and picked.issue == 1 and picked.kind == "issue")
+    assert derive_waiting_on(state, now) == waiting_on
+print("poll interval checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
