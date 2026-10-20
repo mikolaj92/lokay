@@ -66,6 +66,23 @@ def git(path: Path, *args: str, timeout: float = 30) -> str:
     return out.strip()
 
 
+def merge_base_or_restart(worktree: Path, base: str) -> list[str]:
+    ref = f"origin/{base}"
+    code, out, err = git_try(worktree, "merge", "--no-edit", ref, timeout=300)
+    if code == 0:
+        return []
+    if code != 1:
+        raise RuntimeError((err or out).strip())
+    conflicts = list(filter(None, git(worktree, "diff", "--name-only", "--diff-filter=U", "-z").split("\0")))
+    if not conflicts:
+        raise RuntimeError((err or out).strip())
+    git(worktree, "merge", "--abort", timeout=300)
+    commit = git(worktree, "commit-tree", f"{ref}^{{tree}}", "-p", "HEAD", "-p", ref,
+                 "-m", f"lokay: restart from {ref} after base merge conflict")
+    git(worktree, "reset", "--hard", commit, timeout=300)
+    return conflicts
+
+
 def head(path: Path) -> str:
     return git(path, "rev-parse", "HEAD")
 

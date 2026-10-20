@@ -18,7 +18,7 @@ from dataclasses import replace
 from lokay.types import Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
-from lokay.effects.git import base_branch, push, worktree_remove
+from lokay.effects.git import base_branch, merge_base_or_restart, push, worktree_remove
 from lokay.effects.git import git, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
@@ -701,7 +701,9 @@ def _prepare(picked: dict) -> tuple | dict:
                 store.write_artifact(artifact, out)
                 rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
                 git(worktree, "reset", "--hard", "HEAD", timeout=300)
-            git(worktree, "merge", "--no-edit", f"origin/{base}", timeout=300)
+            conflicts = merge_base_or_restart(worktree, base)
+            if conflicts:
+                rounds_append(name, issue, f"Build: base merge conflicts in {', '.join(conflicts)}; restarted from origin/{base}")
             state_update(name, issue, h2_start=git_head(worktree))
         built = run_issue(name, issue, root, start=state_read(name, issue)["h2_start"], title=title,
                           body=body)
