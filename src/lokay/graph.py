@@ -196,7 +196,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
                 continue
             retry_at = state.get("retry_at", 0)
             last_attempt = state.get("last_attempt", 0)
-            pending = state.get("result") == "pending" and state.get("node") in ("build", "check")
+            pending = state.get("result") == "pending" and state.get("node") in ("build", "check", "fix")
             if retry_at > snapshot.now:
                 continue
             if pending and last_activity(state) + 300 > snapshot.now and retry_at <= 0:
