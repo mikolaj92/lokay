@@ -121,7 +121,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Fix | publish błąd albo PR nie potwierdza push SHA | needs_help | failures, reason, retry_at | failed | [S3][S4] |
 | Merge | PR SHA niezgodny lub wynik merge ≠ merged | sync przy nowym SHA; sleep 60 poza conflict | node=check, verdict=None | Check w ticku | [S4][S19] |
 | Merge | verdict=merge i SHA zgodny; gh potwierdza merge | zapis merged przed usunięciem worktree | merged, failures=0, retry_at=0; obserwacja last_merge | merged, koniec ticka | [S1][S4][S19] |
-| Merge | usunięcie worktree nieudane po merge | warning, nie failed | merged zachowany | merged | [S19] |
+| Merge | sprzątanie worktree po merge | atomowe przeniesienie do ukrytego katalogu, prune rejestracji, kasowanie; błąd kasowania nie blokuje usunięcia, inny błąd daje warning | merged zachowany | merged | [S19] |
 | Dowolny krok | zwykły wyjątek / nieoczekiwany wynik | guarded_step/_retry/fix_step → needs_help | patrz tabela retry | failed | [S1][S2][S3] |
 
 ### Retry, trwałość i granice

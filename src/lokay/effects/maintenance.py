@@ -11,7 +11,7 @@ from pathlib import Path
 
 from lokay import store
 from lokay.config import HOME, load_repos
-from lokay.effects.git import git_try
+from lokay.effects.git import git_try, worktree_remove
 from lokay.effects.pi import run_process
 from lokay.effects.tests import UV_CACHE_DIR
 
@@ -131,7 +131,9 @@ def sweep(aggressive: bool) -> None:
                                 if not checked(path, ["for-each-ref", "--contains=HEAD", "--format=%(refname)",
                                                       "refs/remotes/origin/"]).strip():
                                     continue
-                                checked(owner, ["worktree", "remove", str(path)])
+                                cleanup = worktree_remove(owner, path)
+                                if cleanup["result"] != "removed":
+                                    raise RuntimeError(cleanup.get("error") or "worktree cleanup failed")
                                 worktrees += 1
                                 checked(owner, ["worktree", "prune"])
                             except Exception as exc:

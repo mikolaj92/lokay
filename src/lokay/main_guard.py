@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lokay.config import repo as repo_config
 from lokay.effects.gh import gh_json, gh_ok, fit_body
-from lokay.effects.git import git, base_branch
+from lokay.effects.git import git, base_branch, worktree_remove
 from lokay.store import main_status, save_main_status
 from lokay.types import Finding, parse_finding
 
@@ -84,7 +84,9 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 baseline = {"sha": sha, "argv": argv, "guard_version": GUARD_VERSION,
                             "ci": ci, "lockfile": asdict(lock)}
             finally:
-                git(clone_path, "worktree", "remove", "--force", str(worktree), timeout=60)
+                cleanup = worktree_remove(clone_path, worktree)
+                if cleanup["result"] != "removed":
+                    raise RuntimeError(cleanup.get("error") or "worktree cleanup failed")
     ci = baseline["ci"]
     tested = ci.get("tested") is True
     lock = baseline["lockfile"]
