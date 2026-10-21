@@ -596,14 +596,15 @@ def update(repo, issue, **fields):
 def remote(args, **kwargs):
     branch = args[args.index("--head") + 1]
     assert args == ["pr", "list", "--repo", name, "--head", branch,
-                    "--state", "closed", "--limit", "100", "--json", "number,mergedAt"]
+                    "--state", "closed", "--limit", "100", "--json", "number,mergedAt,closedAt"]
     return {"lokay/2": [{"number": 22, "mergedAt": None}],
             "lokay/3": [{"number": 33, "mergedAt": "2026-10-21T09:00:00Z"}]}[branch]
 
 with patch.object(tick, "state_read", side_effect=read), \
         patch.object(tick, "state_update", side_effect=update), \
         patch.object(tick, "list_prs", return_value=[]) as prs, \
-        patch.object(tick, "gh_json", side_effect=remote):
+        patch.object(tick, "gh_json", side_effect=remote), \
+        patch.object(tick, "pr_closed_by_factory", return_value=True):
     assert read(name, 1)["waiting_on"] == "ready"
     tick.reopen_closed_issues(name, issues, reopened)
     assert [(issue, event["action"]) for issue, event in events] == [(2, "reopened")]
@@ -617,6 +618,87 @@ with patch.object(tick, "state_read", side_effect=read), \
     tick.reopen_closed_issues(name, issues[:2], reopened)
     prs.assert_not_called()
 print("reopen all closed issues checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import graph, store, tick
+from lokay.effects import gh
+from lokay.types import Run, parse_event
+
+name = "owner/human-close"
+for nodes, expected in (([{"actor": {"login": "factory"}}], True),
+                        ([{"actor": {"login": "human"}}], False), ([], False)):
+    payload = {"data": {"viewer": {"login": "factory"}, "repository": {
+        "pullRequest": {"timelineItems": {"nodes": nodes}}}}}
+    with patch.object(gh, "gh_json", return_value=payload) as query:
+        assert gh.pr_closed_by_factory(name, 7) is expected
+        query.assert_called_once()
+
+for factory in (True, False):
+    states = {1: {"result": "closed", "node": "check", "pr": 7}}
+    events = []
+    def update(repo, issue, **fields):
+        event = {"ts": 1, **fields.pop("_event"), "fields": fields}
+        states[issue] = graph.step(Run.from_state(states[issue]), parse_event(event)).state
+        events.append(event)
+    with patch.object(tick, "state_read", side_effect=lambda repo, issue: states[issue]), \
+            patch.object(tick, "state_update", side_effect=update), \
+            patch.object(tick, "list_prs", return_value=[]), \
+            patch.object(tick, "gh_json", return_value=[
+                {"number": 7, "mergedAt": None, "closedAt": "2026-10-21"},
+                {"number": 8, "mergedAt": None, "closedAt": "2026-10-20"}]), \
+            patch.object(tick, "pr_closed_by_factory", side_effect=lambda repo, pr: factory if pr == 7 else not factory):
+        reopened = set()
+        for _ in range(2):
+            tick.reopen_closed_issues(name, [{"number": 1}], reopened)
+        assert [event["action"] for event in events] == (["reopened"] if factory else [])
+
+for factory in (True, False):
+    for polling in (True, False):
+        with TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+                stack.enter_context(patch.object(store, key, value))
+            config = {"name": name, "clone_path": str(root / "absent"), "merge": "off"}
+            stack.enter_context(patch.object(tick.maintenance, "sweep"))
+            stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+            stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
+            stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
+            stack.enter_context(patch.object(tick, "open_issues", return_value=[{"number": 1, "state": "OPEN"}]))
+            stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+            stack.enter_context(patch.object(tick, "pr_closed_by_factory", return_value=factory))
+            plan = stack.enter_context(patch.object(tick, "_prepare", side_effect=AssertionError("unexpected Plan")))
+            def remote(args, **kwargs):
+                if args[:2] == ["api", "graphql"]:
+                    return {"data": {"repository": {"issue_1": {"state": "OPEN"}, "pr_7": {"state": "CLOSED"}}}}
+                assert args[:2] == ["pr", "list"] and "closed" in args
+                return [{"number": 6, "mergedAt": None, "closedAt": "2026-10-20"},
+                        {"number": 7, "mergedAt": None, "closedAt": "2026-10-21"}]
+            stack.enter_context(patch.object(tick, "gh_json", side_effect=remote))
+            store.state_update(name, 1, _event={"action": "enter_node", "outcome": {"node": "plan"}},
+                               result="check", pr=7 if polling else None)
+            updates = stack.enter_context(patch.object(tick, "state_update", wraps=store.state_update))
+            picked = tick.pick({"LOKAY2_REPO": name, "LOKAY2_ISSUE": "1"})
+            events = [call.kwargs for call in updates.call_args_list if "_event" in call.kwargs]
+            if factory:
+                assert picked["result"] == "picked" and picked["node"] == "plan", picked
+                tick.release_lock(picked["held"])
+                if polling:
+                    assert events[0]["_event"]["action"] == "reopened", events
+            else:
+                assert picked["result"] == "idle", picked
+                assert [event["_event"]["action"] for event in events] == ["closed"], events
+                assert "closed_on_github" not in events[0]
+                assert store.state_read(name, 1)["result"] == "closed"
+                updates.reset_mock()
+                assert tick.pick({"LOKAY2_REPO": name, "LOKAY2_ISSUE": "1"})["result"] == "idle"
+                updates.assert_not_called()
+            plan.assert_not_called()
+print("human close checks: green")
 PY
 uv run python - <<'PY'
 from lokay.effects.pi import OneHarnessRunDone, TickExpired, start_harness_run, tick_harness_started
@@ -671,7 +753,7 @@ def remote(args, **kwargs):
         return {"data": {"repository": {"issue_1": {"state": remote_issue}, "pr_7": {"state": "CLOSED"}}}}
     assert args[:2] == ["pr", "list"], args
     if "closed" in args:
-        assert args[args.index("--json") + 1] == "number,mergedAt", args
+        assert args[args.index("--json") + 1] == "number,mergedAt,closedAt", args
         assert int(args[args.index("--limit") + 1]) >= 100, args
         return closed_prs
     return []
@@ -684,6 +766,7 @@ with ExitStack() as stack:
     stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
     stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
     stack.enter_context(patch.object(tick, "gh_json", side_effect=remote))
+    stack.enter_context(patch.object(tick, "pr_closed_by_factory", return_value=True))
     stack.enter_context(patch.object(tick, "open_issues", side_effect=lambda _: [
         {"number": 1, "state": "OPEN"}] if remote_issue == "OPEN" else []))
     stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
