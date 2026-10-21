@@ -108,7 +108,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Check | GitHub SHA ≠ kandydat | sync_head | nowy SHA w kolejnej iteracji | Check | [S4][S6] |
 | Check | GitHub ma pending (także razem z red) | komentarz pending, zakończenie | node=check, result=pending, verdict=None | pending, koniec ticka | [S4][S6] |
 | Check | setup/test nieudany, nie uruchomiono skonfigurowanych testów, pominięto zmieniony pakiet albo GitHub red | aggregate uwag checks; przy fix bez zlokalizowanych uwag log trafia do uwagi i unlocated_findings; scope może dodać uwagę | local_ci, tested, verdict, check_history | Fix | [S4][S15] |
-| Check | uwagi lensów albo scope | aggregate, zapis komentarza i opisu PR | verdict SHA-bound, node=fix | Fix | [S4][S15][S16] |
+| Check | uwagi lensów albo scope | aggregate, zapis komentarza i opisu PR | verdict SHA-bound; deleted_files: replan z uwagami i PLAN_RESET | deleted_files → Plan, pozostałe → Fix | [S4][S15][S16] |
 | Check | problem bez konkretu, brak błędów/uwag blokujących | replan_prompt; _prepare | node=plan, phase=write, hash=None | Plan w tym ticku | [S4][S15] |
 | Check | local_ci green, GitHub green/no_ci, brak uwag/replan | aggregate merge | node=merge, verdict SHA-bound | Merge | [S4][S6][S15] |
 | Fix | uwagi puste | unieważnienie cache/fingerprint | node=check, result=check | check, koniec ticka | [S4] |
