@@ -116,8 +116,7 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
             segments = re.split(r"^LOKAY_TEST_CWD=.+$", log, flags=re.MULTILINE)[1:]
             if not all(did_run(CompletedProcess(proc.args, 0, segment, "")) for segment in segments):
                 return False
-        return (proc.returncode == 0
-                and not re.search(r"\b0 passed\b", log)
+        return (executed_tests(log) > 0
                 and not any(marker in log.lower() for marker in markers))
 
     failed = []
@@ -127,20 +126,22 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     for argv in tests:
         proc, timed_out = execute(argv)
         log = (proc.stdout or "") + (proc.stderr or "")
-        ran = did_run(proc)
-        if not ran:
+        attempts = [proc]
+        if not (did_run(proc) and proc.returncode == 0):
             retry, retry_timed_out = execute(argv)
+            attempts.append(retry)
             retry_log = (retry.stdout or "") + (retry.stderr or "")
-            flaky = did_run(retry)
-            ran = flaky
+            flaky = did_run(retry) and retry.returncode == 0
             item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
                     "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log,
                     "timeout": timeout if timed_out or retry_timed_out else None}
             (notes if flaky else failed).append(item)
             log = item["log"]
-        if ran:
-            directories = re.findall(r"^LOKAY_TEST_CWD=(.+)$", log, re.MULTILINE)
-            tested_cwds.update(str(Path(path).resolve()) for path in directories or [cwd])
+        for attempt in attempts:
+            if did_run(attempt):
+                attempt_log = (attempt.stdout or "") + (attempt.stderr or "")
+                directories = re.findall(r"^LOKAY_TEST_CWD=(.+)$", attempt_log, re.MULTILINE)
+                tested_cwds.update(str(Path(path).resolve()) for path in directories or [cwd])
         logs.append(log)
     return {"result": "red" if failed else "green", "sha": sha,
             "tested": bool(tested_cwds), "tested_cwds": sorted(tested_cwds),
