@@ -22,7 +22,11 @@ def merge_allowed(state: dict, sha: str) -> bool:
 def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
     return (state.get("result") == "closed" and issue_open
             and pr.get("state", "OPEN") == "OPEN" and bool(pr.get("headRefOid"))
-            and pr["headRefOid"] != state.get("sha"))
+            and (pr["headRefOid"] != state.get("sha") or state.get("closed_on_github") is True))
+
+
+def empty_patch_result(state: dict, base_head: str) -> str:
+    return "check" if state.get("pr") and state.get("h2_start") != base_head else "close"
 
 
 def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool, closed_pr: bool) -> bool:
@@ -43,7 +47,7 @@ def step(run: Run, event: Event) -> Run:
         case Reopened():
             fields.update(result="check", node="check", sha=outcome.get("sha"), verdict=None,
                           failures=0, retry_at=0, reason=None, last_error=None,
-                          waiting_on=None, awaiting=None, closed_on_github=None)
+                          waiting_on=None, awaiting=None, closed_on_github=None, fix_counts=[], no_progress=0)
             if outcome.get("issue"):
                 fields.update(node="plan", pr=None, sha=None, **deepcopy(PLAN_RESET))
             else:
