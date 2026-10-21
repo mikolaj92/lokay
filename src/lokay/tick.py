@@ -740,6 +740,12 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(name, issue)
     patch = Path(saved["h2_patch"])
     if not patch.read_bytes().strip():
+        if saved.get("pr") and graph.empty_patch_result(saved, git(worktree, "rev-parse", f"origin/{base}")) == "check":
+            sha = git_head(worktree)
+            rounds_append(name, issue, "Build: empty patch on the open PR branch; back to Check")
+            state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "check", "previous_sha": None}},
+                         result="check", verdict=None, sha=sha)
+            return {"result": "check", "sha": sha}
         from lokay.main_guard import check_main
         from lokay.effects.gh import fit_body
 

@@ -272,7 +272,8 @@ from lokay.types import PLAN_RESET, Run, event_record, parse_event
 closed = Run.from_state({"result": "closed", "node": "merge", "sha": "old", "pr": 35,
                          "verdict": {"result": "merge"}, "failures": 3, "retry_at": 99,
                          "reason": "empty PR diff", "last_error": "error",
-                         "waiting_on": "children", "awaiting": "children"})
+                         "waiting_on": "children", "awaiting": "children",
+                         "fix_counts": [4, 4, 4], "no_progress": 6})
 raw = {"ts": 1, "fields": {}, "action": "reopened", "outcome": {"sha": "new", "pr": 36}}
 event = parse_event(raw)
 assert event_record(event) == raw
@@ -280,6 +281,7 @@ live = graph.step(closed, event).state
 assert (live["result"], live["node"], live["sha"], live["pr"]) == ("check", "check", "new", 36)
 assert all(live[key] is None for key in ("verdict", "reason", "last_error", "waiting_on", "awaiting"))
 assert live["failures"] == live["retry_at"] == 0
+assert live["fix_counts"] == [] and live["no_progress"] == 0
 other = parse_event({"ts": 1, "fields": {}, "action": "enter_node", "outcome": {"node": "plan"}})
 assert graph.step(closed, other).state == closed.state
 merged = Run.from_state({**closed.state, "result": "merged"})
@@ -293,6 +295,15 @@ assert graph.reopen_pr_allowed(closed.state, {"headRefOid": "new"}, True)
 assert not graph.reopen_pr_allowed(merged.state, {"headRefOid": "new"}, True)
 assert not graph.reopen_issue_allowed(closed.state, True, False, False)
 marked = {**closed.state, "closed_on_github": True}
+assert graph.reopen_pr_allowed(marked, {"headRefOid": "old", "state": "OPEN"}, True)
+assert not graph.reopen_pr_allowed(marked, {"headRefOid": "old", "state": "OPEN"}, False)
+assert graph.empty_patch_result({"pr": 35, "h2_start": "pr-head"}, "base-head") == "check"
+assert graph.empty_patch_result({"h2_start": "pr-head"}, "base-head") == "close"
+assert graph.empty_patch_result({"pr": 35, "h2_start": "base-head"}, "base-head") == "close"
+replanned = Run.from_state({"node": "build", "sha": "pr-head", "dispute_rechecks": ["pr-head"]})
+fresh_check = parse_event({"ts": 1, "fields": {"sha": "pr-head"}, "action": "enter_node",
+                           "outcome": {"node": "check", "previous_sha": None}})
+assert graph.step(replanned, fresh_check).state["node"] == "check"
 assert graph.step(Run.from_state(marked), event).state["closed_on_github"] is None
 assert graph.reopen_issue_allowed(marked, True, False, False)
 assert not graph.reopen_issue_allowed(marked, False, False, False)
