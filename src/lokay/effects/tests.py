@@ -116,8 +116,11 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
             segments = re.split(r"^LOKAY_TEST_CWD=.+$", log, flags=re.MULTILINE)[1:]
             if not all(did_run(CompletedProcess(proc.args, 0, segment, "")) for segment in segments):
                 return False
+        marker_log = re.sub(
+            r"^=+[ \t]+FAILURES[ \t]+=+[ \t]*\r?\n[\s\S]*?(?=^=+[ \t]+[^=\r\n]+[ \t]+=+[ \t]*\r?$|\Z)",
+            "", log, flags=re.MULTILINE)
         return (executed_tests(log) > 0
-                and not any(marker in log.lower() for marker in markers))
+                and not any(marker in marker_log.lower() for marker in markers))
 
     failed = []
     notes = []
