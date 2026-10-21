@@ -184,6 +184,18 @@ def reopen_closed_issues(name, issues, reopened):
             reopened.add((name, issue))
 
 
+def poll_outcome(saved: dict, remote: dict, issue: int) -> tuple[str | None, str | None]:
+    pr = (remote.get(f"pr_{int(saved['pr'])}") or {}) if saved.get("pr") else {}
+    if pr.get("state") == "MERGED":
+        return "merged", (pr.get("mergeCommit") or {}).get("oid")
+    issue_state = (remote.get(f"issue_{int(issue)}") or {}).get("state")
+    if issue_state == "CLOSED":
+        return "closed", None
+    if issue_state == "OPEN" and pr.get("state") == "CLOSED":
+        return "reopened", None
+    return None, None
+
+
 def pick(env: dict[str, str] | None = None) -> dict:
     free = shutil.disk_usage(Path.home()).free
     token = maintenance.ENV.set(env)
@@ -299,21 +311,14 @@ def pick(env: dict[str, str] | None = None) -> dict:
             owner, repo_name = name.split("/", 1)
             fields = [f"issue_{int(issue)}: issueOrPullRequest(number: {int(issue)}) "
                       "{ ... on Issue { state } ... on PullRequest { state } }" for issue in active]
-            fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state }}"
+            fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state mergeCommit {{ oid }} }}"
                           for number in sorted({int(saved["pr"]) for saved in active.values() if saved.get("pr")}))
             query = ("query($owner: String!, $name: String!) { repository(owner:$owner,name:$name) { "
                      + " ".join(fields) + " } }")
             response = gh_json(["api", "graphql", "-f", f"owner={owner}", "-f", f"name={repo_name}",
                                 "-f", f"query={query}"], allow_partial_data=True)
             remote = response["data"].get("repository") or {}
-            closing = []
-            for issue, saved in active.items():
-                if (remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED":
-                    closing.append(issue)
-                elif ((remote.get(f"issue_{int(issue)}") or {}).get("state") == "OPEN"
-                      and saved.get("pr")
-                      and (remote.get(f"pr_{int(saved['pr'])}") or {}).get("state") == "CLOSED"):
-                    closing.append(issue)
+            closing = [issue for issue, saved in active.items() if poll_outcome(saved, remote, issue)[0]]
             if closing:
                 held = acquire_lock(lock_path(name.split("/")[0], name))
                 busy = held["result"] != "held"
@@ -324,9 +329,14 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             if not saved or saved.get("result") in ("merged", "closed"):
                                 states[issue] = saved
                                 continue
-                            if (remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED":
+                            outcome, oid = poll_outcome(saved, remote, issue)
+                            if outcome == "merged":
+                                state_update(name, issue, _event={"action": "merge_complete", "outcome": {
+                                    "result": "merged", "merge_sha": oid}}, sha=oid,
+                                    failures=0, retry_at=0, reason=None, last_error=None)
+                            elif outcome == "closed":
                                 state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
-                            else:
+                            elif outcome == "reopened":
                                 state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
                                 reopened.add((name, issue))
                             states[issue] = state_read(name, issue)

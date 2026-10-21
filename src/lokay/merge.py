@@ -42,13 +42,13 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
     if outcome["result"] != "merged":
         return outcome
     sha = outcome["merge_sha"]
+    state_update(repo_name if "/" in repo_name else f"{owner}/{repo_name}", issue, **{**rounds, "result": "merged", "sha": sha,
+                                      "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     if clone_path is None:
         from lokay.config import repo
 
         clone_path = Path(repo(repo_name)["clone_path"]).expanduser()
     check_main(repo_name, clone_path, sha, number, base=base)
-    state_update(repo_name if "/" in repo_name else f"{owner}/{repo_name}", issue, **{**rounds, "result": "merged", "sha": sha,
-                                      "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     if worktree is not None:
         try:
             removed = worktree_remove(clone_path, worktree)
