@@ -221,6 +221,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     snapshots = []
     pr_lists = {}
     issue_lists = {}
+    reopened = set()
 
     def list_prs(name):
         if name not in pr_lists:
@@ -298,7 +299,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             if not saved or saved.get("result") in ("merged", "closed"):
                                 states[issue] = saved
                                 continue
-                            state_update(name, issue, _event={"action": "closed"})
+                            state_update(name, issue, _event={"action": "closed"},
+                                         closed_on_github=(remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED")
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
@@ -341,6 +343,14 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if only_issue is not None and issue != only_issue:
                     continue
                 saved = state_read(name, issue)
+                if saved.get("result") == "closed" and (name, issue) not in reopened:
+                    issue_open = any(int(item["number"]) == issue and item.get("state", "OPEN") == "OPEN"
+                                     for item in list_issues(name))
+                    if graph.reopen_pr_allowed(saved, row, issue_open):
+                        state_update(name, issue, _event={"action": "reopened", "outcome": {
+                            "sha": row["headRefOid"], "pr": row["number"]}})
+                        reopened.add((name, issue))
+                        saved = state_read(name, issue)
                 if saved.get("result") in ("closed", "merged"):
                     states[issue] = saved
                     continue
@@ -357,6 +367,18 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
+                if (saved.get("result") == "closed" and saved.get("closed_on_github") is True
+                        and (name, issue) not in reopened):
+                    has_open_pr = any(pr.get("headRefName") == f"lokay/{issue}"
+                                      and pr.get("state", "OPEN") == "OPEN" for pr in list_prs(name))
+                    closed_prs = gh_json([
+                        "pr", "list", "--repo", name, "--head", f"lokay/{issue}",
+                        "--state", "closed", "--limit", "1", "--json", "number",
+                    ], error="closed pr list failed", default="[]") if not has_open_pr else ()
+                    if graph.reopen_issue_allowed(saved, True, has_open_pr, bool(closed_prs)):
+                        state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
+                        reopened.add((name, issue))
+                        saved = states[issue] = state_read(name, issue)
                 if (saved.get("result") in ("merged", "closed")
                         or saved.get("waiting_on") in ("children", "ci")):
                     continue
@@ -729,7 +751,7 @@ def _prepare(picked: dict) -> tuple | dict:
                     f"Lock checks: {baseline['lockfile']['status']}")
         gh_ok(["issue", "close", str(issue), "--repo", name, "--comment", fit_body(evidence)],
               error="issue close failed", strip=False)
-        state_update(name, issue, _event={"action": "closed"})
+        state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
         return {"result": "closed", "reason": "harness2: empty patch, all runs complete, main green"}
     if not saved.get("h2_committed"):
         if git_head(worktree) == saved["h2_start"]:
@@ -1136,7 +1158,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                    "--comment", fit_body(evidence)], strip=False, error="issue close failed")
             rounds_append(picked["repo"], picked["issue"],
                           "Fix round limit (2nd) → issue closed as infeasible")
-            state_update(picked["repo"], picked["issue"], _event={"action": "closed"})
+            state_update(picked["repo"], picked["issue"], _event={"action": "closed"}, closed_on_github=True)
             store.log_event("fix_round_limit", hit=2, repo=picked["repo"], issue=picked["issue"],
                             rounds=rounds, reason=derived["reason"])
             return {"result": "closed", "reason": "infeasible: fix round limit reached twice"}

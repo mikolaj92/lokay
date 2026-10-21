@@ -265,5 +265,40 @@ with patch("lokay.config.repo", return_value={"test": ["pytest"]}), \
                 assert "Removes 1 test assertions" in result.reason, result
 print("weakened test assertion checks: green")
 PY
+uv run python - <<'PY'
+from lokay import graph
+from lokay.types import PLAN_RESET, Run, event_record, parse_event
+
+closed = Run.from_state({"result": "closed", "node": "merge", "sha": "old", "pr": 35,
+                         "verdict": {"result": "merge"}, "failures": 3, "retry_at": 99,
+                         "reason": "empty PR diff", "last_error": "error",
+                         "waiting_on": "children", "awaiting": "children"})
+raw = {"ts": 1, "fields": {}, "action": "reopened", "outcome": {"sha": "new", "pr": 36}}
+event = parse_event(raw)
+assert event_record(event) == raw
+live = graph.step(closed, event).state
+assert (live["result"], live["node"], live["sha"], live["pr"]) == ("check", "check", "new", 36)
+assert all(live[key] is None for key in ("verdict", "reason", "last_error", "waiting_on", "awaiting"))
+assert live["failures"] == live["retry_at"] == 0
+other = parse_event({"ts": 1, "fields": {}, "action": "enter_node", "outcome": {"node": "plan"}})
+assert graph.step(closed, other).state == closed.state
+merged = Run.from_state({**closed.state, "result": "merged"})
+assert graph.step(merged, event).state == merged.state
+issue = graph.step(closed, parse_event({**raw, "outcome": {"issue": True}})).state
+assert (issue["result"], issue["node"], issue["pr"], issue["sha"]) == ("check", "plan", None, None)
+assert all(issue[key] == value for key, value in PLAN_RESET.items())
+assert not graph.reopen_pr_allowed(closed.state, {"headRefOid": "old"}, True)
+assert not graph.reopen_pr_allowed(closed.state, {"headRefOid": "new"}, False)
+assert graph.reopen_pr_allowed(closed.state, {"headRefOid": "new"}, True)
+assert not graph.reopen_pr_allowed(merged.state, {"headRefOid": "new"}, True)
+assert not graph.reopen_issue_allowed(closed.state, True, False, False)
+marked = {**closed.state, "closed_on_github": True}
+assert graph.step(Run.from_state(marked), event).state["closed_on_github"] is None
+assert graph.reopen_issue_allowed(marked, True, False, False)
+assert not graph.reopen_issue_allowed(marked, False, False, False)
+assert not graph.reopen_issue_allowed(marked, True, True, False)
+assert not graph.reopen_issue_allowed(marked, True, False, True)
+print("reopen checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
