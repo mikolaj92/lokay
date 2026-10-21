@@ -25,9 +25,10 @@ def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
             and (pr["headRefOid"] != state.get("sha") or state.get("closed_on_github") is True))
 
 
-def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool, closed_pr: bool) -> bool:
-    return (state.get("result") == "closed" and issue_open and not open_pr
-            and (state.get("closed_on_github") is True or closed_pr))
+def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool,
+                         closed_unmerged_pr: bool, merged_pr: bool) -> bool:
+    return (state.get("result") == "closed" and issue_open and not open_pr and not merged_pr
+            and (state.get("closed_on_github") is True or closed_unmerged_pr))
 
 
 def step(run: Run, event: Event) -> Run:

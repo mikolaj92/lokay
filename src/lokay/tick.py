@@ -374,9 +374,11 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                       and pr.get("state", "OPEN") == "OPEN" for pr in list_prs(name))
                     closed_prs = gh_json([
                         "pr", "list", "--repo", name, "--head", f"lokay/{issue}",
-                        "--state", "closed", "--limit", "1", "--json", "number",
+                        "--state", "closed", "--limit", "100", "--json", "number,mergedAt",
                     ], error="closed pr list failed", default="[]") if not has_open_pr else ()
-                    if graph.reopen_issue_allowed(saved, True, has_open_pr, bool(closed_prs)):
+                    closed_unmerged_pr = any(not pr.get("mergedAt") for pr in closed_prs)
+                    merged_pr = any(pr.get("mergedAt") for pr in closed_prs)
+                    if graph.reopen_issue_allowed(saved, True, has_open_pr, closed_unmerged_pr, merged_pr):
                         state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
                         reopened.add((name, issue))
                         saved = states[issue] = state_read(name, issue)
