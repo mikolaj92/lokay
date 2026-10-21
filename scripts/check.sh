@@ -368,6 +368,58 @@ with patch("lokay.config.repo", return_value={"test": ["pytest"]}), \
 print("weakened test assertion checks: green")
 PY
 uv run python - <<'PY'
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay import graph, tick
+from lokay.checks import CHECKS, CheckInput, deleted_files
+from lokay.types import PLAN_RESET, Run, parse_event, to_dict
+
+paths = ["src/old.py", "assets/old name.txt"]
+diff = ('diff --git a/src/old.py b/src/old.py\ndeleted file mode 100644\n'
+        '--- a/src/old.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-old\n'
+        'diff --git "a/assets/old name.txt" "b/assets/old name.txt"\n'
+        'deleted file mode 100644\n--- "a/assets/old name.txt"\n'
+        '+++ /dev/null\n@@ -1 +0,0 @@\n-old\n')
+x = CheckInput("owner/repo", 1, "head", "unrelated change", "", diff, [], {}, Path.cwd())
+assert deleted_files in CHECKS
+failed = deleted_files(x)
+assert failed.status == "fail", failed
+assert failed.reason == "deleted files not named by the issue or plan: 2 (assets/old name.txt, src/old.py)"
+assert {finding.plik for finding in failed.findings} == set(paths)
+assert all(finding.lens == "deleted_files" for finding in failed.findings)
+for names in ("src/old.py, assets/old name.txt", "old.py, old name.txt"):
+    for field in ("issue_body", "plan"):
+        result = deleted_files(replace(x, **{field: names}))
+        assert result.status == "pass", result
+        assert result.reason == "deleted files named by the issue or plan", result
+assert deleted_files(replace(x, issue_body="src/old.py")).status == "fail"
+assert deleted_files(replace(x, plan="prefixold.py old name.txt.bak")).status == "fail"
+result = deleted_files(replace(x, diff=diff.replace("deleted file mode 100644\n", "")))
+assert (result.status, result.reason) == ("pass", "no deleted files"), result
+run = Run.from_state({"node": "check", "pr": 7, "sha": "head", "plan_accepted_sha": "head"})
+
+def update(repo, issue, _event, **fields):
+    global run
+    run = graph.step(run, parse_event({"ts": 1, **_event, "fields": fields}))
+
+verdict = {"result": "fix", "uwagi": [to_dict(finding) for finding in failed.findings]}
+with patch("lokay.tick.state_update", side_effect=update), \
+        patch("lokay.tick.replan_prompt", return_value="revised plan") as prompt:
+    assert tick.replan_deleted_files({"repo": x.repo, "issue": x.issue}, verdict, x.sha)
+    assert run.state["node"] == "plan", run.state
+    assert all(run.state[key] == value for key, value in PLAN_RESET.items()), run.state
+    assert run.state["pr"] == 7 and run.state["sha"] == "head", run.state
+    assert failed.reason in prompt.call_args.args[1], prompt.call_args
+    assert prompt.call_args.args[2] == verdict["uwagi"], prompt.call_args
+    prompt.reset_mock()
+    assert not tick.replan_deleted_files({"repo": x.repo, "issue": x.issue},
+                                         {"result": "fix", "uwagi": [{"pytanie": "weakened_tests"}]}, x.sha)
+    prompt.assert_not_called()
+print("deleted files scope checks: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import PLAN_RESET, Run, event_record, parse_event
 

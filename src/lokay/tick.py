@@ -974,6 +974,19 @@ def _resume(picked: dict) -> tuple | dict:
     return worktree, branch, sha, repo.get("test") or [], 1
 
 
+def replan_deleted_files(picked: dict, verdict: dict, head: str) -> bool:
+    findings = [row for row in verdict.get("uwagi", [])
+                if parse_finding(row).lens == "deleted_files"]
+    if not findings:
+        return False
+    reason = "\n".join(parse_finding(row).zmiana for row in findings
+                       if isinstance(parse_finding(row), Finding))
+    prompt = replan_prompt(picked, reason, findings, head)
+    state_update(picked["repo"], picked["issue"], _event={"action": "replan"},
+                 plan_prompt=prompt, reason=reason, result="pending")
+    return True
+
+
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.review import hunks
     from lokay.effects.git import git_try
@@ -1127,6 +1140,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
+        if replan_deleted_files(picked, verdict, sha):
+            return {"result": "pending", "next": "plan"}
         derived = graph.step(store.load(picked["repo"], picked["issue"]),
                              Checked(time.time(), outcome=verdict)).state
         pending = derived["node"]

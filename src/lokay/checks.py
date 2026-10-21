@@ -154,6 +154,29 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 
+def deleted_files(x: CheckInput) -> CheckResult:
+    deleted = set()
+    for block in x.diff.split("diff --git ")[1:]:
+        header = block.split("\n@@ ", 1)[0].splitlines()
+        if not any(line.startswith("deleted file mode ") for line in header):
+            continue
+        match = re.fullmatch(r'("a/(?:\\.|[^"])*"|a/.*?) ("b/(?:\\.|[^"])*"|b/.*)', header[0])
+        if match is None:
+            raise ValueError("invalid diff path")
+        path = ast.literal_eval(match[1]) if match[1].startswith('"') else match[1]
+        deleted.add(path.removeprefix("a/"))
+    unapproved = sorted(path for path in deleted if not any(
+        re.search(r"(?<![\w./-])" + re.escape(name) + r"(?![\w./-])", text)
+        for name in (path, Path(path).name) for text in (x.issue_body, x.plan)))
+    if unapproved:
+        reason = (f"deleted files not named by the issue or plan: {len(unapproved)} "
+                  f"({', '.join(unapproved[:5])})")
+        return CheckResult("deleted_files", "fail", reason, tuple(
+            Finding(path, 1, 1, reason, "deleted_files") for path in unapproved))
+    return CheckResult("deleted_files", "pass",
+                       "deleted files named by the issue or plan" if deleted else "no deleted files", ())
+
+
 def weakened_tests(x: CheckInput) -> CheckResult:
     from lokay.config import repo as repo_config
     from lokay.effects.tests import base_tests_on_head
@@ -340,7 +363,7 @@ def junk(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, weakened_tests, encoded_rewrite, docs]
+          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, docs]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
