@@ -25,10 +25,6 @@ def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
             and (pr["headRefOid"] != state.get("sha") or state.get("closed_on_github") is True))
 
 
-def empty_patch_result(state: dict, base_head: str) -> str:
-    return "check" if state.get("pr") and state.get("h2_start") != base_head else "close"
-
-
 def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool, closed_pr: bool) -> bool:
     return (state.get("result") == "closed" and state.get("closed_on_github") is True
             and issue_open and not open_pr and not closed_pr)
