@@ -447,7 +447,7 @@ assert not graph.reopen_pr_allowed(closed.state, {"headRefOid": "old"}, True)
 assert not graph.reopen_pr_allowed(closed.state, {"headRefOid": "new"}, False)
 assert graph.reopen_pr_allowed(closed.state, {"headRefOid": "new"}, True)
 assert not graph.reopen_pr_allowed(merged.state, {"headRefOid": "new"}, True)
-assert not graph.reopen_issue_allowed(closed.state, True, False, False)
+assert not graph.reopen_issue_allowed(closed.state, True, False, False, False)
 marked = {**closed.state, "closed_on_github": True}
 assert graph.reopen_pr_allowed(marked, {"headRefOid": "old", "state": "OPEN"}, True)
 assert not graph.reopen_pr_allowed(marked, {"headRefOid": "old", "state": "OPEN"}, False)
@@ -456,10 +456,10 @@ fresh_check = parse_event({"ts": 1, "fields": {"sha": "pr-head"}, "action": "ent
                            "outcome": {"node": "check", "previous_sha": None}})
 assert graph.step(replanned, fresh_check).state["node"] == "check"
 assert graph.step(Run.from_state(marked), event).state["closed_on_github"] is None
-assert graph.reopen_issue_allowed(marked, True, False, False)
-assert not graph.reopen_issue_allowed(marked, False, False, False)
-assert not graph.reopen_issue_allowed(marked, True, True, False)
-assert graph.reopen_issue_allowed(marked, True, False, True)
+assert graph.reopen_issue_allowed(marked, True, False, False, False)
+assert not graph.reopen_issue_allowed(marked, False, False, False, False)
+assert not graph.reopen_issue_allowed(marked, True, True, False, False)
+assert graph.reopen_issue_allowed(marked, True, False, True, False)
 print("reopen checks: green")
 PY
 uv run python - <<'PY'
@@ -536,7 +536,11 @@ def remote(args, **kwargs):
         assert "prc_" not in " ".join(args), args
         return {"data": {"repository": {"issue_1": {"state": remote_issue}, "pr_7": {"state": "CLOSED"}}}}
     assert args[:2] == ["pr", "list"], args
-    return closed_prs if "closed" in args else []
+    if "closed" in args:
+        assert args[args.index("--json") + 1] == "number,mergedAt", args
+        assert int(args[args.index("--limit") + 1]) >= 100, args
+        return closed_prs
+    return []
 
 with ExitStack() as stack:
     stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": str(state_dir)}))
@@ -572,7 +576,7 @@ with ExitStack() as stack:
     assert poll() == []
     assert store.state_read(name, 1) == before
     store.state_update(name, 1, _event={"action": "closed"}, closed_on_github=False)
-    closed_prs = [{"number": 7}]
+    closed_prs = [{"number": 7, "mergedAt": None}]
     assert poll() == ["reopened"]
     before = fresh()
     assert poll() == []
@@ -581,6 +585,15 @@ with ExitStack() as stack:
     closed_prs = []
     assert poll() == []
     assert store.state_read(name, 1)["result"] == "closed"
+    closed_prs = [{"number": 7, "mergedAt": "2026-10-21T09:00:00Z"}]
+    for marked in (False, True):
+        store.state_update(name, 1, _event={"action": "closed"}, closed_on_github=marked)
+        before = store.state_read(name, 1)
+        assert poll() == []
+        assert store.state_read(name, 1) == before
+    closed_prs = [{"number": 6, "mergedAt": None}, *closed_prs]
+    assert poll() == []
+    assert store.state_read(name, 1) == before
     store.state_update(name, 1, _event={"action": "reopened", "outcome": {"issue": True}})
     remote_issue = "CLOSED"
     assert poll() == ["closed"]
