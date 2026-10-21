@@ -26,8 +26,8 @@ from lokay.config import load_repos, repo as repo_config, tick_budget
 from lokay.effects.gh import gh_json, gh_ok, auth_status, host_ops, open_issues, open_pr_for
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
-from lokay.effects.pi import (TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
-                       process_groups, run_process, tick_deadline)
+from lokay.effects.pi import (OneHarnessRunDone, TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
+                       process_groups, run_process, tick_deadline, tick_harness_started)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
@@ -61,11 +61,13 @@ def act(run: Run) -> Event:
             check_deadline()
             prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
             outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
-        except TickExpired:
+        except TickExpired as exc:
             repo, issue = picked["repo"], picked["issue"]
-            state_update(repo, issue, result="pending", reason="tick budget exhausted")
-            rounds_append(repo, issue, "Tick: budget exhausted; resume saved node")
-            return {"result": "pending", "reason": "tick budget exhausted"}
+            reason = "tick yields after one harness2 run" if isinstance(exc, OneHarnessRunDone) else "tick budget exhausted"
+            line = "Tick: one harness2 run done; resume saved node" if isinstance(exc, OneHarnessRunDone) else "Tick: budget exhausted; resume saved node"
+            state_update(repo, issue, result="pending", reason=reason)
+            rounds_append(repo, issue, line)
+            return {"result": "pending", "reason": reason}
         except Escalated as exc:
             return exc.outcome
         except RetryLater as exc:
@@ -509,12 +511,14 @@ def main(argv: list[str] | None = None) -> int:
         cleanup_process_groups()
         log_event("start")
         token = tick_deadline.set(time.monotonic() + tick_budget())
+        harness_token = tick_harness_started.set(False)
         try:
             _tick()
             return 0
         except TickExpired:
             return 0
         finally:
+            tick_harness_started.reset(harness_token)
             tick_deadline.reset(token)
     finally:
         for sig, handler in handlers.items():

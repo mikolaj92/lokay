@@ -300,5 +300,29 @@ assert not graph.reopen_issue_allowed(marked, True, True, False)
 assert not graph.reopen_issue_allowed(marked, True, False, True)
 print("reopen checks: green")
 PY
+uv run python - <<'PY'
+from lokay.effects.pi import OneHarnessRunDone, TickExpired, start_harness_run, tick_harness_started
+
+assert tick_harness_started.get() is None
+start_harness_run()
+start_harness_run()
+for _ in range(2):
+    token = tick_harness_started.set(False)
+    try:
+        start_harness_run()
+        assert tick_harness_started.get() is True
+        try:
+            start_harness_run()
+        except TickExpired as exc:
+            assert isinstance(exc, OneHarnessRunDone)
+        else:
+            raise AssertionError("second harness2 start allowed in one tick")
+    finally:
+        tick_harness_started.reset(token)
+assert tick_harness_started.get() is None
+start_harness_run()
+start_harness_run()
+print("one harness2 per tick checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
