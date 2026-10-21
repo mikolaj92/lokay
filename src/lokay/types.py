@@ -79,6 +79,11 @@ class Closed(Updated):
 
 
 @dataclass(frozen=True)
+class Reopened(Updated):
+    pass
+
+
+@dataclass(frozen=True)
 class Failed(Updated):
     pass
 
@@ -113,7 +118,7 @@ class Progress(Updated):
     pass
 
 
-Event: TypeAlias = EnteredNode | Planned | Synthesized | Built | Checked | Merged | Closed | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Dispatched | Updated
+Event: TypeAlias = EnteredNode | Planned | Synthesized | Built | Checked | Merged | Closed | Reopened | Failed | Retried | FixToBuild | Published | Fixed | RedMain | Progress | Dispatched | Updated
 
 
 def parse_event(raw: dict) -> Event:
@@ -122,7 +127,7 @@ def parse_event(raw: dict) -> Event:
         "needs_help": Failed, "replan": Planned, "build_complete": Built,
         "retry_succeeded": Retried, "fix_to_build": FixToBuild, "synthesis": Synthesized,
         "published": Published, "verdict": Checked, "fix_complete": Fixed,
-        "merge_complete": Merged, "closed": Closed, "red_main": RedMain,
+        "merge_complete": Merged, "closed": Closed, "reopened": Reopened, "red_main": RedMain,
     }
     action = raw.get("action")
     if action is not None and action not in variants:
@@ -138,7 +143,7 @@ def event_record(event: Event) -> dict:
     actions = {
         EnteredNode: "enter_node", Dispatched: "dispatched",
         Planned: "replan", Synthesized: "synthesis", Built: "build_complete",
-        Checked: "verdict", Merged: "merge_complete",
+        Checked: "verdict", Merged: "merge_complete", Reopened: "reopened",
         Failed: "needs_help", Retried: "retry_succeeded", FixToBuild: "fix_to_build",
         Published: "published", Fixed: "fix_complete", RedMain: "red_main", Closed: "closed",
     }

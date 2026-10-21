@@ -5,7 +5,7 @@ from typing import assert_never
 
 from lokay.scope import kind as change_kind
 from lokay.types import (
-    PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Failed,
+    PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Reopened, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, Snapshot, Pick, pr_number,
 )
 
@@ -19,13 +19,35 @@ def merge_allowed(state: dict, sha: str) -> bool:
     return bool(sha) and recorded.get("sha") == sha and recorded.get("result") == "merge"
 
 
+def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
+    return (state.get("result") == "closed" and issue_open
+            and pr.get("state", "OPEN") == "OPEN" and bool(pr.get("headRefOid"))
+            and pr["headRefOid"] != state.get("sha"))
+
+
+def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool, closed_pr: bool) -> bool:
+    return (state.get("result") == "closed" and state.get("closed_on_github") is True
+            and issue_open and not open_pr and not closed_pr)
+
+
 def step(run: Run, event: Event) -> Run:
     current = dict(run.state)
-    if current.get("result") == "closed":
+    if isinstance(event, Reopened):
+        if current.get("result") != "closed":
+            return run
+    elif current.get("result") == "closed":
         return run
     fields = dict(event.fields)
     outcome = event.outcome
     match event:
+        case Reopened():
+            fields.update(result="check", node="check", sha=outcome.get("sha"), verdict=None,
+                          failures=0, retry_at=0, reason=None, last_error=None,
+                          waiting_on=None, awaiting=None, closed_on_github=None)
+            if outcome.get("issue"):
+                fields.update(node="plan", pr=None, sha=None, **deepcopy(PLAN_RESET))
+            else:
+                fields["pr"] = outcome["pr"]
         case EnteredNode():
             fields["node"] = outcome["node"]
         case Failed():
