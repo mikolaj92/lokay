@@ -511,6 +511,60 @@ assert graph.reopen_issue_allowed(marked, True, False, True, False)
 print("reopen checks: green")
 PY
 uv run python - <<'PY'
+from unittest.mock import patch
+
+from lokay import graph, store, tick
+from lokay.types import Run, parse_event
+
+name = "owner/reopen-all"
+issues = [{"number": issue, "state": "OPEN"} for issue in (1, 2, 3)]
+states = {
+    1: {},
+    2: {"result": "closed", "node": "check", "pr": 22, "sha": "old-2"},
+    3: {"result": "closed", "node": "merge", "pr": 33, "sha": "old-3"},
+}
+events = []
+reopened = set()
+
+def read(repo, issue):
+    assert repo == name
+    saved = dict(states[issue])
+    store.normalize_state(saved)
+    saved["waiting_on"] = store.derive_waiting_on(saved)
+    return saved
+
+def update(repo, issue, **fields):
+    assert repo == name
+    event = {"ts": 1, **fields.pop("_event", {}), "fields": fields}
+    states[issue] = graph.step(Run.from_state(states[issue]), parse_event(event)).state
+    events.append((issue, event))
+
+def remote(args, **kwargs):
+    branch = args[args.index("--head") + 1]
+    assert args == ["pr", "list", "--repo", name, "--head", branch,
+                    "--state", "closed", "--limit", "100", "--json", "number,mergedAt"]
+    return {"lokay/2": [{"number": 22, "mergedAt": None}],
+            "lokay/3": [{"number": 33, "mergedAt": "2026-10-21T09:00:00Z"}]}[branch]
+
+with patch.object(tick, "state_read", side_effect=read), \
+        patch.object(tick, "state_update", side_effect=update), \
+        patch.object(tick, "list_prs", return_value=[]) as prs, \
+        patch.object(tick, "gh_json", side_effect=remote):
+    assert read(name, 1)["waiting_on"] == "ready"
+    tick.reopen_closed_issues(name, issues, reopened)
+    assert [(issue, event["action"]) for issue, event in events] == [(2, "reopened")]
+    assert reopened == {(name, 2)}
+    assert (states[2]["node"], states[2]["pr"], states[2]["sha"]) == ("plan", None, None)
+    assert states[3]["result"] == "closed"
+    prs.assert_called_once_with(name)
+    tick.reopen_closed_issues(name, issues, reopened)
+    assert [(issue, event["action"]) for issue, event in events] == [(2, "reopened")]
+    prs.reset_mock()
+    tick.reopen_closed_issues(name, issues[:2], reopened)
+    prs.assert_not_called()
+print("reopen all closed issues checks: green")
+PY
+uv run python - <<'PY'
 from lokay.effects.pi import OneHarnessRunDone, TickExpired, start_harness_run, tick_harness_started
 
 assert tick_harness_started.get() is None

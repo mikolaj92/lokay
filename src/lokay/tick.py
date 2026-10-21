@@ -155,6 +155,35 @@ def host_ready(report: dict[str, str]) -> bool:
     return all(value == "ok" for value in report.values())
 
 
+def list_prs(name):
+    return tuple(gh_json([
+        "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
+        "--json", "number,headRefName,headRefOid,labels,state",
+    ], error="pr list failed", default="[]"))
+
+
+def reopen_closed_issues(name, issues, reopened):
+    prs = None
+    for row in issues:
+        issue = row["number"]
+        saved = state_read(name, issue)
+        if saved.get("result") != "closed" or (name, issue) in reopened:
+            continue
+        if prs is None:
+            prs = list_prs(name)
+        has_open_pr = any(pr.get("headRefName") == f"lokay/{issue}"
+                          and pr.get("state", "OPEN") == "OPEN" for pr in prs)
+        closed_prs = gh_json([
+            "pr", "list", "--repo", name, "--head", f"lokay/{issue}",
+            "--state", "closed", "--limit", "100", "--json", "number,mergedAt",
+        ], error="closed pr list failed", default="[]") if not has_open_pr else ()
+        closed_unmerged_pr = any(not pr.get("mergedAt") for pr in closed_prs)
+        merged_pr = any(pr.get("mergedAt") for pr in closed_prs)
+        if graph.reopen_issue_allowed(saved, True, has_open_pr, closed_unmerged_pr, merged_pr):
+            state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
+            reopened.add((name, issue))
+
+
 def pick(env: dict[str, str] | None = None) -> dict:
     free = shutil.disk_usage(Path.home()).free
     token = maintenance.ENV.set(env)
@@ -225,12 +254,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
     issue_lists = {}
     reopened = set()
 
-    def list_prs(name):
+    def cached_prs(name):
         if name not in pr_lists:
-            pr_lists[name] = tuple(gh_json([
-                "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                "--json", "number,headRefName,headRefOid,labels,state",
-            ], error="pr list failed", default="[]"))
+            pr_lists[name] = list_prs(name)
         return pr_lists[name]
 
     def list_issues(name):
@@ -335,7 +361,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         name, number = selected.repo, selected.issue
         repo = next(row for row in snapshot.repos if row.name == name)
         if selected.kind == "prs":
-            prs = tuple(row for row in list_prs(name) if row.get("state", "OPEN") == "OPEN")
+            prs = tuple(row for row in cached_prs(name) if row.get("state", "OPEN") == "OPEN")
             states = {}
             for row in prs:
                 branch = row["headRefName"]
@@ -364,24 +390,12 @@ def pick(env: dict[str, str] | None = None) -> dict:
             issues = tuple(row for row in list_issues(name)
                            if row.get("state", "OPEN") == "OPEN"
                            and (only_issue is None or int(row["number"]) == only_issue))
+            reopen_closed_issues(name, issues, reopened)
             states = {}
             open_prs = set()
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
-                if saved.get("result") == "closed" and (name, issue) not in reopened:
-                    has_open_pr = any(pr.get("headRefName") == f"lokay/{issue}"
-                                      and pr.get("state", "OPEN") == "OPEN" for pr in list_prs(name))
-                    closed_prs = gh_json([
-                        "pr", "list", "--repo", name, "--head", f"lokay/{issue}",
-                        "--state", "closed", "--limit", "100", "--json", "number,mergedAt",
-                    ], error="closed pr list failed", default="[]") if not has_open_pr else ()
-                    closed_unmerged_pr = any(not pr.get("mergedAt") for pr in closed_prs)
-                    merged_pr = any(pr.get("mergedAt") for pr in closed_prs)
-                    if graph.reopen_issue_allowed(saved, True, has_open_pr, closed_unmerged_pr, merged_pr):
-                        state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
-                        reopened.add((name, issue))
-                        saved = states[issue] = state_read(name, issue)
                 if (saved.get("result") in ("merged", "closed")
                         or saved.get("waiting_on") in ("children", "ci")):
                     continue
