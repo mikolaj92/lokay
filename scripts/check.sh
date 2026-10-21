@@ -166,6 +166,64 @@ import inspect
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
+
+from lokay import main_guard
+from lokay.effects import maintenance
+from lokay.effects.git import ensure_worktree, git, worktree_remove
+
+os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                  GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid")
+sandbox = Path(sys.argv[1]).resolve()
+origin = sandbox / "atomic-origin.git"
+seed = sandbox / "atomic-seed"
+clone = sandbox / "atomic-clone"
+git(sandbox, "init", "--bare", str(origin))
+git(sandbox, "init", "-b", "base", str(seed))
+files = ("one.txt", "two.txt", "three.txt")
+for name in files:
+    (seed / name).write_text(f"{name}\n")
+git(seed, "add", "--", *files)
+git(seed, "commit", "-m", "seed")
+git(seed, "remote", "add", "origin", str(origin))
+git(seed, "push", "origin", "base", "base:lokay/1", "base:lokay/2")
+git(origin, "symbolic-ref", "HEAD", "refs/heads/base")
+git(sandbox, "clone", str(origin), str(clone))
+
+def interrupted(directory):
+    directory = Path(directory)
+    assert directory.parent == clone.parent
+    assert directory.name.startswith(f".{clone.name}-wt-")
+    assert ".removing-" in directory.name
+    (directory / files[0]).unlink()
+    raise OSError("interrupted deletion")
+
+for issue, safe in ((1, True), (2, False)):
+    branch = f"lokay/{issue}"
+    wt = clone.with_name(f"{clone.name}-wt-{issue}")
+    assert ensure_worktree(clone, branch, wt)["result"] == "added"
+    with patch("lokay.effects.git.shutil.rmtree", side_effect=interrupted) as deletion:
+        result = worktree_remove(clone, wt, safe=safe, branch=branch if safe else None)
+    assert result["result"] == "removed", result
+    deletion.assert_called_once()
+    assert not wt.exists()
+    assert f"worktree {wt}\n" not in git(clone, "worktree", "list", "--porcelain") + "\n"
+    result = ensure_worktree(clone, branch, wt)
+    assert result["result"] == "added", result
+    assert git(wt, "status", "--porcelain") == ""
+    for name in git(wt, "ls-files", "-z").split("\0"):
+        if name:
+            assert (wt / name).is_file(), name
+    assert all((wt / name).read_text() == f"{name}\n" for name in files)
+for module in (main_guard, maintenance):
+    assert '"worktree", "remove"' not in inspect.getsource(module)
+print("atomic worktree removal checks: green")
+PY
+uv run python - "$sandbox" <<'PY'
+import inspect
+import os
+import sys
+from pathlib import Path
 
 from lokay import graph, tick
 from lokay.effects.git import git, git_try, restart_from_base

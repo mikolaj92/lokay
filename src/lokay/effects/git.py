@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+from uuid import uuid4
 from subprocess import CompletedProcess, TimeoutExpired
 from typing import Any
 from pathlib import Path
@@ -306,6 +308,17 @@ def plan_checkout(root: Path) -> Path:
 
 
 def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None) -> dict:
+    def remove():
+        renamed = path.with_name(f".{path.name}.removing-{uuid4().hex}")
+        os.rename(path, renamed)
+        code, out, err = git_try(repo, "worktree", "prune", "--expire=now")
+        if code:
+            raise RuntimeError(err.strip() or out.strip() or "worktree prune failed")
+        try:
+            shutil.rmtree(renamed)
+        except OSError:
+            pass
+
     if safe:
         def checked(where, args):
             code, out, err = git_try(where, *args)
@@ -372,15 +385,21 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
                 raise ValueError("worktree HEAD mismatch")
             reachable = checked(repo, ["for-each-ref", f"--contains={head}",
                                        "--format=%(refname)", "refs/remotes/origin/"])
-            checked(repo, ["worktree", "remove", str(path)])
+            remove()
             if reachable:
                 checked(repo, ["update-ref", "-d", ref, head])
             return {"result": "removed", "path": str(path)}
         except (OSError, ValueError, RuntimeError) as exc:
             return {"result": "failed", "error": str(exc)}
-    code, out, err = git_try(repo, "worktree", "remove", "--force", str(path))
-    if code != 0 and path.exists():
-        return {"result": "failed", "error": err.strip() or out.strip()}
+    if not path.exists():
+        code, out, err = git_try(repo, "worktree", "remove", "--force", str(path))
+        if code != 0 and path.exists():
+            return {"result": "failed", "error": err.strip() or out.strip()}
+        return {"result": "removed", "path": str(path)}
+    try:
+        remove()
+    except (OSError, RuntimeError) as exc:
+        return {"result": "failed", "error": str(exc)}
     return {"result": "removed", "path": str(path)}
 
 
