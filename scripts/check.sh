@@ -753,6 +753,14 @@ with TemporaryDirectory(prefix="lokay-tested-red-") as temporary:
          "red", True, False),
         ("printf 'LOKAY_TEST_CWD=%s\\n5 passed\\nLOKAY_TEST_CWD=%s/empty\\n' \"$PWD\" \"$PWD\"",
          "red", False, False),
+        ("printf \"LOKAY_TEST_CWD=%s\\n=== FAILURES ===\\n"
+         "E       FileNotFoundError: [Errno 2] No such file or directory: 'x'\\n"
+         "=== short test summary info ===\\nFAILED t.py::a\\n1 failed, 5 passed\\n\" \"$PWD\"; exit 1",
+         "red", True, False),
+        ("printf \"LOKAY_TEST_CWD=%s\\n=== ERRORS ===\\n"
+         "E       FileNotFoundError: [Errno 2] No such file or directory: 'x'\\n"
+         "=== short test summary info ===\\n5 passed\\n\" \"$PWD\"; exit 1",
+         "red", False, False),
     )
     for command, expected, tested, flaky in cases:
         result = main_guard.run_repo_tests({"test": ["sh", "-c", command]}, "head", cwd)
