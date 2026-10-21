@@ -259,7 +259,7 @@ assert git_try(repo, "merge-base", "--is-ancestor", old_head, "HEAD")[0] == 0
 assert git_try(repo, "merge-base", "--is-ancestor", "origin/base", "HEAD")[0] == 0
 assert git_try(repo, "rev-parse", "--verify", "--quiet", "MERGE_HEAD")[0] == 1
 git(repo, "push", "origin", "lokay/1")
-assert 'if saved.get("pr"):\n                restart_from_base(worktree, base)' in inspect.getsource(tick._prepare)
+assert 'if git_try(worktree, "merge-base", "--is-ancestor", "HEAD", f"origin/{base}")[0]:' in inspect.getsource(tick._prepare)
 assert not hasattr(graph, "empty_patch_result")
 print("replan from base checks: green")
 PY
@@ -459,7 +459,7 @@ assert graph.step(Run.from_state(marked), event).state["closed_on_github"] is No
 assert graph.reopen_issue_allowed(marked, True, False, False)
 assert not graph.reopen_issue_allowed(marked, False, False, False)
 assert not graph.reopen_issue_allowed(marked, True, True, False)
-assert not graph.reopen_issue_allowed(marked, True, False, True)
+assert graph.reopen_issue_allowed(marked, True, False, True)
 print("reopen checks: green")
 PY
 uv run python - <<'PY'
@@ -507,6 +507,137 @@ for changes, expected in (({}, True), ({"last_attempt": now - 10}, False),
     else:
         assert picked is None, picked
 print("pending fix due checks: green")
+PY
+uv run python - "$sandbox" <<'PY'
+import os
+import sys
+from contextlib import ExitStack
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay import graph, store, tick
+from lokay.effects.git import git, git_try, merge_base_or_restart, restart_from_base
+from lokay.types import PLAN_RESET
+
+sandbox = Path(sys.argv[1]).resolve()
+state_dir = sandbox / "fresh-state"
+name = "owner/fresh"
+config = {"name": name, "clone_path": str(sandbox / "absent-clone"), "merge": "off"}
+remote_issue = "OPEN"
+closed_prs = []
+original_pick = graph.pick
+
+def select(snapshot):
+    selected = original_pick(snapshot)
+    return selected if selected is None or selected.kind in ("prs", "issues") else None
+
+def remote(args, **kwargs):
+    if args[:2] == ["api", "graphql"]:
+        assert "prc_" not in " ".join(args), args
+        return {"data": {"repository": {"issue_1": {"state": remote_issue}, "pr_7": {"state": "CLOSED"}}}}
+    assert args[:2] == ["pr", "list"], args
+    return closed_prs if "closed" in args else []
+
+with ExitStack() as stack:
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": str(state_dir)}))
+    for key, value in (("HOME", state_dir), ("RUNS", state_dir / "runs"), ("LOCKS", state_dir / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
+    stack.enter_context(patch.object(tick, "gh_json", side_effect=remote))
+    stack.enter_context(patch.object(tick, "open_issues", side_effect=lambda _: [
+        {"number": 1, "state": "OPEN"}] if remote_issue == "OPEN" else []))
+    stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    stack.enter_context(patch.object(graph, "pick", side_effect=select))
+    updates = stack.enter_context(patch.object(tick, "state_update", wraps=store.state_update))
+    env = {"LOKAY2_REPO": name, "LOKAY2_ISSUE": "1"}
+
+    def poll():
+        updates.reset_mock()
+        tick.pick(env)
+        return [call.kwargs["_event"]["action"] for call in updates.call_args_list if "_event" in call.kwargs]
+
+    def fresh():
+        saved = store.state_read(name, 1)
+        assert saved["node"] == "plan" and saved["result"] != "closed", saved
+        assert saved["pr"] is None and saved["sha"] is None, saved
+        assert all(saved[key] == value for key, value in PLAN_RESET.items()), saved
+        return saved
+
+    store.state_update(name, 1, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                       result="check", pr=7, sha="old", branch="lokay/1", h2_start="old")
+    assert poll() == ["reopened"]
+    before = fresh()
+    assert poll() == []
+    assert store.state_read(name, 1) == before
+    store.state_update(name, 1, _event={"action": "closed"}, closed_on_github=False)
+    closed_prs = [{"number": 7}]
+    assert poll() == ["reopened"]
+    before = fresh()
+    assert poll() == []
+    assert store.state_read(name, 1) == before
+    store.state_update(name, 1, _event={"action": "closed"}, closed_on_github=False)
+    closed_prs = []
+    assert poll() == []
+    assert store.state_read(name, 1)["result"] == "closed"
+    store.state_update(name, 1, _event={"action": "reopened", "outcome": {"issue": True}})
+    remote_issue = "CLOSED"
+    assert poll() == ["closed"]
+    assert store.state_read(name, 1)["result"] == "closed"
+    assert store.state_read(name, 1)["closed_on_github"] is True
+
+    os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                      GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid")
+    origin = sandbox / "fresh-origin.git"
+    repo = sandbox / "fresh-build"
+    git(sandbox, "init", "--bare", str(origin))
+    git(sandbox, "init", "-b", "base", str(repo))
+    git(repo, "remote", "add", "origin", str(origin))
+    (repo / "keep.txt").write_text("keep\n")
+    git(repo, "add", "keep.txt")
+    git(repo, "commit", "-m", "initial")
+    git(repo, "push", "-u", "origin", "base")
+    git(origin, "symbolic-ref", "HEAD", "refs/heads/base")
+    git(repo, "remote", "set-head", "origin", "base")
+    git(repo, "checkout", "-b", "lokay/1")
+    git(repo, "rm", "keep.txt")
+    git(repo, "commit", "-m", "delete")
+    git(repo, "push", "-u", "origin", "lokay/1")
+    old_head = git(repo, "rev-parse", "HEAD")
+
+    class BuildStarted(Exception):
+        pass
+
+    stack.enter_context(patch.object(tick, "repo_config", return_value=config))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(repo, repo)))
+    stack.enter_context(patch.object(tick, "_ensure_worktree"))
+    stack.enter_context(patch("lokay.h2.run_issue", side_effect=BuildStarted))
+    restart = stack.enter_context(patch.object(tick, "restart_from_base", wraps=restart_from_base))
+    merge = stack.enter_context(patch.object(tick, "merge_base_or_restart", wraps=merge_base_or_restart))
+    for issue, branch in ((1, "lokay/1"), (2, "lokay/2")):
+        if issue == 2:
+            git(repo, "checkout", "-b", branch, "origin/base")
+        store.state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
+        store.state_update(name, issue, issue_title="Restore content", issue_body="Restore keep.txt", difficulty="easy", pr=None)
+        restart.reset_mock()
+        merge.reset_mock()
+        try:
+            tick._prepare({"repo": name, "issue": issue})
+        except BuildStarted:
+            pass
+        else:
+            raise AssertionError("Build did not start")
+        assert git(repo, "rev-parse", "HEAD^{tree}") == git(repo, "rev-parse", "origin/base^{tree}")
+        if issue == 1:
+            restart.assert_called_once_with(repo, "base")
+            merge.assert_not_called()
+            assert git_try(repo, "merge-base", "--is-ancestor", old_head, "HEAD")[0] == 0
+            git(repo, "push", "origin", branch)
+        else:
+            restart.assert_not_called()
+            merge.assert_called_once_with(repo, "base")
+print("fresh start after closed PR checks: green")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

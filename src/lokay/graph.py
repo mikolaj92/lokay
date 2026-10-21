@@ -26,14 +26,14 @@ def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
 
 
 def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool, closed_pr: bool) -> bool:
-    return (state.get("result") == "closed" and state.get("closed_on_github") is True
-            and issue_open and not open_pr and not closed_pr)
+    return (state.get("result") == "closed" and issue_open and not open_pr
+            and (state.get("closed_on_github") is True or closed_pr))
 
 
 def step(run: Run, event: Event) -> Run:
     current = dict(run.state)
     if isinstance(event, Reopened):
-        if current.get("result") != "closed":
+        if current.get("result") != "closed" and (not event.outcome.get("issue") or current.get("result") == "merged"):
             return run
     elif current.get("result") == "closed":
         return run
