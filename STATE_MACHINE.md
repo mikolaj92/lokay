@@ -95,7 +95,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Plan | brak kryteriów < 0.35 | akceptacja; p od 0.35 do <0.5 to notes | node=build, plan_accepted_sha, notes; phase/prompt=None | Build | [S3][S5] |
 | Build | brak worktree | worktree_add; setup zależności | node=build | Build albo błąd retry | [S3][S17] |
 | Build | build_code failed | świeży prompt z błędem i historią | node=plan, phase=write, failures+1, retry_at=0, hash=None | next=plan; koniec ticka | [S3][S11] |
-| Build | no_changes, ale otwarty PR ma commity ponad main | zaakceptowanie istniejącej zmiany do Check | result done wewnętrznie | publikacja | [S3] |
+| Build | otwarty PR i brak h2_start | restart z treści origin/<base>, z rodzicami HEAD i origin/<base>; pusty patch wymaga pełnego wykonania, podsumowania i zielonego main | h2_start; pusty patch zamyka PR i issue z dowodami, zachowuje branch | Build albo closed | [S3] |
 | Build | done | push i stworzenie/odnalezienie PR; wymagany published SHA | failures=0, sha, pr, node=check, verdict=None | Check w tym ticku | [S3][S11] |
 | Build | publikacja ≠ pr_open lub brak SHA | retry | failures, reason, retry_at | failed | [S2][S3] |
 | Resume | brak PR/SHA, zły numer/branch, błąd Git | needs_help | błąd i retry | failed | [S4] |

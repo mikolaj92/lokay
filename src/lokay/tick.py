@@ -18,7 +18,7 @@ from dataclasses import replace
 from lokay.types import Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked, parse_event, pr_number
 from lokay.merge import merge_blocked
 from lokay.effects import maintenance
-from lokay.effects.git import base_branch, merge_base_or_restart, push, worktree_remove
+from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_base, push, worktree_remove
 from lokay.effects.git import git, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
@@ -727,9 +727,13 @@ def _prepare(picked: dict) -> tuple | dict:
                 store.write_artifact(artifact, out)
                 rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
                 git(worktree, "reset", "--hard", "HEAD", timeout=300)
-            conflicts = merge_base_or_restart(worktree, base)
-            if conflicts:
-                rounds_append(name, issue, f"Build: base merge conflicts in {', '.join(conflicts)}; restarted from origin/{base}")
+            if saved.get("pr"):
+                restart_from_base(worktree, base)
+                rounds_append(name, issue, f"Build: restart from origin/{base} on the open PR branch")
+            else:
+                conflicts = merge_base_or_restart(worktree, base)
+                if conflicts:
+                    rounds_append(name, issue, f"Build: base merge conflicts in {', '.join(conflicts)}; restarted from origin/{base}")
             state_update(name, issue, h2_start=git_head(worktree))
         built = run_issue(name, issue, root, start=state_read(name, issue)["h2_start"], title=title,
                           body=body)
@@ -740,12 +744,6 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(name, issue)
     patch = Path(saved["h2_patch"])
     if not patch.read_bytes().strip():
-        if saved.get("pr") and graph.empty_patch_result(saved, git(worktree, "rev-parse", f"origin/{base}")) == "check":
-            sha = git_head(worktree)
-            rounds_append(name, issue, "Build: empty patch on the open PR branch; back to Check")
-            state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "check", "previous_sha": None}},
-                         result="check", verdict=None, sha=sha)
-            return {"result": "check", "sha": sha}
         from lokay.main_guard import check_main
         from lokay.effects.gh import fit_body
 
@@ -759,6 +757,9 @@ def _prepare(picked: dict) -> tuple | dict:
                     f"argv: `{dumps(baseline['argv'])}`\n"
                     f"Executed tests: {baseline['ci'].get('executed', 0)}\n"
                     f"Lock checks: {baseline['lockfile']['status']}")
+        if saved.get("pr"):
+            gh_ok(["pr", "close", str(pr_number(saved["pr"])), "--repo", name, "--comment", fit_body(evidence)],
+                  error="PR close failed", strip=False)
         gh_ok(["issue", "close", str(issue), "--repo", name, "--comment", fit_body(evidence)],
               error="issue close failed", strip=False)
         state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
