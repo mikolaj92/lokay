@@ -112,6 +112,26 @@ def gh_json(args: list[str], *, error: str = "gh failed", strip: bool = True, de
     return json.loads(out if default is None else out or default)
 
 
+def pr_closed_by_factory(repo: str, number: int) -> bool:
+    owner, name = repo.split("/", 1)
+    query = ('query($owner: String!, $name: String!, $number: Int!) {'
+             ' viewer { login } repository(owner: $owner, name: $name) {'
+             ' pullRequest(number: $number) {'
+             ' timelineItems(itemTypes: [CLOSED_EVENT], last: 1) {'
+             ' nodes { ... on ClosedEvent { actor { login } } } } } } }')
+    response = gh_json(["api", "graphql", "-f", f"query={query}",
+                        "-f", f"owner={owner}", "-f", f"name={name}", "-F", f"number={int(number)}"],
+                       error="PR close actor lookup failed")
+    if response.get("errors"):
+        raise RuntimeError("PR close actor lookup failed")
+    data = response["data"]
+    viewer = (data.get("viewer") or {}).get("login")
+    pr = (data.get("repository") or {}).get("pullRequest") or {}
+    nodes = (pr.get("timelineItems") or {}).get("nodes") or []
+    actor = ((nodes[-1] or {}).get("actor") or {}).get("login") if nodes else None
+    return bool(viewer and actor == viewer)
+
+
 def create_child_issue(repo: str, parent: int, index: int, task: dict, generation: int) -> int:
     marker = f"Lokay parent: #{parent}; split: {generation}; task: {index}"
     rows = gh_json(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000",

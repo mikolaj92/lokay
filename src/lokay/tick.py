@@ -23,7 +23,7 @@ from lokay.effects.git import git, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
-from lokay.effects.gh import gh_json, gh_ok, auth_status, host_ops, open_issues, open_pr_for
+from lokay.effects.gh import gh_json, gh_ok, auth_status, host_ops, open_issues, open_pr_for, pr_closed_by_factory
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
 from lokay.effects.pi import (OneHarnessRunDone, TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
@@ -162,6 +162,13 @@ def list_prs(name):
     ], error="pr list failed", default="[]"))
 
 
+def closed_prs(name, issue):
+    return sorted(gh_json([
+        "pr", "list", "--repo", name, "--head", f"lokay/{issue}",
+        "--state", "closed", "--limit", "100", "--json", "number,mergedAt,closedAt",
+    ], error="closed pr list failed", default="[]"), key=lambda pr: pr.get("closedAt") or "", reverse=True)
+
+
 def reopen_closed_issues(name, issues, reopened):
     prs = None
     for row in issues:
@@ -173,12 +180,10 @@ def reopen_closed_issues(name, issues, reopened):
             prs = list_prs(name)
         has_open_pr = any(pr.get("headRefName") == f"lokay/{issue}"
                           and pr.get("state", "OPEN") == "OPEN" for pr in prs)
-        closed_prs = gh_json([
-            "pr", "list", "--repo", name, "--head", f"lokay/{issue}",
-            "--state", "closed", "--limit", "100", "--json", "number,mergedAt",
-        ], error="closed pr list failed", default="[]") if not has_open_pr else ()
-        closed_unmerged_pr = any(not pr.get("mergedAt") for pr in closed_prs)
-        merged_pr = any(pr.get("mergedAt") for pr in closed_prs)
+        closed = closed_prs(name, issue) if not has_open_pr else ()
+        unmerged = next((pr for pr in closed if not pr.get("mergedAt")), None)
+        closed_unmerged_pr = bool(unmerged and pr_closed_by_factory(name, unmerged["number"]))
+        merged_pr = any(pr.get("mergedAt") for pr in closed)
         if graph.reopen_issue_allowed(saved, True, has_open_pr, closed_unmerged_pr, merged_pr):
             state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
             reopened.add((name, issue))
@@ -337,8 +342,11 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             elif outcome == "closed":
                                 state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
                             elif outcome == "reopened":
-                                state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
-                                reopened.add((name, issue))
+                                if pr_closed_by_factory(name, saved["pr"]):
+                                    state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
+                                    reopened.add((name, issue))
+                                else:
+                                    state_update(name, issue, _event={"action": "closed"})
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
@@ -466,6 +474,12 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 node = "plan"
                             node = node if node in ("plan", "build", "check", "fix", "merge") else "check"
                         else:
+                            closed = closed_prs(name, number)
+                            if (closed and not closed[0].get("mergedAt")
+                                    and not pr_closed_by_factory(name, closed[0]["number"])):
+                                state_update(name, number, _event={"action": "closed"})
+                                release_lock(held)
+                                return idle()
                             node = node or "plan"
                             if saved.get("result") == "parked":
                                 resumed = store.escalation_fields(saved)
