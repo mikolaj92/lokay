@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from subprocess import CompletedProcess
+from subprocess import CompletedProcess, TimeoutExpired
 from typing import Any
 from pathlib import Path
 
@@ -54,8 +54,27 @@ def _command(repo: Path | None, args: list[str], *, timeout: float, env: dict[st
     return run_process(argv, cwd=repo, timeout=timeout, env=env, input=input, text=text)
 
 
+def _remove_stale_lock(repo: Path, stderr: str) -> bool:
+    match = re.search(r"Unable to create '([^']+\.lock)': File exists", stderr)
+    if not match:
+        return False
+    lock = repo / match[1]
+    try:
+        if not lock.is_file():
+            return False
+        proc = run_process(["lsof", "-t", "--", str(lock)], timeout=10)
+        if proc.returncode == 0 and (proc.stdout or "").strip():
+            return False
+        lock.unlink(missing_ok=True)
+    except (OSError, TimeoutExpired):
+        return False
+    return True
+
+
 def git_try(path: Path, *args: str, timeout: float = 60, env: dict[str, str] | None = None) -> tuple[int, str, str]:
     proc = _command(path, list(args), timeout=timeout, env=env)
+    if proc.returncode != 0 and _remove_stale_lock(path, proc.stderr or ""):
+        proc = _command(path, list(args), timeout=timeout, env=env)
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 

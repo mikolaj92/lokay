@@ -161,6 +161,36 @@ assert merge_base_or_restart(repo, "base") == []
 assert (repo / "clean.txt").read_text() == "clean\n"
 print("base merge checks: green")
 PY
+uv run python - <<'PY'
+import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay.effects.git import git, git_try
+
+with TemporaryDirectory() as directory:
+    repo = Path(directory)
+    git(repo, "init")
+    (repo / "file.txt").write_text("content\n")
+    lock = repo / ".git/index.lock"
+    lock.touch()
+    assert git_try(repo, "add", "file.txt")[0] == 0
+    assert not lock.exists()
+    lock.touch()
+    child = subprocess.Popen(
+        ["uv", "run", "python", "-c",
+         "import sys, time; f = open(sys.argv[1]); print('ready', flush=True); time.sleep(60)", str(lock)],
+        stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        assert child.stdout.readline().strip() == "ready"
+        assert git_try(repo, "add", "file.txt")[0] != 0
+        assert lock.exists()
+    finally:
+        child.terminate()
+        child.wait(timeout=10)
+print("stale index lock checks: green")
+PY
 .venv/bin/python - <<'PY'
 from datetime import datetime, timezone
 
