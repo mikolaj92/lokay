@@ -275,8 +275,6 @@ def pick(env: dict[str, str] | None = None) -> dict:
                       "{ ... on Issue { state } ... on PullRequest { state } }" for issue in active]
             fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state }}"
                           for number in sorted({int(saved["pr"]) for saved in active.values() if saved.get("pr")}))
-            fields.extend(f"prc_{int(issue)}: pullRequests(headRefName: {json.dumps(saved.get('branch') or f'lokay/{issue}')}, states: CLOSED, first: 1) {{ nodes {{ number }} }}"
-                          for issue, saved in active.items() if not saved.get("pr"))
             query = ("query($owner: String!, $name: String!) { repository(owner:$owner,name:$name) { "
                      + " ".join(fields) + " } }")
             response = gh_json(["api", "graphql", "-f", f"owner={owner}", "-f", f"name={repo_name}",
@@ -286,10 +284,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for issue, saved in active.items():
                 if (remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED":
                     closing.append(issue)
-                elif saved.get("pr"):
-                    if (remote.get(f"pr_{int(saved['pr'])}") or {}).get("state") == "CLOSED":
-                        closing.append(issue)
-                elif (remote.get(f"prc_{int(issue)}") or {}).get("nodes"):
+                elif ((remote.get(f"issue_{int(issue)}") or {}).get("state") == "OPEN"
+                      and saved.get("pr")
+                      and (remote.get(f"pr_{int(saved['pr'])}") or {}).get("state") == "CLOSED"):
                     closing.append(issue)
             if closing:
                 held = acquire_lock(lock_path(name.split("/")[0], name))
@@ -301,8 +298,11 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             if not saved or saved.get("result") in ("merged", "closed"):
                                 states[issue] = saved
                                 continue
-                            state_update(name, issue, _event={"action": "closed"},
-                                         closed_on_github=(remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED")
+                            if (remote.get(f"issue_{int(issue)}") or {}).get("state") == "CLOSED":
+                                state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
+                            else:
+                                state_update(name, issue, _event={"action": "reopened", "outcome": {"issue": True}})
+                                reopened.add((name, issue))
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
@@ -369,8 +369,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             for row in issues:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
-                if (saved.get("result") == "closed" and saved.get("closed_on_github") is True
-                        and (name, issue) not in reopened):
+                if saved.get("result") == "closed" and (name, issue) not in reopened:
                     has_open_pr = any(pr.get("headRefName") == f"lokay/{issue}"
                                       and pr.get("state", "OPEN") == "OPEN" for pr in list_prs(name))
                     closed_prs = gh_json([
@@ -727,9 +726,9 @@ def _prepare(picked: dict) -> tuple | dict:
                 store.write_artifact(artifact, out)
                 rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
                 git(worktree, "reset", "--hard", "HEAD", timeout=300)
-            if saved.get("pr"):
+            if git_try(worktree, "merge-base", "--is-ancestor", "HEAD", f"origin/{base}")[0]:
                 restart_from_base(worktree, base)
-                rounds_append(name, issue, f"Build: restart from origin/{base} on the open PR branch")
+                rounds_append(name, issue, f"Build: restart from origin/{base} on the existing branch")
             else:
                 conflicts = merge_base_or_restart(worktree, base)
                 if conflicts:
