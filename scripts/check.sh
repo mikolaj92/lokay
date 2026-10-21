@@ -651,5 +651,50 @@ with ExitStack() as stack:
             merge.assert_called_once_with(repo, "base")
 print("fresh start after closed PR checks: green")
 PY
+uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import main_guard
+
+with TemporaryDirectory(prefix="lokay-tested-red-") as temporary:
+    cwd = Path(temporary).resolve()
+    cases = (
+        ("printf '2 failed, 5 passed\\n'; exit 1", "red", True, False),
+        ("printf 'no tests ran\\n'; exit 5", "red", False, False),
+        ("printf '5 passed\\n'", "green", True, False),
+        ("if [ -f retried ]; then printf '5 passed\\n'; else touch retried; "
+         "printf '1 failed, 4 passed\\n'; exit 1; fi", "green", True, True),
+        ("printf '0 passed\\n'", "red", False, False),
+        ("true", "red", False, False),
+        ("printf 'LOKAY_TEST_CWD=%s\\n2 failed, 5 passed\\n' \"$PWD\"; exit 1",
+         "red", True, False),
+        ("printf 'LOKAY_TEST_CWD=%s\\n5 passed\\nLOKAY_TEST_CWD=%s/empty\\n' \"$PWD\" \"$PWD\"",
+         "red", False, False),
+    )
+    for command, expected, tested, flaky in cases:
+        result = main_guard.run_repo_tests({"test": ["sh", "-c", command]}, "head", cwd)
+        assert result["result"] == expected, result
+        assert result["tested"] is tested, result
+        assert result["tested_cwds"] == ([str(cwd)] if tested else []), result
+        assert bool(result["notes"]) is flaky, result
+        assert bool(result["failed"]) is (expected == "red"), result
+        assert ("Retry:" in result["log"]) is (expected == "red" or flaky), result
+        if command == cases[0][0]:
+            red = result
+            assert result["log"].count("2 failed, 5 passed") == 2, result
+    baseline = {"sha": "head", "argv": ["sh"], "guard_version": main_guard.GUARD_VERSION,
+                "ci": red, "lockfile": {"status": "pass", "findings": [], "reason": "ok"}}
+    with patch.object(main_guard, "git", return_value="head"), \
+            patch.object(main_guard, "main_status", return_value={"owner/repo": {"baseline": baseline}}), \
+            patch.object(main_guard, "save_main_status"), \
+            patch.object(main_guard, "guard_issue", return_value=7) as issue:
+        status = main_guard.check_main("owner/repo", cwd, base="main", config={"test": ["sh"]})
+    assert status["status"] == "red", status
+    assert status["issue"] == 7, status
+    issue.assert_called_once()
+print("tested red checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
