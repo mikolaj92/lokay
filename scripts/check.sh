@@ -56,28 +56,6 @@ for rollup, expected in (([success, cancelled], "green"), ([cancelled], "red"),
 print("superseded checks: green")
 PY
 .venv/bin/python - <<'PY'
-from lokay.tick import main_check_due
-
-now = 10000
-old = {"checked_at": now - 3601, "baseline": {"sha": "stored"}}
-recent = {**old, "checked_at": now - 3599}
-temida = {"name": "mikolaj92/Temida", "merge": "on"}
-other = {"name": "owner/repo", "merge": "on"}
-
-def no_lookup():
-    raise AssertionError("git lookup not needed")
-
-assert not main_check_due(temida, old, now, lambda: "stored")
-assert main_check_due(temida, old, now, lambda: "new")
-assert not main_check_due(temida, recent, now, lambda: "new")
-assert not main_check_due(temida, recent, now, no_lookup)
-for sha in ("stored", "new"):
-    assert main_check_due(other, old, now, lambda: sha)
-assert main_check_due(other, old, now, no_lookup)
-assert not main_check_due({**temida, "merge": "off"}, old, now, no_lookup)
-print("temida per-sha main check checks: green")
-PY
-.venv/bin/python - <<'PY'
 from lokay.review import verdict
 from lokay.types import CheckResult
 

@@ -184,13 +184,6 @@ def reopen_closed_issues(name, issues, reopened):
             reopened.add((name, issue))
 
 
-def main_check_due(repo: dict, status: dict, now: float, current_sha: Callable[[], str]) -> bool:
-    if repo["merge"] != "on" or status.get("checked_at", 0) > now - 3600:
-        return False
-    return (repo["name"] != "mikolaj92/Temida"
-            or status.get("baseline", {}).get("sha") != current_sha())
-
-
 def pick(env: dict[str, str] | None = None) -> dict:
     free = shutil.disk_usage(Path.home()).free
     token = maintenance.ENV.set(env)
@@ -227,7 +220,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     for repo in sorted(configured, key=lambda row: (statuses.get(row["name"], {}).get("checked_at", 0), row["name"])):
         name = repo["name"]
         clone = Path(repo["clone_path"]).expanduser()
-        if (repo["merge"] != "on" or not clone.is_dir()
+        if (repo["merge"] != "on" or name == "mikolaj92/Temida" or not clone.is_dir()
                 or statuses.get(name, {}).get("checked_at", 0) > time.time() - 3600):
             continue
         held = None
@@ -238,13 +231,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             if held["result"] != "held":
                 continue
             current = main_status().get(name, {})
-
-            def current_sha():
-                base = base_branch(clone)
-                git(clone, "fetch", "origin", base, timeout=60)
-                return git(clone, "rev-parse", f"origin/{base}", timeout=60)
-
-            if not main_check_due(repo, current, time.time(), current_sha):
+            if current.get("checked_at", 0) > time.time() - 3600:
                 continue
             attempted = True
             store.save_main_status(name, {**current, "checked_at": time.time()})
