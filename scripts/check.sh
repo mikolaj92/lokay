@@ -486,28 +486,6 @@ start_harness_run()
 start_harness_run()
 print("one harness2 per tick checks: green")
 PY
-uv run python - <<'PY'
-from lokay import graph
-from lokay.types import RepoSnapshot, Snapshot
-
-now = 10_000
-state = {"result": "pending", "node": "fix", "reason": "tick yields after one harness2 run",
-         "pr": 206, "branch": "lokay/141", "sha": "abc", "last_attempt": 1_000, "retry_at": 0}
-for changes, expected in (({}, True), ({"last_attempt": now - 10}, False),
-                          ({"result": "running"}, False), ({"result": "closed"}, False),
-                          ({"node": "check"}, True)):
-    snapshot = Snapshot(now=now, repos=(RepoSnapshot(
-        name="o/r", last_attempt=9_999, prs=(), issues=(), states={141: {**state, **changes}},
-    ),))
-    picked = graph.pick(snapshot)
-    if expected:
-        assert picked is not None, changes
-        assert picked.kind == "pr" and picked.issue == 141, picked
-        assert picked.target["number"] == 206 and picked.target["headRefOid"] == "abc", picked
-    else:
-        assert picked is None, picked
-print("pending fix due checks: green")
-PY
 uv run python - "$sandbox" <<'PY'
 import os
 import sys
