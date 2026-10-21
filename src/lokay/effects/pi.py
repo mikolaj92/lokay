@@ -164,7 +164,20 @@ class TickExpired(BaseException):
     pass
 
 
+class OneHarnessRunDone(TickExpired):
+    pass
+
+
 tick_deadline: ContextVar[float | None] = ContextVar("tick_deadline", default=None)
+tick_harness_started: ContextVar[bool | None] = ContextVar("tick_harness_started", default=None)
+
+
+def start_harness_run() -> None:
+    started = tick_harness_started.get()
+    if started is True:
+        raise OneHarnessRunDone()
+    if started is False:
+        tick_harness_started.set(True)
 
 
 def check_deadline() -> None:

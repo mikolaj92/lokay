@@ -16,7 +16,7 @@ from harness2.substrate.base import Install
 from lokay import store
 from lokay.config import HOME
 from lokay.effects import git
-from lokay.effects.pi import harness_session, tick_deadline
+from lokay.effects.pi import harness_session, start_harness_run, tick_deadline
 from lokay.safety import untrusted_issue_block
 
 PI_SURFACE = SurfaceSpec(
@@ -171,6 +171,7 @@ class LokayAdapter:
 
 
 def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round=0):
+    start_harness_run()
     token = tick_deadline.set(None)
     try:
         adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
