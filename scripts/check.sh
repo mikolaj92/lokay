@@ -341,6 +341,33 @@ for result in ("failed", "running", "pending", "merged", "closed"):
         assert (picked.repo, picked.issue) == ("owner/B", 8), (result, picked)
 print("red main fairness checks: green")
 PY
+uv run python - <<'PY'
+from lokay import graph
+from lokay.types import RepoSnapshot, Snapshot
+
+now = 1_792_512_000
+for merged in (False, True):
+    states = {
+        7: {"result": "pending", "node": "plan", "awaiting": "children", "children": [11, 12]},
+        11: {"result": "failed", "node": "plan"},
+    }
+    if merged:
+        states[12] = {"result": "merged"}
+    snapshot = Snapshot(repos=(
+        RepoSnapshot(name="owner/A", status={"status": "red", "issue": 7}, prs=(), issues=(),
+                     states=states),
+        RepoSnapshot(name="owner/B", prs=(), issues=(),
+                     states={8: {"result": "pending", "node": "check", "retry_at": now - 20}}),
+    ), now=now)
+    picked = graph.pick(snapshot)
+    assert picked is not None, (merged, picked)
+    if merged:
+        assert picked.kind != "red_main", picked
+        assert (picked.repo, picked.issue) == ("owner/B", 8), picked
+    else:
+        assert (picked.repo, picked.issue, picked.kind) == ("owner/A", 12, "red_main"), picked
+print("red main children checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay import graph
 from lokay.types import Fixed, Run

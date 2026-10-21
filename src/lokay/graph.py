@@ -177,11 +177,15 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if repo.busy:
             continue
         number = repo.status.get("issue")
-        if (repo.status.get("status") == "red" and number
-                and repo.states.get(number, {}).get("waiting_on") != "children"
-                and repo.states.get(number, {}).get("result") not in ("failed", "merged", "closed")
-                and (snapshot.only_issue is None or snapshot.only_issue == number)):
-            return Pick(repo.name, number, "red_main")
+        if repo.status.get("status") == "red" and number:
+            state = repo.states.get(number, {})
+            children = state.get("children", []) if state.get("waiting_on") == "children" else [number]
+            for child in children:
+                child_state = repo.states.get(child, {})
+                if (child_state.get("waiting_on") != "children"
+                        and child_state.get("result") not in ("failed", "merged", "closed")
+                        and (snapshot.only_issue is None or snapshot.only_issue == child)):
+                    return Pick(repo.name, child, "red_main")
     due = []
     for repo in snapshot.repos:
         if repo.busy:
