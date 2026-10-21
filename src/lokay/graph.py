@@ -179,7 +179,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         number = repo.status.get("issue")
         if (repo.status.get("status") == "red" and number
                 and repo.states.get(number, {}).get("waiting_on") != "children"
-                and repo.states.get(number, {}).get("result") not in ("merged", "closed")
+                and repo.states.get(number, {}).get("result") not in ("failed", "merged", "closed")
                 and (snapshot.only_issue is None or snapshot.only_issue == number)):
             return Pick(repo.name, number, "red_main")
     due = []

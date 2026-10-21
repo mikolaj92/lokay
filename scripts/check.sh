@@ -320,6 +320,27 @@ for node, pr, age in (("fix", 7, 400), ("plan", 7, 400), ("fix", None, 400), ("f
         assert picked is None, picked
 print("poll interval checks: green")
 PY
+uv run python - <<'PY'
+from lokay import graph
+from lokay.types import RepoSnapshot, Snapshot
+
+now = 1_792_512_000
+for result in ("failed", "running", "pending", "merged", "closed"):
+    snapshot = Snapshot(repos=(
+        RepoSnapshot(name="owner/A", status={"status": "red", "issue": 7}, prs=(), issues=(),
+                     states={7: {"result": result, "node": "check", "retry_at": now - 10}}),
+        RepoSnapshot(name="owner/B", prs=(), issues=(),
+                     states={8: {"result": "pending", "node": "check", "retry_at": now - 20}}),
+    ), now=now)
+    picked = graph.pick(snapshot)
+    assert picked is not None, (result, picked)
+    if result in ("running", "pending"):
+        assert (picked.repo, picked.issue, picked.kind) == ("owner/A", 7, "red_main"), (result, picked)
+    else:
+        assert picked.kind != "red_main", (result, picked)
+        assert (picked.repo, picked.issue) == ("owner/B", 8), (result, picked)
+print("red main fairness checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay import graph
 from lokay.types import Fixed, Run
