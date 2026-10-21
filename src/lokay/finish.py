@@ -348,7 +348,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         "hunk_fingerprint": hunk_fingerprint, "counts": counts,
     })).no_progress
     test_log = ((saved.get("local_ci") or {}).get("log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
-    if stalled:
+    def replan():
         rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
         title, body = saved.get("issue_title"), saved.get("issue_body")
         if not title:
@@ -366,6 +366,10 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         state_update(picked["repo"], picked["issue"], _event={"action": "replan"}, plan_prompt=prompt)
         pending = "plan"
         return "continue", (sha, pending, verdict)
+
+    if stalled:
+        return replan()
+
     def fix_action():
         current = state_read(picked["repo"], picked["issue"])
         identity = [sha, saved.get("fix_rounds", 0), fingerprint]
@@ -401,7 +405,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
                 raise RuntimeError(err or "fix HEAD lookup failed")
         if fixed_head.strip() == sha:
             rounds_append(picked["repo"], picked["issue"],
-                          "Fix: no changes, recheck" + (f": {summary.splitlines()[0]}" if summary else ""))
+                          "Fix: no changes" + (f": {summary.splitlines()[0]}" if summary else ""))
             return {"result": "done", "no_changes": True}
         state_update(picked["repo"], picked["issue"], h2_fix_identity=identity,
                      h2_fix_committed=fixed_head.strip())
@@ -410,6 +414,8 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     fixed = fix_step(picked, "harness2", fix_action, sha)
     if fixed["result"] == "failed":
         return "return", fixed
+    if fixed.get("no_changes"):
+        return replan()
     pushed = fix_step(picked, "fix_publish", lambda: push(worktree, branch, sha), sha)
     if pushed["result"] == "failed":
         return "return", pushed

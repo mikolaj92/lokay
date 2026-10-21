@@ -435,6 +435,81 @@ second = graph.step(Run.from_state({**first.state, "node": "fix"}), event)
 assert second.state["node"] == "plan", second.state
 print("Fix dispute checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, tick
+from lokay.effects import git
+
+picked = {"repo": "owner/repo", "issue": 1}
+sha, new_sha = "old-head", "new-head"
+verdict = {"result": "fix", "uwagi": [{"pytanie": "checks", "plik": "src/x.py", "log": "failure"}]}
+reason = "Fix made no progress; revise the plan."
+for changed, stalled in ((False, False), (True, False), (False, True)):
+    saved = {"node": "fix", "sha": sha, "issue_title": "Repair", "issue_body": "Repair x",
+             "local_ci": {"sha": sha, "log": "failed checks"}}
+    if stalled:
+        saved["diff_fingerprint"] = "same-diff"
+    events = []
+
+    def update(repo, issue, **fields):
+        event = fields.pop("_event", None)
+        saved.update(fields)
+        if event:
+            events.append({**event, "fields": fields})
+
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        worktree = Path(directory)
+        patch_file = worktree / "fix.patch"
+        patch_file.write_text("--- a/src/x.py\n+++ b/src/x.py\n@@ -1 +1 @@\n-old\n+new\n" if changed else "")
+        stack.enter_context(patch.object(finish, "state_read", side_effect=lambda *args: dict(saved)))
+        stack.enter_context(patch.object(finish, "state_update", side_effect=update))
+        rounds = stack.enter_context(patch.object(finish, "rounds_append"))
+        stack.enter_context(patch.object(tick, "escalate", return_value=None))
+        stack.enter_context(patch.object(tick, "_ensure_worktree"))
+        stack.enter_context(patch.object(tick, "check_deadline"))
+        prompt = stack.enter_context(patch.object(tick, "replan_prompt", return_value=reason))
+        stack.enter_context(patch.object(tick, "pushed_pr", return_value=True))
+        stack.enter_context(patch.object(tick, "refresh_body", return_value={"result": "updated"}))
+        harness = stack.enter_context(patch("lokay.h2.run_issue", return_value={
+            "result": "done", "patch": str(patch_file), "summary": "Fixed" if changed else "Bez zmian"}))
+        apply = stack.enter_context(patch.object(git, "apply_patch"))
+        commit = stack.enter_context(patch("lokay.build.tidy_and_commit"))
+        stack.enter_context(patch.object(git, "git_try", side_effect=lambda cwd, *args:
+            (0, new_sha if args == ("rev-parse", "HEAD") else "Fix #1", "")))
+        push = stack.enter_context(patch.object(git, "push", return_value={"result": "pushed", "sha": new_sha}))
+        result = finish.fix(picked, worktree, "lokay/1", sha, verdict, "old diff", sha,
+                            "same-diff", {}, worktree, "main", lambda: "new diff", lambda: None)
+        if changed:
+            assert result == ("continue", (new_sha, "check", verdict)), result
+            push.assert_called_once_with(worktree, "lokay/1", sha)
+            harness.assert_called_once()
+            apply.assert_called_once_with(worktree, patch_file)
+            commit.assert_called_once()
+            assert [event["action"] for event in events] == ["fix_complete"], events
+            assert events[0]["outcome"] == {"result": "pushed", "sha": new_sha, "previous_sha": sha}
+            prompt.assert_not_called()
+        else:
+            assert result == ("continue", (sha, "plan", verdict)), result
+            push.assert_not_called()
+            apply.assert_not_called()
+            commit.assert_not_called()
+            assert [event["action"] for event in events] == ["replan"], events
+            assert events[0]["fields"]["plan_prompt"] == reason + "\n\nTest log:\nfailed checks", events
+            prompt.assert_called_once_with(picked, reason, verdict["uwagi"], sha)
+            assert saved["fix_counts"] == [] and saved["diff_fingerprint"] is None, saved
+            assert any(call.args[2].startswith("Fix → Plan: no progress, findings=")
+                       for call in rounds.call_args_list), rounds.call_args_list
+            if stalled:
+                harness.assert_not_called()
+            else:
+                harness.assert_called_once()
+                rounds.assert_any_call(picked["repo"], picked["issue"], "Fix: no changes: Bez zmian")
+print("fix no change checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay import graph
 from lokay.finish import removed_assertions
