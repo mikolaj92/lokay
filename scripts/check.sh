@@ -320,6 +320,60 @@ for node, pr, age in (("fix", 7, 400), ("plan", 7, 400), ("fix", None, 400), ("f
         assert picked is None, picked
 print("poll interval checks: green")
 PY
+.venv/bin/python - <<'PY'
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay import graph, merge, tick
+from lokay.effects.pi import TickExpired
+from lokay.types import Run, parse_event
+
+rounds = {"plan_rounds": 2, "check_rounds": 3}
+merged_fields = {**rounds, "result": "merged", "sha": "merge-sha",
+                 "failures": 0, "retry_at": 0, "reason": None, "last_error": None}
+
+with patch.object(merge, "state_read", return_value={}), \
+        patch.object(merge, "state_update") as update, \
+        patch.object(merge, "merge_allowed", return_value=True), \
+        patch("lokay.review.recompute_verdict", return_value={"result": "merge", "sha": "head"}), \
+        patch.object(merge, "pr_files", return_value=["file.py"]), \
+        patch.object(merge, "base_branch", return_value="main"), \
+        patch.object(merge, "gh_merge", return_value={"result": "merged", "merge_sha": "merge-sha"}), \
+        patch.object(merge, "worktree_remove") as cleanup:
+    def expired(*args, **kwargs):
+        update.assert_any_call("owner/repo", 1, **merged_fields)
+        raise TickExpired()
+
+    with patch.object(merge, "check_main", side_effect=expired) as check:
+        try:
+            merge.merge_sha("owner/repo", 7, "head", None, Path("worktree"), "owner", 1,
+                            rounds, clone_path=Path("clone"))
+        except TickExpired:
+            pass
+        else:
+            raise AssertionError("check_main did not expire")
+    check.assert_called_once_with("owner/repo", Path("clone"), "merge-sha", 7, base="main")
+    cleanup.assert_not_called()
+
+for pr_state, issue_state, expected in (
+        ("MERGED", "CLOSED", ("merged", "merge-sha")),
+        ("MERGED", "OPEN", ("merged", "merge-sha")),
+        ("CLOSED", "OPEN", ("reopened", None)),
+        ("CLOSED", "CLOSED", ("closed", None)),
+        ("OPEN", "OPEN", (None, None))):
+    remote = {"issue_1": {"state": issue_state},
+              "pr_7": {"state": pr_state, "mergeCommit": {"oid": "merge-sha"}}}
+    assert tick.poll_outcome({"pr": 7}, remote, 1) == expected, (pr_state, issue_state)
+
+event = parse_event({"ts": 1, "action": "merge_complete",
+                     "outcome": {"result": "merged", "merge_sha": "merge-sha"},
+                     "fields": {"sha": "merge-sha", "failures": 0, "retry_at": 0,
+                                "reason": None, "last_error": None}})
+run = graph.step(Run.from_state({"node": "merge", "result": "pending"}), event)
+assert run.state["result"] == "merged", run.state
+assert run.state["sha"] == "merge-sha", run.state
+print("merged state checks: green")
+PY
 uv run python - <<'PY'
 from lokay import graph
 from lokay.types import RepoSnapshot, Snapshot
