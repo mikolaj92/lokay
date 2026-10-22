@@ -720,6 +720,8 @@ def _prepare(picked: dict) -> tuple | dict:
         answer = _retry(picked, "plan", lambda: decide(plan.difficulty_questions(title, body)))["difficulty"]
         if answer["choice"] not in plan.DIFFICULTIES:
             raise RuntimeError("invalid difficulty choice")
+        if saved.get("pr") is not None and answer["choice"] == "too_big":
+            answer = {**answer, "choice": "hard"}
         state_update(picked["repo"], picked["issue"], difficulty=answer["choice"], difficulty_decision=answer)
         saved = state_read(picked["repo"], picked["issue"])
     repo = repo_config(picked["repo"])

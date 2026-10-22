@@ -239,7 +239,7 @@ def escalation_fields(state: dict) -> dict:
     if difficulty not in levels:
         difficulty = "easy"
     return {
-        "difficulty": levels[min(levels.index(difficulty) + 1, 3)],
+        "difficulty": levels[min(levels.index(difficulty) + 1, 2 if state.get("pr") is not None else 3)],
         "node": "plan", "result": "pending", "retry_at": 0, "awaiting": None,
         "no_progress": 0, "fix_history": [], "fix_counts": [],
         **deepcopy(PLAN_RESET), "plan_prompt": None, "plan_notes": [],
@@ -432,6 +432,8 @@ def normalize_state(state: dict) -> None:
         state["plan_phase"] = "write"
     if "pr" in state:
         state["pr"] = pr_number(state["pr"])
+    if state.get("pr") is not None and state.get("difficulty") == "too_big":
+        state["difficulty"] = "hard"
     if "awaiting" in state and state["awaiting"] not in (None, "children"):
         state["awaiting"] = None
         if state.get("result") == "wait" and not state.get("wait_escape"):

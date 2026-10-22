@@ -1190,6 +1190,67 @@ with TemporaryDirectory(prefix="lokay-split-checks-") as temporary, ExitStack() 
 print("split before worktree checks: green")
 PY
 uv run python - <<'PY'
+import json
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import plan, store, tick
+from lokay.effects import decide, gh, git
+
+with TemporaryDirectory(prefix="lokay-issue-only-checks-") as temporary, ExitStack() as stack:
+    directory = Path(temporary)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": str(directory)}))
+    for key, value in (("HOME", directory), ("RUNS", directory / "runs"), ("LOCKS", directory / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    name = "owner/issue-only"
+    fields = {"pr": 7, "difficulty": "too_big", "awaiting": "children", "children": [8],
+              "split_tasks": [{"title": "Part", "body": "Implement part"}], "node": "fix", "result": "pending"}
+    store.save_run(name, 1, dict(fields))
+    path = store.run_dir(name, 1) / "state.json"
+    expected = {**fields, "difficulty": "hard"}
+    assert json.loads(path.read_text()) == expected
+    store.state_update(name, 1, difficulty="too_big")
+    assert json.loads(path.read_text())["difficulty"] == "hard"
+    store.write_json(path, fields)
+    saved = store.state_read(name, 1)
+    assert {key: saved[key] for key in fields} == expected, saved
+    for state, difficulty in (({"difficulty": "hard", "pr": 7}, "hard"),
+                              ({"difficulty": "too_big", "pr": 7}, "hard"),
+                              ({"difficulty": "hard"}, "too_big"),
+                              ({"difficulty": "hard", "pr": None}, "too_big")):
+        assert store.escalation_fields(state)["difficulty"] == difficulty, state
+    root = directory / "clone"
+    tasks = [{"title": "First task", "body": "Implement first part"},
+             {"title": "Second task", "body": "Implement second part"}]
+    stack.enter_context(patch.object(tick, "repo_config", return_value={"name": name, "clone_path": str(root)}))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "Parent", "body": "Implement both parts"}))
+    setup = stack.enter_context(patch.object(git, "ensure_worktree", side_effect=RuntimeError("worktree reached")))
+    stack.enter_context(patch.object(git, "plan_checkout", return_value=root))
+    split = stack.enter_context(patch.object(plan, "split_tasks", return_value={"result": "done", "tasks": tasks}))
+    child = stack.enter_context(patch.object(gh, "create_child_issue", side_effect=[101, 102]))
+    store.state_update(name, 2, difficulty="too_big")
+    outcome = tick._prepare({"repo": name, "issue": 2, "node": "plan"})
+    assert outcome == {"result": "pending", "children": [101, 102]}, outcome
+    setup.assert_not_called()
+    split.assert_called_once()
+    assert child.call_count == 2
+    stack.enter_context(patch.object(decide, "decide", return_value={"difficulty": {"choice": "too_big"}}))
+    store.state_update(name, 3, pr=9)
+    setup.side_effect = [{"result": "added"}, RuntimeError("worktree reached")]
+    try:
+        tick._prepare({"repo": name, "issue": 3, "node": "plan"})
+    except RuntimeError as exc:
+        assert str(exc) == "worktree reached", exc
+    else:
+        raise AssertionError("Build skipped worktree setup")
+    saved = store.state_read(name, 3)
+    assert saved["difficulty"] == saved["difficulty_decision"]["choice"] == "hard", saved
+print("issue-only too_big checks: green")
+PY
+uv run python - <<'PY'
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
