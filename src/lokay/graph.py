@@ -99,7 +99,7 @@ def step(run: Run, event: Event) -> Run:
                     else:
                         fields.update(node="plan", **deepcopy(PLAN_RESET), result="pending", fix_rounds=0,
                                       fix_limit_hits=current.get("fix_limit_hits", 1) + 1,
-                                      difficulty="too_big", split_tasks=None, children=[],
+                                      split_pending=True, split_tasks=None, children=[],
                                       reason="fix round limit reached twice; split")
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
@@ -179,7 +179,12 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if repo.busy:
             continue
         number = repo.status.get("issue")
-        if repo.status.get("status") == "red" and number:
+        unhealthy = (repo.status.get("status") == "red"
+                     or (repo.status.get("status") == "unknown"
+                         and snapshot.now - repo.status.get("since", snapshot.now) >= 3600))
+        if (unhealthy and number
+                and not (repo.status.get("exhausted_sha")
+                         and repo.status["exhausted_sha"] == repo.status.get("baseline", {}).get("sha"))):
             state = repo.states.get(number, {})
             children = state.get("children", []) if state.get("waiting_on") == "children" else [number]
             for child in children:
@@ -237,8 +242,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             state = repo.states[issue]
             if state.get("result") in ("closed", "merged"):
                 continue
-            parked = (state.get("result") == "parked"
-                      or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
+            parked = state.get("result") == "parked"
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
                 ready.append((_kind(pr, pr=True), state.get("last_attempt", 0), pr["number"], issue, pr))
         fallback = None
