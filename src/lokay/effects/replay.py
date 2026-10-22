@@ -228,6 +228,13 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
                 raise Mismatch(f"seq={effects[position - 1]['seq']} unsupported recorded process exception")
             attempt = attempts[-1]
             stdout, stderr = attempt["stdout"], attempt["stderr"]
+            if (kind == "git" and attempt["returncode"] == 0
+                    and argv[1:] in (["rev-parse", "--show-toplevel"],
+                                     ["rev-parse", "--git-common-dir"], ["rev-parse", "--git-dir"])):
+                directory = (Path(cwd) / stdout.strip()).resolve()
+                if not directory.is_relative_to(sandbox):
+                    raise Mismatch("recorded git directory escapes sandbox")
+                store.ensure_directory(directory)
             if not text:
                 stdout, stderr = stdout.encode(), stderr.encode()
             return CompletedProcess(argv, attempt["returncode"], stdout, stderr)
