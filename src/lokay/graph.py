@@ -177,7 +177,12 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if repo.busy:
             continue
         number = repo.status.get("issue")
-        if repo.status.get("status") == "red" and number:
+        unhealthy = (repo.status.get("status") == "red"
+                     or (repo.status.get("status") == "unknown"
+                         and snapshot.now - repo.status.get("since", snapshot.now) >= 3600))
+        if (unhealthy and number
+                and not (repo.status.get("exhausted_sha")
+                         and repo.status["exhausted_sha"] == repo.status.get("baseline", {}).get("sha"))):
             state = repo.states.get(number, {})
             children = state.get("children", []) if state.get("waiting_on") == "children" else [number]
             for child in children:

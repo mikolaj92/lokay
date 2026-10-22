@@ -95,8 +95,8 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 | Plan | brak kryteriów < 0.35 | akceptacja; p od 0.35 do <0.5 to notes | node=build, plan_accepted_sha, notes; phase/prompt=None | Build | [S3][S5] |
 | Build | brak worktree | worktree_add; setup zależności | node=build | Build albo błąd retry | [S3][S17] |
 | Build | build_code failed | świeży prompt z błędem i historią | node=plan, phase=write, failures+1, retry_at=0, hash=None | next=plan; koniec ticka | [S3][S11] |
-| Build | HEAD nie jest przodkiem origin/<base> i brak h2_start | restart z treści origin/<base>, z rodzicami HEAD i origin/<base>; pusty patch wymaga pełnego wykonania, podsumowania i zielonego main | h2_start; pusty patch zamyka PR i issue z dowodami, zachowuje branch | Build albo closed | [S3] |
-| Build | done | push i stworzenie/odnalezienie PR; wymagany published SHA | failures=0, sha, pr, node=check, verdict=None | Check w tym ticku | [S3][S11] |
+| Build | HEAD nie jest przodkiem origin/<base> i brak h2_start | restart z treści origin/<base>, zachowanie rodziców; kompletny pusty patch wymusza świeży check_main | zielony main zamyka PR i issue; red lub unknown starszy niż 1 h uruchamia recovery guarda | Build albo closed | src/lokay/tick.py |
+| Build | done albo recovery: świeży culprit red bez błędu setup/lock, jego pierwszy rodzic green | revert culprit PR; publikacja zwykłym torem, wymagany SHA | sha, pr, node=check; bez culprit Build dostaje baseline.ci, lockfile i diagnozę; drugi pusty patch kończy dziecko, nie zdrowie main | Check; po wyczerpaniu zwykłe issues, guard co godzinę bez wyjątków repo | src/lokay/main_guard.py, src/lokay/tick.py |
 | Build | publikacja ≠ pr_open lub brak SHA | retry | failures, reason, retry_at | failed | [S2][S3] |
 | Resume | brak PR/SHA, zły numer/branch, błąd Git | needs_help | błąd i retry | failed | [S4] |
 | Resume | worktree brak lub zły branch | zachowanie starego worktree pod nazwą recovery; odtworzenie z remote | node=check, verdict/local_ci=None | Check | [S4] |

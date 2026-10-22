@@ -174,7 +174,8 @@ def reopen_closed_issues(name, issues, reopened):
     for row in issues:
         issue = row["number"]
         saved = state_read(name, issue)
-        if saved.get("result") != "closed" or (name, issue) in reopened:
+        if (saved.get("result") != "closed" or (name, issue) in reopened
+                or saved.get("recovery_exhausted")):
             continue
         if prs is None:
             prs = list_prs(name)
@@ -237,7 +238,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     for repo in sorted(configured, key=lambda row: (statuses.get(row["name"], {}).get("checked_at", 0), row["name"])):
         name = repo["name"]
         clone = Path(repo["clone_path"]).expanduser()
-        if (repo["merge"] != "on" or name == "mikolaj92/Temida" or not clone.is_dir()
+        if (repo["merge"] != "on" or not clone.is_dir()
                 or statuses.get(name, {}).get("checked_at", 0) > time.time() - 3600):
             continue
         held = None
@@ -252,7 +253,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 continue
             attempted = True
             store.save_main_status(name, {**current, "checked_at": time.time()})
-            check_main(name, clone, config=repo)
+            check_main(name, clone, config=repo, force=True)
         except TickExpired:
             raise
         except Exception as exc:
@@ -289,7 +290,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 continue
             issue = int(path.name)
             saved = state_read(name, issue)
-            if saved.get("awaiting") == "children":
+            if (saved.get("awaiting") == "children"
+                    and not (statuses.get(name, {}).get("issue") == issue
+                             and any(state_read(name, child).get("recovery_sha")
+                                     for child in saved.get("children", [])))):
                 from lokay.effects.gh import children_done
 
                 held = acquire_lock(lock_path(name.split("/")[0], name))
@@ -793,21 +797,62 @@ def _prepare(picked: dict) -> tuple | dict:
 
         if not saved.get("h2_all_ran") or not (saved.get("h2_summary") or "").strip():
             return needs_help(picked, "harness2: empty patch without complete execution and summary evidence")
-        main = check_main(name, root, base=base, config=repo)
-        if main["status"] != "green":
-            return needs_help(picked, f"harness2: empty patch, main {main['status']}")
+        previous = store.main_status().get(name, {})
+        main = check_main(name, root, base=base, config=repo, force=True,
+                          merge_sha=(previous.get("culprit") or {}).get("sha"),
+                          pr=(previous.get("culprit") or {}).get("pr"))
         baseline = main["baseline"]
-        evidence = (f"{saved['h2_summary']}\n\nMain zielony. Tested SHA: `{baseline['sha']}`\n"
-                    f"argv: `{dumps(baseline['argv'])}`\n"
-                    f"Executed tests: {baseline['ci'].get('executed', 0)}\n"
-                    f"Lock checks: {baseline['lockfile']['status']}")
-        if saved.get("pr"):
-            gh_ok(["pr", "close", str(pr_number(saved["pr"])), "--repo", name, "--comment", fit_body(evidence)],
-                  error="PR close failed", strip=False)
-        gh_ok(["issue", "close", str(issue), "--repo", name, "--comment", fit_body(evidence)],
-              error="issue close failed", strip=False)
-        state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
-        return {"result": "closed", "reason": "harness2: empty patch, all runs complete, main green"}
+        if main["status"] != "green":
+            guard = main.get("issue")
+            recovery = state_read(name, guard) if guard else {}
+            if guard and (issue == guard or issue in recovery.get("children", [])):
+                if saved.get("recovery_sha") == baseline["sha"]:
+                    if issue != guard:
+                        gh_ok(["issue", "close", str(issue), "--repo", name, "--comment",
+                               fit_body("Recovery exhausted after two empty patches.\n" + dumps(baseline))],
+                              error="recovery issue close failed", strip=False)
+                    state_update(name, issue, _event={"action": "closed"}, closed_on_github=issue != guard,
+                                 recovery_exhausted=True)
+                    if all(state_read(name, child).get("result") in ("closed", "merged")
+                           for child in recovery.get("children", [])):
+                        state_update(name, guard, _event={"action": "closed"}, closed_on_github=False,
+                                     recovery_exhausted=True)
+                        store.save_main_status(name, {**main, "exhausted_sha": baseline["sha"]})
+                    return {"result": "closed", "reason": "main recovery exhausted; hourly guard remains active"}
+                culprit = main.get("culprit") or {}
+                diagnosis = {}
+                if (culprit.get("sha") and culprit.get("pr")
+                        and git_try(root, "merge-base", "--is-ancestor", culprit["sha"], baseline["sha"])[0] == 0):
+                    for key, revision in (("culprit", culprit["sha"]), ("parent", culprit["sha"] + "^1")):
+                        diagnosis[key] = check_main(name, root, base=base, config=repo,
+                                                    force=True, revision=revision)
+                failing = diagnosis.get("culprit", {}).get("baseline", {})
+                if (main["status"] == "red" and baseline["lockfile"]["status"] == "pass"
+                        and baseline["ci"].get("tested") is True
+                        and not any(row.get("warstwa") == "setup" for row in baseline["ci"].get("failed", []))
+                        and diagnosis.get("parent", {}).get("status") == "green"
+                        and diagnosis.get("culprit", {}).get("status") == "red"
+                        and failing.get("lockfile", {}).get("status") == "pass"
+                        and failing.get("ci", {}).get("tested") is True
+                        and not any(row.get("warstwa") == "setup" for row in failing["ci"].get("failed", []))):
+                    parents = git(worktree, "rev-list", "--parents", "-n", "1", culprit["sha"]).split()
+                    git(worktree, "revert", "--no-commit", *(["-m", "1"] if len(parents) > 2 else []), culprit["sha"])
+                    store.write_artifact(patch, git(worktree, "diff", "--binary", "HEAD"))
+                    tidy_and_commit(worktree, f"Revert culprit PR #{culprit['pr']}")
+                    state_update(name, issue, h2_summary=f"Revert culprit PR #{culprit['pr']}",
+                                 h2_committed=git_head(worktree))
+                    saved = state_read(name, issue)
+                else:
+                    evidence = dumps({"baseline": baseline, "diagnosis": diagnosis}, ensure_ascii=False)
+                    state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "build"}},
+                                 result="pending", recovery_sha=baseline["sha"], h2_patch=None,
+                                 h2_start=None, h2_context=None, h2_committed=None,
+                                 issue_body=(body or "") + "\n\nMain recovery setup/lock evidence:\n" + evidence)
+                    return {"result": "pending", "next": "build"}
+            else:
+                return needs_help(picked, f"harness2: empty patch, main {main['status']}")
+        if main["status"] == "green":
+            return close_empty_patch(name, issue, saved, baseline)
     if not saved.get("h2_committed"):
         if git_head(worktree) == saved["h2_start"]:
             apply_patch(worktree, patch)
@@ -831,6 +876,22 @@ def _prepare(picked: dict) -> tuple | dict:
     )
     state_update(picked["repo"], picked["issue"], _event={"action": "published", "outcome": published})
     return worktree, branch, published["sha"], repo.get("test") or [], 1
+
+
+def close_empty_patch(name: str, issue: int, saved: dict, baseline: dict) -> dict:
+    from lokay.effects.gh import fit_body
+
+    evidence = (f"{saved['h2_summary']}\n\nMain zielony. Tested SHA: `{baseline['sha']}`\n"
+                f"argv: `{dumps(baseline['argv'])}`\n"
+                f"Executed tests: {baseline['ci'].get('executed', 0)}\n"
+                f"Lock checks: {baseline['lockfile']['status']}")
+    if saved.get("pr"):
+        gh_ok(["pr", "close", str(pr_number(saved["pr"])), "--repo", name, "--comment", fit_body(evidence)],
+              error="PR close failed", strip=False)
+    gh_ok(["issue", "close", str(issue), "--repo", name, "--comment", fit_body(evidence)],
+          error="issue close failed", strip=False)
+    state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
+    return {"result": "closed", "reason": "harness2: empty patch, all runs complete, main green"}
 
 
 def needs_help(picked: dict, reason: str, sha: str | None = None, *, plan_branch: bool = False) -> dict:
