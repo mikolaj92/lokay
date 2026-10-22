@@ -11,7 +11,7 @@ from pathlib import Path
 
 from lokay import store
 from lokay.config import HOME, load_repos
-from lokay.effects.git import git_try, worktree_remove
+from lokay.effects.git import git_try, samefile, worktree_remove
 from lokay.effects.pi import run_process
 from lokay.effects.tests import UV_CACHE_DIR
 
@@ -93,15 +93,15 @@ def sweep(aggressive: bool) -> None:
                         if name == "mikolaj92/temida" or owner.is_symlink() or not owner.is_dir():
                             continue
                         owner = owner.resolve()
-                        if owner in seen:
+                        if any(samefile(owner, previous) for previous in seen):
                             continue
                         if origin(owner) != name:
                             continue
-                        if Path(checked(owner, ["rev-parse", "--show-toplevel"]).strip()).resolve() != owner:
+                        if not samefile(checked(owner, ["rev-parse", "--show-toplevel"]).strip(), owner):
                             continue
                         common = (owner / checked(owner, ["rev-parse", "--git-common-dir"]).strip()).resolve()
                         git_dir = (owner / checked(owner, ["rev-parse", "--git-dir"]).strip()).resolve()
-                        if common != git_dir or not (owner / ".git").is_dir():
+                        if not samefile(common, git_dir) or not (owner / ".git").is_dir():
                             continue
                         seen.add(owner)
                         records = registrations(owner)
@@ -113,16 +113,16 @@ def sweep(aggressive: bool) -> None:
                                 if dotgit.is_symlink() or not dotgit.is_file():
                                     continue
                                 resolved = path.resolve()
-                                if resolved == owner or cwd == resolved or resolved in cwd.parents:
+                                if samefile(resolved, owner) or any(samefile(resolved, parent) for parent in (cwd, *cwd.parents)):
                                     continue
-                                matches = [row for row in records if row["worktree"] == str(path)]
+                                matches = [row for row in records if samefile(row["worktree"], path)]
                                 if len(matches) != 1 or matches[0] is records[0] or "locked" in matches[0]:
                                     continue
                                 if not aggressive and now - path.stat().st_mtime < 86400:
                                     continue
-                                if (path / checked(path, ["rev-parse", "--git-common-dir"]).strip()).resolve() != common:
+                                if not samefile(path / checked(path, ["rev-parse", "--git-common-dir"]).strip(), common):
                                     continue
-                                if Path(checked(path, ["rev-parse", "--show-toplevel"]).strip()).resolve() != resolved:
+                                if not samefile(checked(path, ["rev-parse", "--show-toplevel"]).strip(), resolved):
                                     continue
                                 if origin(path) != name:
                                     continue

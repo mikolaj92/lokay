@@ -18,6 +18,18 @@ BASE_BRANCHES: dict[tuple[Path, str | None], str] = {}
 REPOSITORIES: dict[Path, dict] = {}
 
 
+def samefile(left: str | Path, right: str | Path) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def worktree_record_matches(record: str, path: Path) -> bool:
+    return any(samefile(field.removeprefix("worktree "), path)
+               for field in record.split("\0") if field.startswith("worktree "))
+
+
 def base_branch(path: Path, *, branch: str | None = None) -> str:
     path = path.resolve()
     key = (path, branch)
@@ -182,15 +194,15 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
     def registration():
         records = registrations()
         matches = [row for row in records
-                   if row.get("worktree") is not None and Path(row["worktree"]).resolve() == path.resolve()]
+                   if row.get("worktree") is not None and samefile(row["worktree"], path)]
         if len(matches) != 1:
             raise ValueError("expected exactly one worktree registration")
         row = matches[0]
         if (row is records[0] or row.get("branch") != f"refs/heads/{branch}" or "bare" in row
-                or "detached" in row or Path(row["worktree"]).resolve() == repo):
+                or "detached" in row or samefile(row["worktree"], repo)):
             raise ValueError("worktree registration or branch mismatch")
         if any(row.get("branch") == f"refs/heads/{branch}"
-               and (row.get("worktree") is None or Path(row["worktree"]).resolve() != path.resolve())
+               and (row.get("worktree") is None or not samefile(row["worktree"], path))
                for row in records):
             raise ValueError("branch registered at another worktree")
         return row
@@ -203,8 +215,8 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
         common = checked(path, ["rev-parse", "--git-common-dir"]).strip()
         git_dir = (path / checked(path, ["rev-parse", "--git-dir"]).strip()).resolve()
         head = checked(path, ["symbolic-ref", "HEAD"]).strip()
-        if (Path(top).resolve() != path or (path / common).resolve() != common_dir
-                or git_dir.parent != common_dir / "worktrees" or head != f"refs/heads/{branch}"):
+        if (not samefile(top, path) or not samefile(path / common, common_dir)
+                or not samefile(git_dir.parent, common_dir / "worktrees") or head != f"refs/heads/{branch}"):
             raise ValueError("worktree top-level, common directory or branch mismatch")
 
     try:
@@ -215,16 +227,16 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
         repo = repo.resolve()
         path = path.parent.resolve() / path.name
         expected = repo.parent / f"{repo.name}-wt-{match[1]}"
-        if path.is_symlink() or path != expected or path == repo:
+        if path.is_symlink() or path != expected or samefile(path, repo):
             raise ValueError(f"expected non-symlink sibling worktree path {expected}")
-        if Path(checked(repo, ["rev-parse", "--show-toplevel"]).strip()).resolve() != repo:
+        if not samefile(checked(repo, ["rev-parse", "--show-toplevel"]).strip(), repo):
             raise ValueError("repository top-level mismatch")
         common_dir = (repo / checked(repo, ["rev-parse", "--git-common-dir"]).strip()).resolve()
         if path.exists():
             verify()
             return {"result": "added", "path": str(path), "branch": branch}
         records = registrations()
-        if any(row.get("worktree") is not None and Path(row["worktree"]).resolve() == path.resolve()
+        if any(row.get("worktree") is not None and samefile(row["worktree"], path)
                for row in records):
             row = registration()
             if "locked" in row or path.exists() or path.is_symlink():
@@ -285,6 +297,8 @@ def plan_checkout(root: Path) -> Path:
     path = root.parent / f"{root.name}-plan"
     if path.is_symlink():
         raise ValueError("expected non-symlink plan checkout")
+    if not samefile(git(root, "rev-parse", "--show-toplevel"), root):
+        raise ValueError("plan checkout repository mismatch")
     base = base_branch(root)
     common = (root / git(root, "rev-parse", "--git-common-dir")).resolve()
     if not path.exists():
@@ -292,14 +306,14 @@ def plan_checkout(root: Path) -> Path:
     if not (path / ".git").is_file() or (path / ".git").is_symlink():
         raise ValueError("expected a registered linked plan checkout")
     records = git(root, "worktree", "list", "--porcelain", "-z").split("\0\0")
-    matches = [record.split("\0") for record in records if f"worktree {path}" in record.split("\0")]
+    matches = [record.split("\0") for record in records if worktree_record_matches(record, path)]
     if (len(matches) != 1 or "detached" not in matches[0]
             or any(field.startswith("locked") for field in matches[0])):
         raise ValueError("plan checkout registration mismatch or locked")
     git_dir = (path / git(path, "rev-parse", "--git-dir")).resolve()
-    if (Path(git(path, "rev-parse", "--show-toplevel")).resolve() != path
-            or (path / git(path, "rev-parse", "--git-common-dir")).resolve() != common
-            or git_dir.parent != common / "worktrees"):
+    if (not samefile(git(path, "rev-parse", "--show-toplevel"), path)
+            or not samefile(path / git(path, "rev-parse", "--git-common-dir"), common)
+            or not samefile(git_dir.parent, common / "worktrees")):
         raise ValueError("plan checkout repository mismatch")
     git(path, "checkout", "--detach", "--force", f"origin/{base}", timeout=60)
     git(path, "clean", "-fdx", timeout=60)
@@ -333,17 +347,17 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             repo = repo.resolve()
             path = path.parent.resolve() / path.name
             expected = repo.parent / f"{repo.name}-wt-{match[1]}"
-            if path != expected or path.is_symlink() or path == repo:
+            if path != expected or path.is_symlink() or samefile(path, repo):
                 raise ValueError("expected non-symlink sibling worktree path")
             ref = f"refs/heads/{branch}"
             if not path.exists():
-                if Path(checked(repo, ["rev-parse", "--show-toplevel"])).resolve() != repo:
+                if not samefile(checked(repo, ["rev-parse", "--show-toplevel"]), repo):
                     raise ValueError("repository top-level mismatch")
                 records = checked(repo, ["worktree", "list", "--porcelain", "-z"]).split("\0\0")
                 matches = [record.split("\0") for record in records
-                           if f"worktree {path}" in record.split("\0")]
+                           if worktree_record_matches(record, path)]
                 if any(f"branch {ref}" in record.split("\0")
-                       and f"worktree {path}" not in record.split("\0") for record in records):
+                       and not worktree_record_matches(record, path) for record in records):
                     return {"result": "kept", "path": str(path), "reason": "branch checked out"}
                 if matches:
                     if (len(matches) != 1 or f"branch {ref}" not in matches[0]
@@ -364,17 +378,17 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
                     return {"result": "kept", "path": str(path), "reason": "unpushed"}
                 checked(repo, ["update-ref", "-d", ref, head])
                 return {"result": "removed", "path": str(path)}
-            if (Path(checked(repo, ["rev-parse", "--show-toplevel"])).resolve() != repo
+            if (not samefile(checked(repo, ["rev-parse", "--show-toplevel"]), repo)
                     or not (path / ".git").is_file() or (path / ".git").is_symlink()
-                    or Path(checked(path, ["rev-parse", "--show-toplevel"])).resolve() != path
+                    or not samefile(checked(path, ["rev-parse", "--show-toplevel"]), path)
                     or checked(path, ["symbolic-ref", "HEAD"]) != ref):
                 raise ValueError("worktree top-level or branch mismatch")
             common = (repo / checked(repo, ["rev-parse", "--git-common-dir"])).resolve()
-            if (path / checked(path, ["rev-parse", "--git-common-dir"])).resolve() != common:
+            if not samefile(path / checked(path, ["rev-parse", "--git-common-dir"]), common):
                 raise ValueError("worktree repository mismatch")
             records = checked(repo, ["worktree", "list", "--porcelain", "-z"]).split("\0\0")
             matches = [record.split("\0") for record in records
-                       if f"worktree {path}" in record.split("\0")]
+                       if worktree_record_matches(record, path)]
             if (len(matches) != 1 or f"branch {ref}" not in matches[0]
                     or any(field.startswith("locked") for field in matches[0])):
                 raise ValueError("worktree registration mismatch or locked")

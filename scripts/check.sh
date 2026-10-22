@@ -161,6 +161,64 @@ assert merge_base_or_restart(repo, "base") == []
 assert (repo / "clean.txt").read_text() == "clean\n"
 print("base merge checks: green")
 PY
+uv run python - <<'PY'
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay.effects.git import ensure_worktree, git, plan_checkout, samefile, worktree_remove
+
+os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                  GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid",
+                  GIT_AUTHOR_DATE="2025-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2025-01-01T00:00:00+00:00")
+with TemporaryDirectory(prefix="lokay-samefile-") as directory:
+    temporary = Path(directory)
+    real = temporary / "Real"
+    real.mkdir()
+    assert (temporary / "real").is_dir(), "samefile path checks require a case-insensitive filesystem"
+    (temporary / "link").symlink_to(temporary / "real", target_is_directory=True)
+    origin = temporary / "origin.git"
+    clone = real / "repo"
+    git(temporary, "init", "--bare", str(origin))
+    git(temporary, "clone", str(origin), str(clone))
+    git(clone, "checkout", "-b", "main")
+    git(clone, "commit", "--allow-empty", "-m", "seed")
+    git(clone, "push", "-u", "origin", "HEAD")
+    git(origin, "symbolic-ref", "HEAD", "refs/heads/main")
+    git(clone, "remote", "set-head", "origin", "main")
+    root = temporary / "link/repo"
+    assert samefile(root, clone)
+    assert not samefile(root, temporary / "missing")
+    worktree = root.parent / "repo-wt-5"
+    for _ in range(2):
+        result = ensure_worktree(root, "lokay/5", worktree)
+        assert result["result"] == "added", result
+    checkout = plan_checkout(root)
+    assert checkout.name == "repo-plan" and samefile(checkout, real / "repo-plan"), checkout
+    assert samefile(plan_checkout(root), checkout)
+    foreign = temporary / "foreign"
+    git(temporary, "clone", str(origin), str(foreign))
+    inside = foreign / "inside"
+    inside.mkdir()
+    result = ensure_worktree(inside, "lokay/5", foreign / "inside-wt-5")
+    assert result["result"] == "failed" and "repository top-level mismatch" in result["error"], result
+    try:
+        plan_checkout(inside)
+    except ValueError as exc:
+        assert "plan checkout repository mismatch" in str(exc), exc
+    else:
+        raise AssertionError("plan checkout accepted a different repository top-level")
+    wrong = root.parent / "repo-wt-6"
+    git(foreign, "worktree", "add", "-b", "lokay/6", str(wrong))
+    result = ensure_worktree(root, "lokay/6", wrong)
+    assert result["result"] == "failed" and "registration" in result["error"], result
+    result = worktree_remove(root, wrong, safe=True, branch="lokay/6")
+    assert result["result"] == "failed" and "repository mismatch" in result["error"], result
+    assert wrong.is_dir()
+    result = worktree_remove(root, worktree, safe=True, branch="lokay/5")
+    assert result["result"] == "removed", result
+print("samefile path checks: green")
+PY
 uv run python - "$sandbox" <<'PY'
 import inspect
 import os
