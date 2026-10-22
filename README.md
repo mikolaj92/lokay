@@ -29,9 +29,9 @@ It parses the entire script before running, so an update cannot change a running
   The monitor alarms on blocked idle, at least three failures, an old issue,
   or queued work without a merge past the configured threshold.
 - Each Check round posts its result, findings and CI outcome on the PR.
-- The separate `ai.mikolaj.lokay2.monitor` LaunchAgent runs `lokay monitor` every
-  60 seconds, even when the factory stops. It opens one `lokay-stalled` issue while
-  an alarm remains open. The factory excludes this issue from its queue.
+- Worker 0 runs `lokay monitor` every `LOKAY_MONITOR_TICKS` iterations (default 5).
+  It opens one ordinary `lokay-stalled` issue with heartbeat and latest `needs_help`;
+  recovery closes it with heartbeat evidence. A stopped service cannot monitor itself.
 - Logs use `~/.lokay/logs/lokay.log`; the caretaker rotates at 10 MiB to `lokay.log.1`
   between runs. A single long run can exceed this limit.
 - Merged worktrees are removed by the existing Merge step.

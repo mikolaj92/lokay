@@ -805,7 +805,9 @@ def _prepare(picked: dict) -> tuple | dict:
         if main["status"] != "green":
             guard = main.get("issue")
             recovery = state_read(name, guard) if guard else {}
-            if guard and (issue == guard or issue in recovery.get("children", [])):
+            unhealthy = (main["status"] == "red" or
+                         (main["status"] == "unknown" and time.time() - main.get("since", time.time()) >= 3600))
+            if unhealthy and guard and (issue == guard or issue in recovery.get("children", [])):
                 if saved.get("recovery_sha") == baseline["sha"]:
                     if issue != guard:
                         gh_ok(["issue", "close", str(issue), "--repo", name, "--comment",

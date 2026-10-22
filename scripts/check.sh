@@ -1302,5 +1302,299 @@ with TemporaryDirectory(prefix="lokay-harness-rule-checks-") as temporary:
     adapter.substrate.execute.assert_not_called()
 print("harness rule checks: green")
 PY
+.venv/bin/python - <<'PY'
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import store
+from lokay.effects.git import git
+from lokay.finish import assertion_base_violations
+
+os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                  GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid",
+                  GIT_AUTHOR_DATE="2025-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2025-01-01T00:00:00+00:00")
+with TemporaryDirectory(prefix="lokay-fix-assertion-base-checks-") as temporary:
+    repo = Path(temporary)
+    git(repo, "init", "-b", "main")
+    test = repo / "test_example.py"
+    source = repo / "example.py"
+    base_text = "assert True\nassert 1 == 1\n"
+    store.write_artifact(test, base_text)
+    store.write_artifact(source, "assert True\n")
+    git(repo, "add", "--", test.name, source.name)
+    git(repo, "commit", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    store.write_artifact(test, base_text + "assert 2 == 2\nassert 3 == 3\nassert 4 == 4\n")
+    git(repo, "commit", "-am", "PR assertions")
+    sha = git(repo, "rev-parse", "HEAD")
+    base_revision = git(repo, "merge-base", "origin/main", sha)
+    for text, expected in ((base_text, {}), ("assert True\n", {test.name: 1})):
+        store.write_artifact(test, text)
+        patch = git(repo, "diff", "HEAD", "--", test.name)
+        assert assertion_base_violations(repo, base_revision, patch) == expected
+    store.write_artifact(source, "")
+    patch = git(repo, "diff", "HEAD", "--", source.name)
+    assert assertion_base_violations(repo, base_revision, patch) == {}
+print("fix assertion base checks: green")
+PY
+uv run python - <<'PY'
+import gzip
+import json
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import observe
+
+script = Path("scripts/lokay-service.sh").read_text()
+path_line = next(line for line in script.splitlines() if line.startswith("export PATH="))
+loop = script[script.index("while true; do"):]
+assert 'if [[ "$LOKAY2_WORKER" == "0" ]]; then\n    monitor_ticks=' in loop
+assert 'if (( monitor_ticks % monitor_every == 0 )); then\n      run_child "$ROOT/.venv/bin/lokay" monitor' in loop
+assert loop.index('" monitor </dev/null') < loop.rindex('run_child sleep "$LOKAY_TICK_SECONDS"')
+validation = script[script.index("monitor_ticks=0"):script.index('active=""')]
+rejected = subprocess.run(["/bin/bash", "-c", validation], env={"LOKAY_MONITOR_TICKS": "0"},
+                          capture_output=True, text=True)
+assert rejected.returncode == 64 and "LOKAY_MONITOR_TICKS" in rejected.stderr, rejected
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    ticks = root / "ticks"
+    ticks.mkdir()
+    now = 1_800_000_000
+    def transition(ts, reason):
+        return {"kind": "transition", "repo": "owner/repo", "issue": 7,
+                "before": {"node": "fix"},
+                "event": {"action": "needs_help", "ts": ts, "reason": reason}}
+    older = ticks / "2026-10-19.jsonl"
+    older.write_text(json.dumps(transition(now + 1000, "older file")) + "\n")
+    newest_help = ticks / "2026-10-20.jsonl.gz"
+    with gzip.open(newest_help, "wt") as stream:
+        stream.write("broken\n" + json.dumps(transition(now - 20, "latest help")) + "\n"
+                     + json.dumps(transition(now - 30, "earlier help")) + "\n")
+    newest = ticks / "2026-10-21.jsonl"
+    newest.write_text('{"kind": "other"}\n')
+    opened = []
+    original_open = open
+    def tracked_open(path, *args, **kwargs):
+        path = Path(path)
+        assert path != older, "older tick file was read"
+        opened.append(path)
+        return original_open(path, *args, **kwargs)
+    with patch.object(observe, "HOME", root), patch.object(observe, "RUNS", root / "runs"), \
+            patch.object(observe.time, "time", return_value=now), \
+            patch.dict(os.environ, {"LOKAY_ALARM_REPO": "mikolaj92/lokay", "LOKAY_HEARTBEAT_MINUTES": "5"}), \
+            patch("builtins.open", side_effect=tracked_open):
+        help_result = observe.latest_needs_help()
+        assert help_result["latest_needs_help"]["event"]["reason"] == "latest help", help_result
+        assert help_result["unreadable_records_or_files"] == 1, help_result
+        assert opened == [newest, newest_help], opened
+        beat = {"time": datetime.fromtimestamp(now - 600, timezone.utc).isoformat()}
+        (root / "heartbeat.json").write_text(json.dumps(beat))
+        with patch.object(observe, "gh_json", return_value=[]) as lookup, \
+                patch.object(observe, "gh_ok") as action:
+            result = observe.monitor()
+            assert result["result"] == "stalled", result
+            action.assert_called_once()
+            args = action.call_args.args[0]
+            assert args[:2] == ["issue", "create"], args
+            assert args[args.index("--repo") + 1] == "mikolaj92/lokay", args
+            assert args[args.index("--title") + 1] == "lokay-stalled", args
+            body = args[args.index("--body") + 1]
+            assert all(reason in body for reason in result["reasons"]), body
+            assert "latest help" in body and beat["time"] in body, body
+            lookup.return_value = [{"number": 42, "title": "lokay-stalled"}]
+            action.reset_mock()
+            assert observe.monitor()["result"] == "stalled"
+            action.assert_not_called()
+            beat["time"] = datetime.fromtimestamp(now, timezone.utc).isoformat()
+            (root / "heartbeat.json").write_text(json.dumps(beat))
+            assert observe.monitor() == {"result": "ok", "closed": [42]}
+            action.assert_called_once()
+            args = action.call_args.args[0]
+            assert args[:3] == ["issue", "close", "42"], args
+            assert beat["time"] in args[args.index("--comment") + 1], args
+    command = path_line + '\nprintf "%s" "$PATH"'
+    first = subprocess.check_output(["/usr/bin/env", "-i", f"HOME={root}", "PATH=/usr/bin:/bin",
+                                     "/bin/bash", "-c", command], text=True)
+    second = subprocess.check_output(["/usr/bin/env", "-i", f"HOME={root}", f"PATH={first}",
+                                      "/bin/bash", "-c", command], text=True)
+    assert "/usr/sbin" in first.split(":") and "/sbin" in first.split(":"), first
+    assert first == second and len(first.split(":")) == len(set(first.split(":"))), (first, second)
+print("monitor loop checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import build, checks, graph, main_guard, setup, store, tick
+from lokay.effects import git as git_effects
+from lokay.types import CheckResult, RepoSnapshot, Snapshot
+
+name = "mikolaj92/Temida"
+now = 10000
+for age in (3599, 3600, 3601):
+    snapshot = Snapshot(repos=(RepoSnapshot(
+        name=name, status={"status": "unknown", "since": now - age, "issue": 7},
+        prs=(), issues=(), states={7: {"result": "running", "node": "build"}}),), now=now)
+    picked = graph.pick(snapshot)
+    assert (picked is not None and picked.kind == "red_main") == (age >= 3600), picked
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    config = {"name": name, "clone_path": str(root), "merge": "on", "test": ["checks"]}
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+    guard = stack.enter_context(patch.object(main_guard, "check_main"))
+    assert tick.pick({})["result"] == "idle"
+    assert guard.call_args.args[:2] == (name, root), guard.call_args
+    assert guard.call_args.kwargs["force"] is True
+
+ci = {"result": "red", "tested": True, "executed": 1, "failed": [], "log": "setup log evidence"}
+lock = {"status": "pass", "reason": "lockfile evidence", "findings": [], "name": "lockfile"}
+baseline = {"sha": "head", "argv": ["checks"], "ci": ci, "lockfile": lock}
+main = {"status": "red", "baseline": baseline, "issue": 7, "culprit": {"sha": "merge", "pr": 42}}
+for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhausted", "green"):
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        root = Path(directory)
+        for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+            stack.enter_context(patch.object(store, key, value))
+        artifact = root / "empty.patch"
+        store.write_artifact(artifact, "")
+        context = hashlib.sha256(json.dumps(["repair", "spec", "easy", []]).encode()).hexdigest()
+        store.state_update(name, 7, awaiting="children", children=[11, 12], result="pending")
+        store.state_update(name, 12, _event={"action": "closed"})
+        store.state_update(name, 11, issue_title="repair", issue_body="spec", difficulty="easy",
+                           h2_context=context, h2_patch=str(artifact), h2_start="start",
+                           h2_all_ran=True, h2_summary="complete",
+                           recovery_sha="head" if scenario == "exhausted" else None)
+        status = deepcopy(main)
+        if scenario == "no culprit":
+            status["culprit"] = None
+        if scenario == "green":
+            status["status"] = "green"
+        if scenario == "setup":
+            status["baseline"]["ci"]["failed"] = [{"warstwa": "setup"}]
+        if scenario == "lock":
+            status["baseline"]["lockfile"]["status"] = "fail"
+        store.save_main_status(name, status)
+        def diagnose(repo, clone, **kwargs):
+            assert kwargs["force"] is True
+            revision = kwargs.get("revision")
+            if revision:
+                return {"status": "red" if revision == "merge" or scenario == "parent red" else "green",
+                        "baseline": deepcopy(baseline)}
+            return status
+        guard = stack.enter_context(patch.object(main_guard, "check_main", side_effect=diagnose))
+        stack.enter_context(patch.object(tick, "repo_config", return_value={"test": ["checks"]}))
+        stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+        stack.enter_context(patch.object(tick, "_ensure_worktree"))
+        stack.enter_context(patch.object(tick, "check_deadline"))
+        stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
+        stack.enter_context(patch.object(git_effects, "git_try", return_value=(0, "", "")))
+        def git(path, *args, **kwargs):
+            if args[0] == "rev-list":
+                return "merge parent other"
+            if args[0] == "diff":
+                return "revert patch"
+            assert args == ("revert", "--no-commit", "-m", "1", "merge"), args
+            return ""
+        commands = stack.enter_context(patch.object(tick, "git", side_effect=git))
+        stack.enter_context(patch.object(tick, "git_head", return_value="revert-sha"))
+        commit = stack.enter_context(patch.object(build, "tidy_and_commit"))
+        stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+        stack.enter_context(patch.object(build, "build_publish", return_value={"result": "pr_open", "sha": "revert-sha", "pr": 99}))
+        stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, fn, *args: fn()))
+        remote = stack.enter_context(patch.object(tick, "gh_ok"))
+        result = tick._prepare({"repo": name, "issue": 11})
+        saved = store.state_read(name, 11)
+        if scenario == "revert":
+            assert isinstance(result, tuple), result
+            assert saved["h2_committed"] == "revert-sha" and saved["node"] == "check", saved
+            assert saved["h2_summary"] == "Revert culprit PR #42", saved
+            commit.assert_called_once_with(root, "Revert culprit PR #42")
+            assert artifact.read_text() == "revert patch"
+            assert [call.kwargs.get("revision") for call in guard.call_args_list] == [None, "merge", "merge^1"]
+        elif scenario == "exhausted":
+            assert result["result"] == "closed" and saved["recovery_exhausted"], (result, saved)
+            assert store.state_read(name, 7)["recovery_exhausted"]
+            exhausted = store.main_status()[name]
+            assert exhausted["exhausted_sha"] == "head", exhausted
+            snapshot = Snapshot(repos=(RepoSnapshot(name=name, status=exhausted, prs=(),
+                issues=({"number": 20},), states={7: store.state_read(name, 7), 11: saved, 20: {}}),), now=now)
+            assert graph.pick(snapshot).issue == 20
+            remote.assert_called_once()
+        elif scenario == "green":
+            assert result["result"] == "closed" and saved["closed_on_github"], (result, saved)
+            assert "main green" in result["reason"]
+            remote.assert_called_once()
+        else:
+            assert result == {"result": "pending", "next": "build"}, result
+            assert saved["node"] == "build" and saved["recovery_sha"] == "head", saved
+            assert "setup log evidence" in saved["issue_body"] and "lockfile evidence" in saved["issue_body"]
+            commit.assert_not_called()
+            remote.assert_not_called()
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    current_sha = "head"
+    def git(path, *args, **kwargs):
+        if args[0] == "rev-parse":
+            return "parent" if args[1] == "merge^1" else current_sha
+        return ""
+    commands = stack.enter_context(patch.object(main_guard, "git", side_effect=git))
+    stack.enter_context(patch.object(main_guard, "worktree_remove", return_value={"result": "removed"}))
+    stack.enter_context(patch.object(setup, "prepare_dependencies", return_value={"log": "setup"}))
+    tests = stack.enter_context(patch.object(main_guard, "run_repo_tests", side_effect=lambda *args: deepcopy(ci)))
+    stack.enter_context(patch.object(checks, "lockfile", return_value=CheckResult("lockfile", "pass", "lockfile evidence", [])))
+    lookup = stack.enter_context(patch.object(main_guard, "gh_json", return_value=[
+        {"number": 42, "merged_at": "today", "merge_commit_sha": "head"}]))
+    issue = stack.enter_context(patch.object(main_guard, "guard_issue", return_value=7))
+    config = {"test": ["checks"]}
+    result = main_guard.check_main(name, root, base="main", config=config, force=True, revision="merge^1")
+    assert result["baseline"]["sha"] == "parent"
+    assert tests.call_args.args[1] == "parent"
+    added = [call for call in commands.call_args_list if call.args[1:3] == ("worktree", "add")]
+    assert added[-1].args[-1] == "parent", added
+    assert store.main_status() == {}
+    result = main_guard.check_main(name, root, base="main", config=config, force=True)
+    assert result["culprit"] == {"sha": "head", "pr": 42}, result
+    store.state_update(name, 7, _event={"action": "closed"}, recovery_exhausted=True)
+    store.save_main_status(name, {**result, "exhausted_sha": "head"})
+    issue.reset_mock()
+    main_guard.check_main(name, root, base="main", config=config, force=True)
+    issue.assert_not_called()
+    current_sha = "new-head"
+    result = main_guard.check_main(name, root, base="main", config=config, force=True)
+    issue.assert_called_once()
+    assert result["exhausted_sha"] is None and result["culprit"] is None, result
+    assert not store.state_read(name, 7)["recovery_exhausted"]
+    for age in (3599, 3600):
+        unknown = {**deepcopy(ci), "tested": False}
+        tests.side_effect = lambda *args: deepcopy(unknown)
+        store.save_main_status(name, {"status": "unknown", "since": now - age,
+                                     "baseline": {"sha": current_sha}, "issue": 7})
+        issue.reset_mock()
+        with patch.object(main_guard.time, "time", return_value=now):
+            result = main_guard.check_main(name, root, base="main", config=config, force=True)
+        assert result["status"] == "unknown"
+        assert issue.call_count == (1 if age >= 3600 else 0), (age, issue.call_args_list)
+print("main recovery checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

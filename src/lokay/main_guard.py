@@ -95,6 +95,12 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     if revision:
         return {"status": status, "baseline": baseline}
     culprit = ({"sha": merge_sha, "pr": pr} if merge_sha and pr else previous.get("culprit"))
+    if not (merge_sha and pr) and sha != previous.get("baseline", {}).get("sha"):
+        culprit = None
+        if status != "green":
+            pulls = gh_json(["api", f"repos/{repo}/commits/{sha}/pulls"], error="main culprit lookup failed")
+            culprit = next(({"sha": sha, "pr": row["number"]} for row in pulls
+                            if row.get("merged_at") and row.get("merge_commit_sha") == sha), None)
     result = {"status": status,
               "since": previous.get("since", time.time()) if previous.get("status") == status else time.time(),
               "culprit": culprit, "issue": previous.get("issue"), "baseline": baseline,
@@ -117,7 +123,8 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 from lokay.store import state_update
 
                 state_update(repo, result["issue"], _event={"action": "reopened", "outcome": {"issue": True}},
-                             children=[], split_tasks=None, recovery_sha=None, recovery_exhausted=False)
+                             children=[], split_tasks=None, recovery_sha=None, recovery_exhausted=False,
+                             h2_context=None, difficulty=None, issue_body=body)
                 result["exhausted_sha"] = None
     elif status == "green":
         matches = [issue for issue in guard_issues(repo, "open") if issue.get("state") == "OPEN"]
