@@ -351,6 +351,47 @@ with TemporaryDirectory() as directory:
         child.wait(timeout=10)
 print("stale index lock checks: green")
 PY
+uv run python - <<'PY'
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import store
+from lokay.effects.git import git, lsof_path, worktree_remove
+
+with TemporaryDirectory() as directory:
+    home = Path(directory)
+    repo = home / "repo"
+    env = {"LOKAY_ROOT": str(repo), "GIT_AUTHOR_NAME": "mikolaj92",
+           "GIT_AUTHOR_EMAIL": "checks@example.invalid", "GIT_COMMITTER_NAME": "mikolaj92",
+           "GIT_COMMITTER_EMAIL": "checks@example.invalid"}
+    with patch.dict(os.environ, env):
+        os.environ.pop("LOKAY_VERSION", None)
+        git(home, "init", "-b", "main", str(repo))
+        git(repo, "commit", "--allow-empty", "-m", "initial")
+        git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        with patch.object(store, "HOME", home), patch.object(store, "main_status", return_value={}):
+            assert store.write_heartbeat()["version"] == git(repo, "rev-parse", "HEAD")
+        with patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}):
+            if Path("/usr/sbin/lsof").exists():
+                assert lsof_path() == "/usr/sbin/lsof"
+        worktree = home / "repo-wt-5"
+        git(repo, "worktree", "add", "-b", "lokay/5", str(worktree))
+        raw = b"\xda\xff\n"
+        store.write_artifact(worktree / "invalid.txt", raw)
+        store.write_artifact(worktree / "binary.bin", b"\xda\xff\x00")
+        artifact = home / "cleanup.patch"
+        result = worktree_remove(repo, worktree, safe=True, branch="lokay/5", patch_path=artifact)
+        assert result["result"] == "removed", result
+        saved = artifact.read_bytes()
+        assert raw in saved and b"GIT binary patch" in saved, saved
+        assert not worktree.exists()
+        git(repo, "apply", str(artifact))
+        assert (repo / "invalid.txt").read_bytes() == raw
+        assert (repo / "binary.bin").read_bytes() == b"\xda\xff\x00"
+print("worker version and binary cleanup checks: green")
+PY
 .venv/bin/python - <<'PY'
 from datetime import datetime, timezone
 
@@ -1799,6 +1840,12 @@ for scenario in ("dirty", "unpushed", "write failed", "remove failed"):
             if args[0] == "diff":
                 return (1, "untracked bytes\n", "") if "--no-index" in args else (0, "committed and working bytes\n", "")
             return 0, "", ""
+        def fake_command(where, args, **kwargs):
+            from subprocess import CompletedProcess
+
+            code, out, err = fake_git(where, *args)
+            return CompletedProcess(args, code, out.encode(), err.encode())
+        stack.enter_context(patch.object(effects, "_command", side_effect=fake_command))
         stack.enter_context(patch.object(effects, "git_try", side_effect=fake_git))
         stack.enter_context(patch.object(tick, "git_try", side_effect=fake_git))
         events = stack.enter_context(patch.object(store, "log_event"))

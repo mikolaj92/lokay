@@ -376,9 +376,12 @@ def rounds_append(repo: str, issue: int, line: str) -> Path:
     return path
 
 
-def write_artifact(path: Path, text: str) -> None:
+def write_artifact(path: Path, text: str | bytes) -> None:
     ensure_directory(path.parent)
-    path.write_text(text)
+    if isinstance(text, bytes):
+        path.write_bytes(text)
+    else:
+        path.write_text(text)
 
 
 def ensure_directory(path: Path) -> None:
@@ -479,6 +482,8 @@ def shared_file_lock(path: Path):
 
 
 def write_heartbeat(result: str | None = None, **fields) -> dict:
+    from lokay.effects.git import checkout_version
+
     path = HOME / "heartbeat.json"
     with shared_file_lock(path.with_suffix(".lock")):
         previous = json.loads(path.read_text()) if path.exists() else {}
@@ -515,7 +520,7 @@ def write_heartbeat(result: str | None = None, **fields) -> dict:
         except PackageNotFoundError:
             installed = "unknown"
         previous.update(time=datetime.now(timezone.utc).isoformat(),
-                        version=os.environ.get("LOKAY_VERSION", installed))
+                        version=checkout_version() or os.environ.get("LOKAY_VERSION") or installed)
         if worker is not None:
             workers[worker] = dict(previous)
         if workers:
