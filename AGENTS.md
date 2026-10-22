@@ -7,7 +7,7 @@
 | Issue body is the spec; changed existing tests must be explicitly named there; no plan file lists | `checks.weakened_tests`, `h2.LokayAdapter` |
 | Only `store.py` writes persisted state | `store.save`, `store.write_json` |
 | Subprocess execution stays in `effects/` | `lokay lint` |
-| No new comments, docstrings, unit tests, or blanket staging | `lokay lint`, `checks.run_checks` |
+| No new comments, docstrings, unit tests, blanket staging, or label state; only remove existing lokay-* labels | `lokay lint`, `checks.run_checks` |
 | Recorded replay or a real run proves behavior | `scripts/check.sh`, `lokay replay` |
 | Auto-merge stays on; only the nuke PR needs human approval | `config.load_repos`, `effects.gh.merge` |
 | Do not import `lokay` from `src/lokay` | `scripts/check.sh` isolated import check |

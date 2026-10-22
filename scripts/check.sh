@@ -1596,5 +1596,152 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
         assert issue.call_count == (1 if age >= 3600 else 0), (age, issue.call_args_list)
 print("main recovery checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, graph, lint, plan, retro, store, tick
+from lokay.effects import gh, git as git_effects
+from lokay.types import RepoSnapshot, Snapshot
+
+name = "owner/split"
+sha = "a" * 40
+finding = {"plik": "src/a.py", "linia_od": 1, "linia_do": 1,
+           "zmiana": "logic bug", "pytanie": "correctness", "uzasadnienie": "quoted evidence"}
+findings = [dict(finding, uzasadnienie=f"finding {index} " + "x" * 1000) for index in range(30)]
+verdict = {"result": "fix", "sha": sha, "uwagi": [finding]}
+tasks = [{"title": "first", "body": "first spec"}, {"title": "second", "body": "second spec"}]
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    calls = []
+    def remote(args, **kwargs):
+        calls.append(args)
+        assert args[:2] in (["issue", "create"], ["issue", "comment"]), args
+        return f"https://github.com/{name}/issues/{100 + len(calls)}"
+    stack.enter_context(patch.object(gh, "gh_json", return_value=[]))
+    stack.enter_context(patch.object(gh, "gh_ok", side_effect=remote))
+    stack.enter_context(patch.object(tick, "gh_ok", side_effect=remote))
+    stack.enter_context(patch.object(tick, "repo_config", return_value={"test": []}))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+    stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, fn, *args, **kwargs: fn()))
+    stack.enter_context(patch.object(tick, "check_deadline"))
+    stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(tick, "escalate", return_value=None))
+    stack.enter_context(patch.object(tick, "fix_step", return_value={"result": "pushed", "sha": sha}))
+    stack.enter_context(patch.object(tick, "pushed_pr", return_value={"number": 7}))
+    stack.enter_context(patch.object(tick, "refresh_body", return_value={"result": "updated"}))
+    stack.enter_context(patch.object(finish, "sync_main", return_value=[]))
+    stack.enter_context(patch.object(git_effects, "git_try", side_effect=lambda path, *args, **kwargs:
+        (0, sha if args[0] == "rev-parse" else "", "")))
+    stack.enter_context(patch.object(git_effects, "plan_checkout", return_value=root))
+    stack.enter_context(patch.object(finish, "local_checks", return_value={"result": "green", "failed": [], "notes": []}))
+    stack.enter_context(patch.object(finish, "remote_checks", return_value=(7, {"result": "green"})))
+    stack.enter_context(patch.object(finish, "lenses", return_value=([], [], [], [], "", [], False)))
+    stack.enter_context(patch.object(finish, "complete_check", return_value=(verdict, 8)))
+    splitter = stack.enter_context(patch.object(plan, "split_tasks", return_value={"result": "done", "tasks": tasks}))
+    publisher = stack.enter_context(patch.object(retro, "publish"))
+    picked = {"repo": name, "issue": 1}
+    for hits in (0, 1):
+        store.state_update(name, 1, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                           result="pending", difficulty="hard", issue_title="split issue", issue_body="spec",
+                           pr=7, sha=sha, fix_rounds=graph.FIX_ROUND_LIMIT - 1, fix_limit_hits=hits,
+                           check_history=[{"sha": sha, "findings": findings}])
+        result = tick._finish(picked, root, "lokay/1", sha, [])
+        saved = store.state_read(name, 1)
+        assert saved["difficulty"] == "hard" and saved["pr"] == 7, saved
+        assert all(item["uzasadnienie"] in saved["plan_prompt"] for item in findings)
+        if hits == 0:
+            assert result == {"result": "pending", "next": "plan"}, result
+            assert saved["node"] == "plan" and saved["fix_limit_hits"] == 1
+            splitter.assert_not_called()
+            assert calls == []
+        else:
+            assert len(result["children"]) == 2 and saved["awaiting"] == "children", saved
+            assert all(item["uzasadnienie"] in splitter.call_args.args[0] for item in findings)
+            assert [args[:2] for args in calls] == [["issue", "create"]] * 2, calls
+            for index, args in enumerate(calls):
+                assert f"Lokay parent: #1; split: 0; task: {index}" in args[args.index("--body") + 1].splitlines()
+        assert publisher.call_count == hits + 1
+    for hits in (0, 1, 2, 99):
+        normalized = {"pr": 7, "difficulty": "too_big", "fix_limit_hits": hits}
+        store.normalize_state(normalized)
+        assert normalized["difficulty"] == "hard"
+    calls.clear()
+    store.state_update(name, 2, issue_title="ops", issue_body="<!-- lokay-host-ops: repair -->")
+    assert tick._prepare({"repo": name, "issue": 2})["result"] == "closed"
+    assert store.state_read(name, 2)["host_ops"] is True
+    assert [args[:2] for args in calls] == [["issue", "comment"]], calls
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.object(store, "RUNS", root / "runs"))
+    rows = []
+    created = []
+    def create(args, **kwargs):
+        created.append(args)
+        rows.append({"number": 10, "body": args[args.index("--body") + 1]})
+    stack.enter_context(patch.object(retro, "gh_json", side_effect=lambda *args, **kwargs: rows))
+    stack.enter_context(patch.object(retro, "gh_ok", side_effect=create))
+    for index in range(3):
+        state = {"sha": sha, "pr": 7, "last_check": verdict}
+        row = {"kind": "transition", "repo": f"owner/repo{index}", "issue": 1, "after": state}
+        store.write_artifact(root / "ticks" / f"{index}.jsonl", (json.dumps(row) + "\n") * 2)
+        retro.publish()
+        assert len(created) == (1 if index == 2 else 0)
+    retro.publish()
+    assert len(created) == 1
+    args = created[0]
+    assert args[args.index("--repo") + 1] == "mikolaj92/lokay"
+    assert args[args.index("--title") + 1] == "nowy check w checks.py: logic bug"
+    body = rows[0]["body"]
+    assert body.splitlines()[0].startswith("Lokay retro: ")
+    assert all(f"owner/repo{index}/issues/1" in body and f"owner/repo{index}/pull/7" in body for index in range(3))
+    assert sha in body and "> quoted evidence" in body
+
+for parked in (True, False):
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        root = Path(directory)
+        for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+            stack.enter_context(patch.object(store, key, value))
+        config = {"name": name, "clone_path": str(root / "absent"), "merge": "off"}
+        pr = {"number": 7, "headRefName": "lokay/1", "headRefOid": sha,
+              "labels": [] if parked else [{"name": "lokay-parked"}]}
+        store.state_update(name, 1, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                           pr=7, sha=sha, result="parked" if parked else "check", no_progress=3)
+        stack.enter_context(patch.object(tick.maintenance, "sweep"))
+        stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+        stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
+        stack.enter_context(patch.object(tick, "list_prs", return_value=[pr]))
+        stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+        stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+        remote = stack.enter_context(patch.object(tick, "gh_ok"))
+        result = tick.pick({"LOKAY2_REPO": name})
+        if parked:
+            assert result["result"] == "picked" and result["node"] == "plan", result
+            assert store.state_read(name, 1)["no_progress"] == 0
+            tick.release_lock(result["held"])
+        else:
+            assert result["result"] == "picked" and result["node"] == "check", result
+            assert store.state_read(name, 1)["no_progress"] == 3
+            tick.release_lock(result["held"])
+            remote.assert_called_once()
+            assert remote.call_args.args[0][-2:] == ["--remove-label", "lokay-parked"]
+        if parked:
+            remote.assert_not_called()
+
+for line, rejected in (("args = ['--add-label', 'lokay-x']", True),
+                       ('args = ["label", "create", "lokay-x"]', True),
+                       ("args = ['--remove-label', 'lokay-x']", False)):
+    diff = "diff --git a/src/example.py b/src/example.py\n--- a/src/example.py\n+++ b/src/example.py\n@@ -0,0 +1 @@\n+" + line + "\n"
+    with patch.object(lint, "git_output", return_value=line + "\n"):
+        errors = lint.lint_diff(diff, "head", Path.cwd(), lokay_rules=True)
+    assert bool(errors) is rejected, errors
+print("split and label checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

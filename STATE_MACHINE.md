@@ -137,7 +137,7 @@ Stan JSON zastępuje plik przez plik tymczasowy. Rounds są dopisywane osobno.
 Nie jest to transakcja obejmująca Git, GitHub, stan i logi.[S12]
 Budżet domyślny to 2700 s. Deadline zaczyna się przed wyborem pracy.
 Poza harness2 proces ma limit minimum z timeout operacji, 3600 s i pozostałego budżetu; harness2 Build/Fix nie podlega deadline ticka, ale zachowuje timeout każdego procesu do 3600 s; sprzątanie procesu ma dodatkowe 5 s.[S2][S7][S8]
-Nie ma limitu liczby rund. Jest limit czasu rozpoczynania operacji i oczekiwania na procesy.
+Limit 8 rund Check→Fix: pierwsze trafienie → Plan z uwagami; drugie → podział issue, awaiting=children; PR pozostaje otwarty, difficulty bez too_big; oba → retro.
 Operacje plikowe i sprzątanie guardów nie mają twardego wspólnego limitu czasu.[S7]
 
 `test: []` daje local green z tested=false i notatką. Brak GitHub checks daje no_ci, nie green; anulowany CheckRun jest pomijany tylko przy nieanulowanym CheckRun z tym samym workflowName i name.

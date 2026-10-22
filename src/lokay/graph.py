@@ -97,8 +97,10 @@ def step(run: Run, event: Event) -> Run:
                                       fix_limit_hits=1, result="pending",
                                       reason=f"fix round limit: {FIX_ROUND_LIMIT} Check→Fix rounds")
                     else:
-                        fields.update(node="check", result="infeasible", fix_rounds=0,
-                                      reason="fix round limit reached twice")
+                        fields.update(node="plan", **deepcopy(PLAN_RESET), result="pending", fix_rounds=0,
+                                      fix_limit_hits=current.get("fix_limit_hits", 1) + 1,
+                                      split_pending=True, split_tasks=None, children=[],
+                                      reason="fix round limit reached twice; split")
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
             rechecks = current.get("dispute_rechecks", [])
@@ -240,8 +242,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             state = repo.states[issue]
             if state.get("result") in ("closed", "merged"):
                 continue
-            parked = (state.get("result") == "parked"
-                      or any(label["name"] == "lokay-parked" for label in pr.get("labels", [])))
+            parked = state.get("result") == "parked"
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
                 ready.append((_kind(pr, pr=True), state.get("last_attempt", 0), pr["number"], issue, pr))
         fallback = None

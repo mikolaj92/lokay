@@ -9,7 +9,6 @@ import shutil
 import signal
 import sys
 import time
-from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
@@ -472,7 +471,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                     "pr", "edit", str(pr["number"]), "--repo", name,
                                     "--remove-label", "lokay-parked",
                                 ], error="park label removal failed", include_stdout=True)
-                            if labelled or saved.get("result") == "parked":
+                            if saved.get("result") == "parked":
                                 resumed = store.escalation_fields(saved)
                                 resumed.pop("node")
                                 resumed.pop("result")
@@ -686,11 +685,38 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
     return prompt
 
 
+def _split_issue(picked: dict, root: Path) -> dict:
+    from lokay import plan
+    from lokay.effects.git import plan_checkout
+    from lokay.effects.gh import create_child_issue
+
+    saved = state_read(picked["repo"], picked["issue"])
+    tasks = saved.get("split_tasks")
+    if tasks is None:
+        outcome = _retry(picked, "plan", lambda: plan.split_tasks(
+            saved.get("plan_prompt") or plan.prompt_for(saved["issue_title"], saved["issue_body"]),
+            run_dir(picked["repo"], picked["issue"]) / "split.json", cwd=plan_checkout(root)), "done", worktree=False)
+        tasks = plan.validate_tasks(outcome["tasks"])
+        state_update(picked["repo"], picked["issue"], split_tasks=tasks, children=[])
+    tasks = plan.validate_tasks(tasks)
+    children = list(state_read(picked["repo"], picked["issue"]).get("children") or [])
+    for index, task in enumerate(tasks):
+        if index < len(children):
+            continue
+        number = create_child_issue(picked["repo"], picked["issue"], index, task,
+                                    saved.get("split_generation", 0))
+        children.append(number)
+        state_update(picked["repo"], picked["issue"], children=children)
+    state_update(picked["repo"], picked["issue"], awaiting="children", _event={"action": "enter_node", "outcome": {"node": "plan"}},
+                 result="pending", retry_at=0, failures=0, reason=None, split_pending=False)
+    return {"result": "pending", "children": children}
+
+
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_publish, tidy_and_commit
     from lokay import plan
     from lokay.h2 import run_issue
-    from lokay.effects.git import apply_patch, git_try, plan_checkout
+    from lokay.effects.git import apply_patch, git_try
 
     saved = state_read(picked["repo"], picked["issue"])
     if "issue_title" not in saved or "issue_body" not in saved:
@@ -708,15 +734,11 @@ def _prepare(picked: dict) -> tuple | dict:
         from lokay.effects.gh import fit_body
 
         reason = "not a coding issue (lokay-host-ops)"
-        gh_ok(["label", "create", "lokay-host-ops", "--force", "--repo", picked["repo"]],
-              error="host-ops label creation failed")
-        gh_ok(["issue", "edit", str(picked["issue"]), "--repo", picked["repo"],
-               "--add-label", "lokay-host-ops"], error="issue label failed")
         gh_ok(["issue", "comment", str(picked["issue"]), "--repo", picked["repo"],
                "--body", fit_body("lokay skips this issue: its body carries the lokay-host-ops marker, so it is host/ops work, not a code change.")],
               strip=False, error="issue comment failed")
         state_update(picked["repo"], picked["issue"],
-                     _event={"action": "closed", "outcome": {"reason": reason}})
+                     _event={"action": "closed", "outcome": {"reason": reason}}, host_ops=True)
         return {"result": "closed", "reason": reason}
     if saved.get("difficulty") not in plan.DIFFICULTIES:
         from lokay.effects.decide import decide
@@ -730,28 +752,8 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(picked["repo"], picked["issue"])
     repo = repo_config(picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
-    if saved["difficulty"] == "too_big":
-        from lokay.effects.gh import create_child_issue
-
-        tasks = saved.get("split_tasks")
-        if tasks is None:
-            outcome = _retry(picked, "plan", lambda: plan.split_tasks(
-                saved.get("plan_prompt") or plan.prompt_for(title, body),
-                run_dir(picked["repo"], picked["issue"]) / "split.json", cwd=plan_checkout(root)), "done", worktree=False)
-            tasks = plan.validate_tasks(outcome["tasks"])
-            state_update(picked["repo"], picked["issue"], split_tasks=tasks, children=[])
-        tasks = plan.validate_tasks(tasks)
-        children = list(state_read(picked["repo"], picked["issue"]).get("children") or [])
-        for index, task in enumerate(tasks):
-            if index < len(children):
-                continue
-            number = create_child_issue(picked["repo"], picked["issue"], index, task,
-                                        saved.get("split_generation", 0))
-            children.append(number)
-            state_update(picked["repo"], picked["issue"], children=children)
-        state_update(picked["repo"], picked["issue"], awaiting="children", _event={"action": "enter_node", "outcome": {"node": "plan"}},
-                     result="pending", retry_at=0, failures=0, reason=None)
-        return {"result": "pending", "children": children}
+    if saved["difficulty"] == "too_big" or saved.get("split_pending"):
+        return _split_issue(picked, root)
 
     _ensure_worktree(picked)
     name, issue = picked["repo"], picked["issue"]
@@ -1254,46 +1256,25 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         findings = [finding for entry in derived.get("check_history", [])
                     for finding in entry.get("findings", [])]
         if pending == "plan":
+            from lokay.retro import publish
+
+            split = derived.get("fix_limit_hits", 0) >= 2
             prompt = replan_prompt(
                 picked,
-                f"Check→Fix did not converge in {graph.FIX_ROUND_LIMIT} rounds; revise the plan against every finding below.",
+                ("Split this issue into smaller tasks against every finding below. " if split else "")
+                + f"Check→Fix did not converge in {graph.FIX_ROUND_LIMIT} rounds; revise the plan against every finding below.",
                 findings, sha)
+            prompt += "\n\nEvery Check finding:\n" + dumps(findings, ensure_ascii=False)
             state_update(picked["repo"], picked["issue"],
                          _event={"action": "verdict", "outcome": verdict}, plan_prompt=prompt)
-            rounds_append(picked["repo"], picked["issue"], "Fix round limit → Plan (1st)")
-            store.log_event("fix_round_limit", hit=1, repo=picked["repo"], issue=picked["issue"],
-                            rounds=rounds, reason=derived["reason"])
-            return {"result": "pending", "next": "plan"}
-        if derived.get("result") == "infeasible":
-            from lokay.effects.gh import fit_body
-
-            state_update(picked["repo"], picked["issue"], _event={"action": "verdict", "outcome": verdict})
-            counts = Counter(
-                (item.plik, item.lens) if isinstance(item, Finding) else ("", item.pytanie or item.lens)
-                for finding in findings if isinstance(item := parse_finding(finding), (Finding, Note)))
-            evidence = (
-                f"Infeasible: fix round limit reached twice.\n\n"
-                f"Total Check rounds: {rounds}\n"
-                f"Check→Fix rounds: {2 * graph.FIX_ROUND_LIMIT}\n"
-                f"PR #{pr_number}: https://github.com/{picked['repo']}/pull/{pr_number}\n"
-                f"Last SHA: `{sha}`\n\n"
-                "Top 10 recurring findings (file, question/lens):\n"
-                + "\n".join(f"- {path or '(no file)'} — {lens}: {count}"
-                            for (path, lens), count in counts.most_common(10)))
-            gh_ok(["label", "create", "lokay-infeasible", "--force", "--repo", picked["repo"]],
-                  error="infeasible label creation failed")
-            gh_ok(["pr", "edit", str(pr_number), "--repo", picked["repo"],
-                   "--add-label", "lokay-infeasible"], error="PR label failed")
-            gh_ok(["issue", "edit", str(picked["issue"]), "--repo", picked["repo"],
-                   "--add-label", "lokay-infeasible"], error="issue label failed")
-            gh_ok(["issue", "close", str(picked["issue"]), "--repo", picked["repo"],
-                   "--comment", fit_body(evidence)], strip=False, error="issue close failed")
+            _retry(picked, "check", publish)
             rounds_append(picked["repo"], picked["issue"],
-                          "Fix round limit (2nd) → issue closed as infeasible")
-            state_update(picked["repo"], picked["issue"], _event={"action": "closed"}, closed_on_github=True)
-            store.log_event("fix_round_limit", hit=2, repo=picked["repo"], issue=picked["issue"],
+                          "Fix round limit → split" if split else "Fix round limit → Plan (1st)")
+            store.log_event("fix_round_limit", hit=derived["fix_limit_hits"], repo=picked["repo"], issue=picked["issue"],
                             rounds=rounds, reason=derived["reason"])
-            return {"result": "closed", "reason": "infeasible: fix round limit reached twice"}
+            if split:
+                return _split_issue(picked, clone_path)
+            return {"result": "pending", "next": "plan"}
         escalated = escalate(picked, verdict.get("uwagi"))
         if escalated:
             return escalated
