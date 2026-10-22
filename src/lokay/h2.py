@@ -108,13 +108,15 @@ class LokayAdapter:
         return None
 
     def execute(self, task_id, harness_dir, run_id, *, timeout=None):
+        harness_dir = harness_dir or self.base_harness()
+        self.validate_tree(read_tree(PI_SURFACE, harness_dir))
         directory = self.spec.runs_root / "executions" / hashlib.sha256(run_id.encode()).hexdigest()
         if (directory / "complete.json").is_file():
             completed = json.loads((directory / "complete.json").read_text())
             if completed.get("start") != self.start:
                 raise RuntimeError("completed rollout belongs to a different starting SHA")
             return directory
-        install = self.substrate.materialise(harness_dir or self.base_harness(), self.spec,
+        install = self.substrate.materialise(harness_dir, self.spec,
                                              {"staging_dir": str(directory / "config")})
         return self.substrate.execute(task_id, install, [run_id], timeout or 3600)[0]
 
@@ -156,15 +158,26 @@ class LokayAdapter:
         return (run_dir / "patch.diff").read_text()
 
     def base_harness(self):
-        entries = self.library.entries()
-        if not entries:
-            return BASE
-        latest = max(entries, key=lambda name: self.library.entry_dir(name).stat().st_mtime_ns)
-        return self.library.entry_dir(latest) / "harness"
+        entries = sorted(self.library.entries(),
+                         key=lambda name: self.library.entry_dir(name).stat().st_mtime_ns,
+                         reverse=True)
+        for name in entries:
+            directory = self.library.entry_dir(name) / "harness"
+            path = directory / "AGENTS.md"
+            try:
+                self.validate_tree({"AGENTS.md": path.read_text() if path.is_file() else ""})
+            except ValueError:
+                continue
+            return directory
+        return BASE
 
     def validate_tree(self, tree):
         if not tree.get("AGENTS.md", "").strip():
             raise ValueError("Keep nonempty AGENTS.md instructions")
+        lines = set(tree["AGENTS.md"].splitlines())
+        for line in (BASE / "AGENTS.md").read_text().splitlines()[1:-2]:
+            if line.strip() and line not in lines:
+                raise ValueError(f"Keep invariant AGENTS.md rule: {line}")
 
     def score(self, run_dir, task_id):
         return None
