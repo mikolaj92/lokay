@@ -52,7 +52,7 @@ def guard_issue(repo: str, body: str) -> int:
     return int(out.strip().rstrip("/").rsplit("/", 1)[1])
 
 
-def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None, *, base: str | None = None, config: dict | None = None) -> dict:
+def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None, *, base: str | None = None, config: dict | None = None, force: bool = False, revision: str | None = None) -> dict:
     from lokay.checks import CheckInput, lockfile
 
     if config is None:
@@ -60,11 +60,11 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
 
     base = base or base_branch(clone_path)
     git(clone_path, "fetch", "origin", base, timeout=60)
-    sha = git(clone_path, "rev-parse", f"origin/{base}", timeout=60)
+    sha = git(clone_path, "rev-parse", revision or f"origin/{base}", timeout=60)
     previous = main_status().get(repo, {})
     baseline = previous.get("baseline", {})
     argv = config.get("test") or []
-    if (baseline.get("sha") != sha or baseline.get("argv") != argv
+    if (force or revision or baseline.get("sha") != sha or baseline.get("argv") != argv
             or baseline.get("guard_version") != GUARD_VERSION
             or baseline.get("lockfile", {}).get("status") not in ("pass", "fail")
             or baseline.get("ci", {}).get("tested") is not True):
@@ -92,23 +92,40 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     lock = baseline["lockfile"]
     status = ("red" if lock["status"] == "fail" or (tested and ci["result"] != "green")
               else "green" if tested and lock["status"] == "pass" else "unknown")
-    culprit = {"sha": merge_sha or sha, "pr": pr} if tested or status == "red" else None
+    if revision:
+        return {"status": status, "baseline": baseline}
+    culprit = ({"sha": merge_sha, "pr": pr} if merge_sha and pr else previous.get("culprit"))
+    if not (merge_sha and pr) and sha != previous.get("baseline", {}).get("sha"):
+        culprit = None
+        if status != "green":
+            pulls = gh_json(["api", f"repos/{repo}/commits/{sha}/pulls"], error="main culprit lookup failed")
+            culprit = next(({"sha": sha, "pr": row["number"]} for row in pulls
+                            if row.get("merged_at") and row.get("merge_commit_sha") == sha), None)
     result = {"status": status,
               "since": previous.get("since", time.time()) if previous.get("status") == status else time.time(),
               "culprit": culprit, "issue": previous.get("issue"), "baseline": baseline,
-              "checked_at": time.time()}
-    if status == "red":
+              "checked_at": time.time(),
+              "exhausted_sha": previous.get("exhausted_sha")}
+    if status == "red" or (status == "unknown" and time.time() - result["since"] >= 3600):
         save_main_status(repo, result)
         diff = git(clone_path, "show", "--format=fuller", "--first-parent", merge_sha, timeout=60) if merge_sha else ""
         lock_log = "\n".join(
             f"{item.plik}:{item.linia_od}: {item.zmiana}" for raw in lock["findings"]
             if isinstance(item := parse_finding(raw), Finding))
-        body = (f"Main czerwony. Napraw przez Plan → Build → Check → Fix → Merge.\n"
+        body = (f"Main {status}. Napraw przez Plan → Build → Check → Fix → Merge.\n"
                 f"Culprit: {dumps(culprit)} · tested SHA: `{sha}`\n\n"
                 f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
                 f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```\n\n"
                 f"Lock checks ({lock['status']}):\n```\n{lock['reason']}\n{lock_log}\n```")
-        result["issue"] = guard_issue(repo, body)
+        if result["exhausted_sha"] != sha:
+            result["issue"] = guard_issue(repo, body)
+            if previous.get("exhausted_sha"):
+                from lokay.store import state_update
+
+                state_update(repo, result["issue"], _event={"action": "reopened", "outcome": {"issue": True}},
+                             children=[], split_tasks=None, recovery_sha=None, recovery_exhausted=False,
+                             h2_context=None, difficulty=None, issue_body=body)
+                result["exhausted_sha"] = None
     elif status == "green":
         matches = [issue for issue in guard_issues(repo, "open") if issue.get("state") == "OPEN"]
         if matches:

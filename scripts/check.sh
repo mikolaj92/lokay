@@ -1426,5 +1426,175 @@ with TemporaryDirectory() as directory:
     assert first == second and len(first.split(":")) == len(set(first.split(":"))), (first, second)
 print("monitor loop checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import build, checks, graph, main_guard, setup, store, tick
+from lokay.effects import git as git_effects
+from lokay.types import CheckResult, RepoSnapshot, Snapshot
+
+name = "mikolaj92/Temida"
+now = 10000
+for age in (3599, 3600, 3601):
+    snapshot = Snapshot(repos=(RepoSnapshot(
+        name=name, status={"status": "unknown", "since": now - age, "issue": 7},
+        prs=(), issues=(), states={7: {"result": "running", "node": "build"}}),), now=now)
+    picked = graph.pick(snapshot)
+    assert (picked is not None and picked.kind == "red_main") == (age >= 3600), picked
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    config = {"name": name, "clone_path": str(root), "merge": "on", "test": ["checks"]}
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+    guard = stack.enter_context(patch.object(main_guard, "check_main"))
+    assert tick.pick({})["result"] == "idle"
+    assert guard.call_args.args[:2] == (name, root), guard.call_args
+    assert guard.call_args.kwargs["force"] is True
+
+ci = {"result": "red", "tested": True, "executed": 1, "failed": [], "log": "setup log evidence"}
+lock = {"status": "pass", "reason": "lockfile evidence", "findings": [], "name": "lockfile"}
+baseline = {"sha": "head", "argv": ["checks"], "ci": ci, "lockfile": lock}
+main = {"status": "red", "baseline": baseline, "issue": 7, "culprit": {"sha": "merge", "pr": 42}}
+for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhausted", "green"):
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        root = Path(directory)
+        for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+            stack.enter_context(patch.object(store, key, value))
+        artifact = root / "empty.patch"
+        store.write_artifact(artifact, "")
+        context = hashlib.sha256(json.dumps(["repair", "spec", "easy", []]).encode()).hexdigest()
+        store.state_update(name, 7, awaiting="children", children=[11, 12], result="pending")
+        store.state_update(name, 12, _event={"action": "closed"})
+        store.state_update(name, 11, issue_title="repair", issue_body="spec", difficulty="easy",
+                           h2_context=context, h2_patch=str(artifact), h2_start="start",
+                           h2_all_ran=True, h2_summary="complete",
+                           recovery_sha="head" if scenario == "exhausted" else None)
+        status = deepcopy(main)
+        if scenario == "no culprit":
+            status["culprit"] = None
+        if scenario == "green":
+            status["status"] = "green"
+        if scenario == "setup":
+            status["baseline"]["ci"]["failed"] = [{"warstwa": "setup"}]
+        if scenario == "lock":
+            status["baseline"]["lockfile"]["status"] = "fail"
+        store.save_main_status(name, status)
+        def diagnose(repo, clone, **kwargs):
+            assert kwargs["force"] is True
+            revision = kwargs.get("revision")
+            if revision:
+                return {"status": "red" if revision == "merge" or scenario == "parent red" else "green",
+                        "baseline": deepcopy(baseline)}
+            return status
+        guard = stack.enter_context(patch.object(main_guard, "check_main", side_effect=diagnose))
+        stack.enter_context(patch.object(tick, "repo_config", return_value={"test": ["checks"]}))
+        stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+        stack.enter_context(patch.object(tick, "_ensure_worktree"))
+        stack.enter_context(patch.object(tick, "check_deadline"))
+        stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
+        stack.enter_context(patch.object(git_effects, "git_try", return_value=(0, "", "")))
+        def git(path, *args, **kwargs):
+            if args[0] == "rev-list":
+                return "merge parent other"
+            if args[0] == "diff":
+                return "revert patch"
+            assert args == ("revert", "--no-commit", "-m", "1", "merge"), args
+            return ""
+        commands = stack.enter_context(patch.object(tick, "git", side_effect=git))
+        stack.enter_context(patch.object(tick, "git_head", return_value="revert-sha"))
+        commit = stack.enter_context(patch.object(build, "tidy_and_commit"))
+        stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+        stack.enter_context(patch.object(build, "build_publish", return_value={"result": "pr_open", "sha": "revert-sha", "pr": 99}))
+        stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, fn, *args: fn()))
+        remote = stack.enter_context(patch.object(tick, "gh_ok"))
+        result = tick._prepare({"repo": name, "issue": 11})
+        saved = store.state_read(name, 11)
+        if scenario == "revert":
+            assert isinstance(result, tuple), result
+            assert saved["h2_committed"] == "revert-sha" and saved["node"] == "check", saved
+            assert saved["h2_summary"] == "Revert culprit PR #42", saved
+            commit.assert_called_once_with(root, "Revert culprit PR #42")
+            assert artifact.read_text() == "revert patch"
+            assert [call.kwargs.get("revision") for call in guard.call_args_list] == [None, "merge", "merge^1"]
+        elif scenario == "exhausted":
+            assert result["result"] == "closed" and saved["recovery_exhausted"], (result, saved)
+            assert store.state_read(name, 7)["recovery_exhausted"]
+            exhausted = store.main_status()[name]
+            assert exhausted["exhausted_sha"] == "head", exhausted
+            snapshot = Snapshot(repos=(RepoSnapshot(name=name, status=exhausted, prs=(),
+                issues=({"number": 20},), states={7: store.state_read(name, 7), 11: saved, 20: {}}),), now=now)
+            assert graph.pick(snapshot).issue == 20
+            remote.assert_called_once()
+        elif scenario == "green":
+            assert result["result"] == "closed" and saved["closed_on_github"], (result, saved)
+            assert "main green" in result["reason"]
+            remote.assert_called_once()
+        else:
+            assert result == {"result": "pending", "next": "build"}, result
+            assert saved["node"] == "build" and saved["recovery_sha"] == "head", saved
+            assert "setup log evidence" in saved["issue_body"] and "lockfile evidence" in saved["issue_body"]
+            commit.assert_not_called()
+            remote.assert_not_called()
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    current_sha = "head"
+    def git(path, *args, **kwargs):
+        if args[0] == "rev-parse":
+            return "parent" if args[1] == "merge^1" else current_sha
+        return ""
+    commands = stack.enter_context(patch.object(main_guard, "git", side_effect=git))
+    stack.enter_context(patch.object(main_guard, "worktree_remove", return_value={"result": "removed"}))
+    stack.enter_context(patch.object(setup, "prepare_dependencies", return_value={"log": "setup"}))
+    tests = stack.enter_context(patch.object(main_guard, "run_repo_tests", side_effect=lambda *args: deepcopy(ci)))
+    stack.enter_context(patch.object(checks, "lockfile", return_value=CheckResult("lockfile", "pass", "lockfile evidence", [])))
+    lookup = stack.enter_context(patch.object(main_guard, "gh_json", return_value=[
+        {"number": 42, "merged_at": "today", "merge_commit_sha": "head"}]))
+    issue = stack.enter_context(patch.object(main_guard, "guard_issue", return_value=7))
+    config = {"test": ["checks"]}
+    result = main_guard.check_main(name, root, base="main", config=config, force=True, revision="merge^1")
+    assert result["baseline"]["sha"] == "parent"
+    assert tests.call_args.args[1] == "parent"
+    added = [call for call in commands.call_args_list if call.args[1:3] == ("worktree", "add")]
+    assert added[-1].args[-1] == "parent", added
+    assert store.main_status() == {}
+    result = main_guard.check_main(name, root, base="main", config=config, force=True)
+    assert result["culprit"] == {"sha": "head", "pr": 42}, result
+    store.state_update(name, 7, _event={"action": "closed"}, recovery_exhausted=True)
+    store.save_main_status(name, {**result, "exhausted_sha": "head"})
+    issue.reset_mock()
+    main_guard.check_main(name, root, base="main", config=config, force=True)
+    issue.assert_not_called()
+    current_sha = "new-head"
+    result = main_guard.check_main(name, root, base="main", config=config, force=True)
+    issue.assert_called_once()
+    assert result["exhausted_sha"] is None and result["culprit"] is None, result
+    assert not store.state_read(name, 7)["recovery_exhausted"]
+    for age in (3599, 3600):
+        unknown = {**deepcopy(ci), "tested": False}
+        tests.side_effect = lambda *args: deepcopy(unknown)
+        store.save_main_status(name, {"status": "unknown", "since": now - age,
+                                     "baseline": {"sha": current_sha}, "issue": 7})
+        issue.reset_mock()
+        with patch.object(main_guard.time, "time", return_value=now):
+            result = main_guard.check_main(name, root, base="main", config=config, force=True)
+        assert result["status"] == "unknown"
+        assert issue.call_count == (1 if age >= 3600 else 0), (age, issue.call_args_list)
+print("main recovery checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
