@@ -307,6 +307,26 @@ def removed_assertions(patch: str) -> dict[str, int]:
             if count > 0 and is_test(path, lines[path])}
 
 
+def assertion_base_violations(worktree: Path, base_revision: str, patch: str) -> dict[str, int]:
+    from lokay.effects.git import git
+    from lokay.scope import ASSERTION
+
+    violations = {}
+    for path in removed_assertions(patch):
+        base_text = ""
+        if git(worktree, "--literal-pathspecs", "ls-tree", "--name-only", base_revision, "--", path):
+            base_text = git(worktree, "show", f"{base_revision}:{path}")
+        try:
+            after_text = (worktree / path).read_text()
+        except FileNotFoundError:
+            after_text = ""
+        count = sum(bool(ASSERTION.match(line)) for line in base_text.splitlines()) - sum(
+            bool(ASSERTION.match(line)) for line in after_text.splitlines())
+        if count > 0:
+            violations[path] = count
+    return violations
+
+
 def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
         clone_path, base, read_diff, sync_head) -> tuple[Literal["return"], dict] | tuple[Literal["continue"], tuple]: 
     from lokay.tick import (escalate, dumps, gh_json, _retry, replan_prompt,
@@ -392,7 +412,13 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
                      h2_fix_identity=identity, h2_fix_patch=str(patch), h2_fix_committed=None)
         if patch.read_bytes().strip():
             apply_patch(worktree, patch)
-            removed = removed_assertions(patch.read_text())
+            patch_text = patch.read_text()
+            removed = removed_assertions(patch_text)
+            if removed:
+                from lokay.effects.git import git
+
+                base_revision = git(worktree, "merge-base", f"origin/{base}", sha)
+                removed = assertion_base_violations(worktree, base_revision, patch_text)
             if removed:
                 restore_head(worktree)
                 for path, count in removed.items():

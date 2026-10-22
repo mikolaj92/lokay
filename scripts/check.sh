@@ -1302,5 +1302,41 @@ with TemporaryDirectory(prefix="lokay-harness-rule-checks-") as temporary:
     adapter.substrate.execute.assert_not_called()
 print("harness rule checks: green")
 PY
+.venv/bin/python - <<'PY'
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import store
+from lokay.effects.git import git
+from lokay.finish import assertion_base_violations
+
+os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                  GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid",
+                  GIT_AUTHOR_DATE="2025-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2025-01-01T00:00:00+00:00")
+with TemporaryDirectory(prefix="lokay-fix-assertion-base-checks-") as temporary:
+    repo = Path(temporary)
+    git(repo, "init", "-b", "main")
+    test = repo / "test_example.py"
+    source = repo / "example.py"
+    base_text = "assert True\nassert 1 == 1\n"
+    store.write_artifact(test, base_text)
+    store.write_artifact(source, "assert True\n")
+    git(repo, "add", "--", test.name, source.name)
+    git(repo, "commit", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    store.write_artifact(test, base_text + "assert 2 == 2\nassert 3 == 3\nassert 4 == 4\n")
+    git(repo, "commit", "-am", "PR assertions")
+    sha = git(repo, "rev-parse", "HEAD")
+    base_revision = git(repo, "merge-base", "origin/main", sha)
+    for text, expected in ((base_text, {}), ("assert True\n", {test.name: 1})):
+        store.write_artifact(test, text)
+        patch = git(repo, "diff", "HEAD", "--", test.name)
+        assert assertion_base_violations(repo, base_revision, patch) == expected
+    store.write_artifact(source, "")
+    patch = git(repo, "diff", "HEAD", "--", source.name)
+    assert assertion_base_violations(repo, base_revision, patch) == {}
+print("fix assertion base checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
