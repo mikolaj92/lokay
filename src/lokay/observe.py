@@ -3,7 +3,9 @@ from __future__ import annotations
 from json import dumps
 from lokay.store import write_heartbeat
 
+import gzip
 import json
+import math
 import os
 import time
 from contextlib import contextmanager
@@ -62,6 +64,41 @@ def status() -> None:
         print("  ".join(value.ljust(width) for value, width in zip(row, widths)))
 
 
+def latest_needs_help() -> dict:
+    from lokay.replay import unpack
+
+    latest = None
+    unreadable = 0
+    directory = RUNS.parent / "ticks"
+    for path in sorted((*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz")), reverse=True):
+        try:
+            opener = gzip.open if path.suffix == ".gz" else open
+            with opener(path, "rt") as stream:
+                for line in stream:
+                    try:
+                        row = json.loads(line)
+                        if row.get("kind") != "transition":
+                            continue
+                        event = unpack(row.get("event"), directory, source=directory)
+                        if event.get("action") != "needs_help":
+                            continue
+                        ts = float(event["ts"])
+                        if not math.isfinite(ts):
+                            raise ValueError("invalid event timestamp")
+                        before = unpack(row.get("before", {}), directory, source=directory)
+                        if latest is None or ts > latest["ts"]:
+                            latest = {"ts": ts, "time": datetime.fromtimestamp(ts, timezone.utc).isoformat(),
+                                      "repo": row.get("repo"), "issue": row.get("issue"),
+                                      "node": before.get("node", row.get("node")), "event": event}
+                    except (ValueError, KeyError, TypeError, AttributeError, OSError, OverflowError, EOFError):
+                        unreadable += 1
+        except (OSError, EOFError, UnicodeError):
+            unreadable += 1
+        if latest is not None:
+            break
+    return {"latest_needs_help": latest, "unreadable_records_or_files": unreadable}
+
+
 def monitor() -> dict:
     path = HOME / "heartbeat.json"
     reasons = []
@@ -86,14 +123,20 @@ def monitor() -> dict:
     except (OSError, ValueError, KeyError, TypeError) as exc:
         beat = {}
         reasons.append(f"Heartbeat unavailable: {exc}")
-    if not reasons:
-        return {"result": "ok"}
     repo = os.environ.get("LOKAY_ALARM_REPO", "mikolaj92/lokay")
     rows = gh_json(["issue", "list", "--repo", repo, "--state", "open",
-                    "--search", "lokay-stalled in:title", "--json", "number,title"],
+                    "--search", "lokay-stalled in:title", "--limit", "1000000", "--json", "number,title"],
                    error="alarm lookup failed", strip=False, default="[]")
-    if not any(row["title"] == "lokay-stalled" for row in rows):
-        body = "\n".join(reasons) + "\n\n```json\n" + dumps(beat, indent=2) + "\n```"
+    alarms = [row for row in rows if row["title"] == "lokay-stalled"]
+    evidence = "\n\n```json\n" + dumps(beat, indent=2) + "\n```"
+    if not reasons:
+        for alarm in alarms:
+            gh_ok(["issue", "close", str(alarm["number"]), "--repo", repo,
+                   "--comment", "Monitor recovered: no stall predicates remain." + evidence],
+                  error="alarm closure failed", strip=False)
+        return {"result": "ok", "closed": [alarm["number"] for alarm in alarms]}
+    if not alarms:
+        body = "\n".join(reasons) + evidence + "\n\n```json\n" + dumps(latest_needs_help(), indent=2) + "\n```"
         gh_ok(["issue", "create", "--repo", repo, "--title", "lokay-stalled", "--body", body],
               error="alarm creation failed", strip=False)
     return {"result": "stalled", "reasons": reasons}

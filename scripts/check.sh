@@ -1338,5 +1338,93 @@ with TemporaryDirectory(prefix="lokay-fix-assertion-base-checks-") as temporary:
     assert assertion_base_violations(repo, base_revision, patch) == {}
 print("fix assertion base checks: green")
 PY
+uv run python - <<'PY'
+import gzip
+import json
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import observe
+
+script = Path("scripts/lokay-service.sh").read_text()
+path_line = next(line for line in script.splitlines() if line.startswith("export PATH="))
+loop = script[script.index("while true; do"):]
+assert 'if [[ "$LOKAY2_WORKER" == "0" ]]; then\n    monitor_ticks=' in loop
+assert 'if (( monitor_ticks % monitor_every == 0 )); then\n      run_child "$ROOT/.venv/bin/lokay" monitor' in loop
+assert loop.index('" monitor </dev/null') < loop.rindex('run_child sleep "$LOKAY_TICK_SECONDS"')
+validation = script[script.index("monitor_ticks=0"):script.index('active=""')]
+rejected = subprocess.run(["/bin/bash", "-c", validation], env={"LOKAY_MONITOR_TICKS": "0"},
+                          capture_output=True, text=True)
+assert rejected.returncode == 64 and "LOKAY_MONITOR_TICKS" in rejected.stderr, rejected
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    ticks = root / "ticks"
+    ticks.mkdir()
+    now = 1_800_000_000
+    def transition(ts, reason):
+        return {"kind": "transition", "repo": "owner/repo", "issue": 7,
+                "before": {"node": "fix"},
+                "event": {"action": "needs_help", "ts": ts, "reason": reason}}
+    older = ticks / "2026-10-19.jsonl"
+    older.write_text(json.dumps(transition(now + 1000, "older file")) + "\n")
+    newest_help = ticks / "2026-10-20.jsonl.gz"
+    with gzip.open(newest_help, "wt") as stream:
+        stream.write("broken\n" + json.dumps(transition(now - 20, "latest help")) + "\n"
+                     + json.dumps(transition(now - 30, "earlier help")) + "\n")
+    newest = ticks / "2026-10-21.jsonl"
+    newest.write_text('{"kind": "other"}\n')
+    opened = []
+    original_open = open
+    def tracked_open(path, *args, **kwargs):
+        path = Path(path)
+        assert path != older, "older tick file was read"
+        opened.append(path)
+        return original_open(path, *args, **kwargs)
+    with patch.object(observe, "HOME", root), patch.object(observe, "RUNS", root / "runs"), \
+            patch.object(observe.time, "time", return_value=now), \
+            patch.dict(os.environ, {"LOKAY_ALARM_REPO": "mikolaj92/lokay", "LOKAY_HEARTBEAT_MINUTES": "5"}), \
+            patch("builtins.open", side_effect=tracked_open):
+        help_result = observe.latest_needs_help()
+        assert help_result["latest_needs_help"]["event"]["reason"] == "latest help", help_result
+        assert help_result["unreadable_records_or_files"] == 1, help_result
+        assert opened == [newest, newest_help], opened
+        beat = {"time": datetime.fromtimestamp(now - 600, timezone.utc).isoformat()}
+        (root / "heartbeat.json").write_text(json.dumps(beat))
+        with patch.object(observe, "gh_json", return_value=[]) as lookup, \
+                patch.object(observe, "gh_ok") as action:
+            result = observe.monitor()
+            assert result["result"] == "stalled", result
+            action.assert_called_once()
+            args = action.call_args.args[0]
+            assert args[:2] == ["issue", "create"], args
+            assert args[args.index("--repo") + 1] == "mikolaj92/lokay", args
+            assert args[args.index("--title") + 1] == "lokay-stalled", args
+            body = args[args.index("--body") + 1]
+            assert all(reason in body for reason in result["reasons"]), body
+            assert "latest help" in body and beat["time"] in body, body
+            lookup.return_value = [{"number": 42, "title": "lokay-stalled"}]
+            action.reset_mock()
+            assert observe.monitor()["result"] == "stalled"
+            action.assert_not_called()
+            beat["time"] = datetime.fromtimestamp(now, timezone.utc).isoformat()
+            (root / "heartbeat.json").write_text(json.dumps(beat))
+            assert observe.monitor() == {"result": "ok", "closed": [42]}
+            action.assert_called_once()
+            args = action.call_args.args[0]
+            assert args[:3] == ["issue", "close", "42"], args
+            assert beat["time"] in args[args.index("--comment") + 1], args
+    command = path_line + '\nprintf "%s" "$PATH"'
+    first = subprocess.check_output(["/usr/bin/env", "-i", f"HOME={root}", "PATH=/usr/bin:/bin",
+                                     "/bin/bash", "-c", command], text=True)
+    second = subprocess.check_output(["/usr/bin/env", "-i", f"HOME={root}", f"PATH={first}",
+                                      "/bin/bash", "-c", command], text=True)
+    assert "/usr/sbin" in first.split(":") and "/sbin" in first.split(":"), first
+    assert first == second and len(first.split(":")) == len(set(first.split(":"))), (first, second)
+print("monitor loop checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
