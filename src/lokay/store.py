@@ -432,7 +432,8 @@ def normalize_state(state: dict) -> None:
         state["plan_phase"] = "write"
     if "pr" in state:
         state["pr"] = pr_number(state["pr"])
-    if state.get("pr") is not None and state.get("difficulty") == "too_big":
+    if (state.get("pr") is not None and state.get("difficulty") == "too_big"
+            and state.get("fix_limit_hits", 0) < 2):
         state["difficulty"] = "hard"
     if "awaiting" in state and state["awaiting"] not in (None, "children"):
         state["awaiting"] = None

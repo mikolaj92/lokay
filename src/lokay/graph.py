@@ -97,8 +97,10 @@ def step(run: Run, event: Event) -> Run:
                                       fix_limit_hits=1, result="pending",
                                       reason=f"fix round limit: {FIX_ROUND_LIMIT} Check→Fix rounds")
                     else:
-                        fields.update(node="check", result="infeasible", fix_rounds=0,
-                                      reason="fix round limit reached twice")
+                        fields.update(node="plan", **deepcopy(PLAN_RESET), result="pending", fix_rounds=0,
+                                      fix_limit_hits=current.get("fix_limit_hits", 1) + 1,
+                                      difficulty="too_big", split_tasks=None, children=[],
+                                      reason="fix round limit reached twice; split")
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
             rechecks = current.get("dispute_rechecks", [])
