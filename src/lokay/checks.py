@@ -102,7 +102,7 @@ def secrets(x: CheckInput) -> CheckResult:
 def no_new_comments(x: CheckInput) -> CheckResult:
     ignored = {".md", ".rst", ".txt", ".json", ".lock"}
     markers = {
-        "#": {".py", ".pyi", ".sh", ".bash", ".zsh", ".fish", ".rb", ".pl", ".pm", ".ps1", ".r", ".jl", ".ex", ".exs", ".mojo", ".php", ".tcl", ".yaml", ".yml", ".toml", ""},
+        "#": {".py", ".pyi", ".sh", ".bash", ".zsh", ".fish", ".rb", ".pl", ".pm", ".ps1", ".r", ".jl", ".ex", ".exs", ".mojo", ".🔥", ".php", ".tcl", ".yaml", ".yml", ".toml", ""},
         "//": {".c", ".h", ".cc", ".cpp", ".hpp", ".cs", ".java", ".js", ".jsx", ".ts", ".tsx", ".go", ".rs", ".swift", ".kt", ".kts", ".scala", ".php", ".dart", ".zig", ".vue", ".svelte"},
         "--": {".sql", ".lua", ".hs", ".elm", ".adb", ".ads"},
         ";": {".lisp", ".cl", ".clj", ".cljs", ".scm", ".el", ".asm", ".s"},

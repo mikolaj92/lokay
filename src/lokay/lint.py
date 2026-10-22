@@ -93,9 +93,11 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
                     errors.append(f"{path}: recorded tick fixture changed -> never edit recordings; adjust replay matching in src/lokay/effects/replay.py")
     added = {}
     for path, number, kind, text in diff_lines(diff):
-        if kind != "+" or not path.endswith(".py"):
+        if kind != "+" or not path.endswith((".py", ".mojo", ".🔥")):
             continue
         added.setdefault(path, set()).add(number)
+        if not path.endswith(".py"):
+            continue
         if lokay_rules and path != "src/lokay/lint.py":
             if re.search(r"\badd\s+(?:-A\b|--all\b|\.(?:\s|$))|['\"]add['\"]\s*,\s*['\"](?:-A|--all|\.)['\"]", text):
                 errors.append(f"{path}:{number}: staging all files -> use lokay.effects.git.commit_paths(changed)")
@@ -107,6 +109,22 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
             errors.append(f"{path}:{number}: raw finding dict access -> use lokay.types.Finding/Note fields")
     for path, numbers in added.items():
         source = git_output(cwd, ["show", f"{head}:{path}"])
+        if path.endswith((".mojo", ".🔥")):
+            delimiter = ""
+            start = 0
+            for number, line in enumerate(source.splitlines(), 1):
+                if not delimiter:
+                    stripped = line.lstrip()
+                    if not stripped.startswith(('"""', "'''")):
+                        continue
+                    delimiter = stripped[:3]
+                    start = number
+                    line = stripped[3:]
+                if delimiter in line:
+                    if numbers.intersection(range(start, number + 1)):
+                        errors.append(f"{path}:{start}: docstring -> delete it")
+                    delimiter = ""
+            continue
         try:
             for token in tokenize.generate_tokens(io.StringIO(source).readline):
                 if token.type != tokenize.COMMENT or token.start[0] not in numbers:
