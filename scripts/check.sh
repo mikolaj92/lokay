@@ -1646,7 +1646,7 @@ from unittest.mock import patch
 
 from lokay import finish, graph, lint, plan, retro, store, tick
 from lokay.effects import gh, git as git_effects
-from lokay.types import RepoSnapshot, Snapshot
+from lokay.types import Checked, RepoSnapshot, Run, Snapshot
 
 name = "owner/split"
 sha = "a" * 40
@@ -1690,11 +1690,11 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     for hits in (0, 1):
         store.state_update(name, 1, _event={"action": "enter_node", "outcome": {"node": "check"}},
                            result="pending", difficulty="hard", issue_title="split issue", issue_body="spec",
-                           pr=7, sha=sha, fix_rounds=graph.FIX_ROUND_LIMIT - 1, fix_limit_hits=hits,
+                           pr=None, sha=sha, fix_rounds=graph.FIX_ROUND_LIMIT - 1, fix_limit_hits=hits,
                            check_history=[{"sha": sha, "findings": findings}])
         result = tick._finish(picked, root, "lokay/1", sha, [])
         saved = store.state_read(name, 1)
-        assert saved["difficulty"] == "hard" and saved["pr"] == 7, saved
+        assert saved["difficulty"] == "hard" and saved["pr"] is None, saved
         assert all(item["uzasadnienie"] in saved["plan_prompt"] for item in findings)
         if hits == 0:
             assert result == {"result": "pending", "next": "plan"}, result
@@ -1708,6 +1708,45 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
             for index, args in enumerate(calls):
                 assert f"Lokay parent: #1; split: 0; task: {index}" in args[args.index("--body") + 1].splitlines()
         assert publisher.call_count == hits + 1
+    with ExitStack() as checks:
+        for hits in (1, 2, 5):
+            derived = graph.step(Run.from_state({"pr": 7, "node": "check",
+                "fix_rounds": graph.FIX_ROUND_LIMIT - 1, "fix_limit_hits": hits}),
+                Checked(1, outcome=verdict)).state
+            assert derived["node"] == "plan" and derived["fix_rounds"] == 0, derived
+            assert derived["fix_limit_hits"] == hits + 1 and derived["pr"] == 7, derived
+            assert not derived.get("split_pending"), derived
+            assert "children" not in derived and "split_tasks" not in derived, derived
+        calls.clear()
+        splitter.reset_mock()
+        picked_pr = {"repo": name, "issue": 3}
+        store.state_update(name, 3, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                           result="pending", difficulty="hard", issue_title="existing PR", issue_body="spec",
+                           pr=7, sha=sha, fix_rounds=graph.FIX_ROUND_LIMIT - 1, fix_limit_hits=1,
+                           check_history=[{"sha": sha, "findings": findings}])
+        result = tick._finish(picked_pr, root, "lokay/3", sha, [])
+        saved = store.state_read(name, 3)
+        assert result == {"result": "pending", "next": "plan"}, result
+        assert saved["pr"] == 7 and saved["node"] == "plan", saved
+        assert "Split this issue" not in saved["plan_prompt"], saved["plan_prompt"]
+        assert calls == [], calls
+        splitter.assert_not_called()
+        store.state_update(name, 3, split_pending=True)
+        split_issue = checks.enter_context(patch.object(tick, "_split_issue"))
+        sentinel = RuntimeError("normal prepare path reached")
+        ensure = checks.enter_context(patch.object(tick, "_ensure_worktree", side_effect=sentinel))
+        try:
+            tick._prepare(picked_pr)
+        except RuntimeError as exc:
+            assert exc is sentinel, exc
+        else:
+            raise AssertionError("normal prepare path not reached")
+        ensure.assert_called_once_with(picked_pr)
+        split_issue.assert_not_called()
+        splitter.assert_not_called()
+        assert not store.state_read(name, 3).get("split_pending")
+        assert calls == [], calls
+        print("existing PR fix round limit checks: ok")
     for hits in (0, 1, 2, 99):
         normalized = {"pr": 7, "difficulty": "too_big", "fix_limit_hits": hits}
         store.normalize_state(normalized)
