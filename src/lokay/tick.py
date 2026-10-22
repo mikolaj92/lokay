@@ -769,8 +769,11 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(picked["repo"], picked["issue"])
     repo = repo_config(picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
-    if saved["difficulty"] == "too_big" or saved.get("split_pending"):
-        return _split_issue(picked, root)
+    if saved.get("pr") is None:
+        if saved["difficulty"] == "too_big" or saved.get("split_pending"):
+            return _split_issue(picked, root)
+    elif saved.get("split_pending"):
+        state_update(picked["repo"], picked["issue"], split_pending=False)
 
     _ensure_worktree(picked)
     name, issue = picked["repo"], picked["issue"]
@@ -1275,7 +1278,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if pending == "plan":
             from lokay.retro import publish
 
-            split = derived.get("fix_limit_hits", 0) >= 2
+            split = derived.get("fix_limit_hits", 0) >= 2 and derived.get("pr") is None
             prompt = replan_prompt(
                 picked,
                 ("Split this issue into smaller tasks against every finding below. " if split else "")
@@ -1286,7 +1289,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                          _event={"action": "verdict", "outcome": verdict}, plan_prompt=prompt)
             _retry(picked, "check", publish)
             rounds_append(picked["repo"], picked["issue"],
-                          "Fix round limit → split" if split else "Fix round limit → Plan (1st)")
+                          "Fix round limit → split" if split else f"Fix round limit → Plan (hit {derived['fix_limit_hits']})")
             store.log_event("fix_round_limit", hit=derived["fix_limit_hits"], repo=picked["repo"], issue=picked["issue"],
                             rounds=rounds, reason=derived["reason"])
             if split:
