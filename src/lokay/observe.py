@@ -70,7 +70,7 @@ def latest_needs_help() -> dict:
     latest = None
     unreadable = 0
     directory = RUNS.parent / "ticks"
-    for path in (*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz")):
+    for path in sorted((*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz")), reverse=True):
         try:
             opener = gzip.open if path.suffix == ".gz" else open
             with opener(path, "rt") as stream:
@@ -94,6 +94,8 @@ def latest_needs_help() -> dict:
                         unreadable += 1
         except (OSError, EOFError, UnicodeError):
             unreadable += 1
+        if latest is not None:
+            break
     return {"latest_needs_help": latest, "unreadable_records_or_files": unreadable}
 
 

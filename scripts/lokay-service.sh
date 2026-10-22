@@ -5,7 +5,7 @@ set -uo pipefail
 
 worker_index="${LOKAY2_WORKER-}"
 export HOME="${HOME:-${TMPDIR:-/tmp}/lokay-${UID:-unknown}}"
-export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:${PATH:-/usr/bin:/bin}"
+export PATH="$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:${PATH:-/usr/bin:/bin}:/usr/sbin:/sbin" | /usr/bin/awk -v RS=: '!seen[$0]++ {printf "%s%s", sep, $0; sep=":"}')"
 if [[ -f "$HOME/.config/lokay/env" ]]; then
   set -a
   source "$HOME/.config/lokay/env"
