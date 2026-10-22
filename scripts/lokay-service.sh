@@ -71,6 +71,12 @@ case "$LOKAY2_WORKER" in
   *) exit 64 ;;
 esac
 export LOKAY2_WORKER
+monitor_ticks=0
+monitor_every="${LOKAY_MONITOR_TICKS:-5}"
+if [[ ! "$monitor_every" =~ ^[1-9][0-9]{0,8}$ ]]; then
+  printf 'LOKAY_MONITOR_TICKS must be a positive integer (at most 9 digits)\n' >&2
+  exit 64
+fi
 active=""
 update_file=""
 stop_worker() {
@@ -125,6 +131,12 @@ while true; do
   fi
   run_child "$ROOT/.venv/bin/lokay" start </dev/null >>"$LOG" 2>&1
   rc=$?
+  if [[ "$LOKAY2_WORKER" == "0" ]]; then
+    monitor_ticks=$((monitor_ticks + 1))
+    if (( monitor_ticks % monitor_every == 0 )); then
+      run_child "$ROOT/.venv/bin/lokay" monitor </dev/null >>"$LOG" 2>&1
+    fi
+  fi
   [[ "${1:-}" == "--once" ]] && exit "$rc"
   run_child sleep "$LOKAY_TICK_SECONDS"
 done
