@@ -1029,5 +1029,50 @@ with TemporaryDirectory(prefix="lokay-tested-red-") as temporary:
     issue.assert_called_once()
 print("tested red checks: green")
 PY
+uv run python - <<'PY'
+from difflib import unified_diff
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, no_new_comments
+from lokay.lint import lint_diff
+
+for suffix in (".mojo", ".🔥"):
+    path = f"mojo/takt/plant{suffix}"
+    for delimiter in ('"""', "'''"):
+        module = (delimiter + "\nPlant metadata.\n\n"
+                  "Each node may carry parent_id, layer, and kind so hosts can model documents,\n"
+                  "code trees, and multi-layer cascades without domain parsers inside takt.\n"
+                  + delimiter + "\nvar n = 1\n")
+        changed = module.replace(
+            "Each node may carry parent_id, layer, and kind so hosts can model documents,\n"
+            "code trees, and multi-layer cascades without domain parsers inside takt.\n",
+            "Each node may carry parent_id, layer, and kind as host metadata.\n"
+            "TreeNode.layer does not select a regulator; evaluation starts at the chain root.\n")
+        function = f"fn run():\n    {delimiter}\n    Old text.\n    {delimiter}\n    pass\n"
+        cases = (
+            ("", "# comment\n", "fail", None),
+            ("# old comment\n", "# new comment\n", "fail", None),
+            ("", module, "fail", 1),
+            (module, changed, "fail", 1),
+            (function, function.replace("Old text.", "New text."), "fail", 2),
+            ("# comment\n", "", "pass", None),
+            (module, "var n = 1\n", "pass", None),
+            (module, module.replace("Plant metadata.\n", ""), "pass", None),
+            (module, module.replace("var n = 1", "var n = 2"), "pass", None),
+            ("", f"var s = {delimiter}text{delimiter}\n", "pass", None),
+            ("", f"{delimiter}text{delimiter}\n", "fail", 1),
+        )
+        for before, after, expected, start in cases:
+            diff = "".join(unified_diff(before.splitlines(True), after.splitlines(True),
+                                        fromfile=f"a/{path}", tofile=f"b/{path}", n=0))
+            x = CheckInput("owner/repo", 1, "head", "", "", diff, [], {}, Path.cwd())
+            with patch("lokay.lint.git_output", return_value=after):
+                errors = lint_diff(diff, x.sha, x.worktree, lokay_rules=False)
+                result = no_new_comments(x)
+            assert errors == ([f"{path}:{start}: docstring -> delete it"] if start else []), errors
+            assert result.status == expected, (diff, result)
+print("mojo comment checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
