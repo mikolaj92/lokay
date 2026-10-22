@@ -164,7 +164,7 @@ Historyczny [start.py][H1] ma wymienione w issue numery linii; nie przenosimy ic
 | brak checks równy green | osobny no_ci, nadal dopuszczony; did_run i kontrola pakietów | [S6][S15][S4] |
 | git add -A wszystko | snapshot przed pi i wybór ścieżek; resume bez snapshotu nadal może commitować zastany stan | [S11][S4] |
 | skip-issues.json i epic | brak skip-file; nowe epic/tracker/alarm odfiltrowane, otwarte PR nie | [S1][H1] |
-| cleanup po merge może dać failed | cleanup warning po trwałym merged; błąd wcześniejszego zapisu nadal możliwy | [S19] |
+| cleanup po merge może dać failed | warning po merged; zamknięte issue: patch przed usunięciem, cleanup done/failed bez ponowień; osierocony PR zamykany z datą i URL issue | [S19][S1] |
 
 ## Kontrole tej zmiany
 

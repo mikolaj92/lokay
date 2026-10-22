@@ -22,7 +22,7 @@ from lokay.effects.git import git, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
-from lokay.effects.gh import gh_json, gh_ok, auth_status, host_ops, open_issues, open_pr_for, pr_closed_by_factory
+from lokay.effects.gh import gh_json, gh_ok, fit_body, auth_status, host_ops, open_issues, open_pr_for, pr_closed_by_factory
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
 from lokay.effects.pi import (OneHarnessRunDone, TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
@@ -353,7 +353,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
-        closed = [issue for issue, saved in states.items() if saved.get("result") == "closed"]
+        closed = [issue for issue, saved in states.items()
+                  if saved.get("result") == "closed" and "cleanup" not in saved]
         root = Path(repo["clone_path"]).expanduser()
         if closed and root.is_dir():
             code, out, _ = git_try(root, "for-each-ref", "--format=%(refname)", "refs/heads/lokay/")
@@ -365,8 +366,15 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if held["result"] == "held":
                     try:
                         for issue in cleanup_issues:
+                            if "cleanup" in state_read(name, issue):
+                                continue
                             root, worktree = _repo_paths(repo, issue)
-                            cleanup = worktree_remove(root, worktree, safe=True, branch=f"lokay/{issue}")
+                            try:
+                                cleanup = worktree_remove(root, worktree, safe=True, branch=f"lokay/{issue}",
+                                                          patch_path=run_dir(name, issue) / "cleanup.patch")
+                            except Exception as exc:
+                                cleanup = {"result": "failed", "error": str(exc)}
+                            state_update(name, issue, cleanup="done" if cleanup.get("result") == "removed" else "failed")
                             store.log_event("closed_cleanup", repo=name, issue=issue, outcome=cleanup)
                     finally:
                         release_lock(held)
@@ -392,6 +400,15 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 if only_issue is not None and issue != only_issue:
                     continue
                 saved = state_read(name, issue)
+                if saved.get("result") != "merged" and not any(
+                        int(item["number"]) == issue for item in list_issues(name)):
+                    remote_issue = gh_json(["issue", "view", str(issue), "--repo", name,
+                                            "--json", "state,closedAt,url"], error="issue view failed")
+                    if remote_issue.get("state") == "CLOSED":
+                        gh_ok(["pr", "close", str(row["number"]), "--repo", name, "--comment",
+                               fit_body(f"Issue closed at {remote_issue['closedAt']}: {remote_issue['url']}")])
+                        store.log_event("orphan_pr_closed", repo=name, issue=issue, pr=row["number"])
+                        continue
                 if saved.get("result") == "closed" and (name, issue) not in reopened:
                     issue_open = any(int(item["number"]) == issue and item.get("state", "OPEN") == "OPEN"
                                      for item in list_issues(name))

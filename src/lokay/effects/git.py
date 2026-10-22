@@ -321,7 +321,8 @@ def plan_checkout(root: Path) -> Path:
     return path
 
 
-def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None) -> dict:
+def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str | None = None,
+                    patch_path: Path | None = None) -> dict:
     def remove():
         renamed = path.with_name(f".{path.name}.removing-{uuid4().hex}")
         os.rename(path, renamed)
@@ -339,6 +340,24 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             if code:
                 raise RuntimeError(err.strip() or out.strip() or "cleanup lookup failed")
             return out.strip()
+
+        def archive(where, ref="HEAD"):
+            code, upstream, _ = git_try(where, "rev-parse", "--verify", f"{ref}@{{upstream}}")
+            base = upstream.strip() if code == 0 else f"origin/{base_branch(repo)}"
+            refs = [base, ref] if where == repo else [base]
+            code, diff, err = git_try(where, "diff", "--binary", *refs, "--")
+            if code:
+                raise RuntimeError(err.strip() or "cleanup diff failed")
+            if where != repo:
+                code, untracked, err = git_try(where, "ls-files", "--others", "--exclude-standard", "-z")
+                if code:
+                    raise RuntimeError(err.strip() or "cleanup untracked lookup failed")
+                for name in filter(None, untracked.split("\0")):
+                    code, extra, err = git_try(where, "diff", "--binary", "--no-index", "--", "/dev/null", name)
+                    if code not in (0, 1):
+                        raise RuntimeError(err.strip() or "cleanup untracked diff failed")
+                    diff += extra
+            store.write_artifact(patch_path, diff)
 
         try:
             match = re.fullmatch(r"lokay/([1-9][0-9]*)", branch or "")
@@ -375,7 +394,9 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
                 head = head.strip()
                 if not checked(repo, ["for-each-ref", f"--contains={head}",
                                       "--format=%(refname)", "refs/remotes/origin/"]):
-                    return {"result": "kept", "path": str(path), "reason": "unpushed"}
+                    if patch_path is None:
+                        return {"result": "kept", "path": str(path), "reason": "unpushed"}
+                    archive(repo, ref)
                 checked(repo, ["update-ref", "-d", ref, head])
                 return {"result": "removed", "path": str(path)}
             if (not samefile(checked(repo, ["rev-parse", "--show-toplevel"]), repo)
@@ -392,15 +413,18 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             if (len(matches) != 1 or f"branch {ref}" not in matches[0]
                     or any(field.startswith("locked") for field in matches[0])):
                 raise ValueError("worktree registration mismatch or locked")
-            if checked(path, ["status", "--porcelain", "--untracked-files=all"]):
+            dirty = checked(path, ["status", "--porcelain", "--untracked-files=all"])
+            if dirty and patch_path is None:
                 return {"result": "kept", "path": str(path), "reason": "dirty"}
             head = checked(repo, ["rev-parse", "--verify", ref])
             if checked(path, ["rev-parse", "HEAD"]) != head:
                 raise ValueError("worktree HEAD mismatch")
             reachable = checked(repo, ["for-each-ref", f"--contains={head}",
                                        "--format=%(refname)", "refs/remotes/origin/"])
+            if patch_path is not None and (dirty or not reachable):
+                archive(path)
             remove()
-            if reachable:
+            if reachable or patch_path is not None:
                 checked(repo, ["update-ref", "-d", ref, head])
             return {"result": "removed", "path": str(path)}
         except (OSError, ValueError, RuntimeError) as exc:
