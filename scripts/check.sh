@@ -1131,5 +1131,57 @@ with TemporaryDirectory(prefix="lokay-split-checks-") as temporary, ExitStack() 
     child.assert_not_called()
 print("split before worktree checks: green")
 PY
+uv run python - <<'PY'
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+from harness2.core.library import Library
+
+from lokay import h2, store
+
+base = (h2.BASE / "AGENTS.md").read_text()
+comments = next(line for line in base.splitlines() if line.startswith("No new comments"))
+docs = next(line for line in base.splitlines() if line.startswith("Docs describe"))
+drifted = base.replace(comments, "No unsolicited comments, docstrings, test files, or unit test functions. "
+                       "When the issue requests tests, persist them in the named test file...")
+drifted_docs = base.replace(docs, "Add requested documentation without deleting unrelated, nonduplicate contracts.")
+adapter = h2.LokayAdapter.__new__(h2.LokayAdapter)
+for text, missing in (("", None), (drifted, comments), (drifted_docs, docs)):
+    try:
+        adapter.validate_tree({"AGENTS.md": text})
+    except ValueError as exc:
+        assert missing in str(exc) if missing else "nonempty" in str(exc), exc
+    else:
+        raise AssertionError("Invalid harness instructions accepted")
+adapter.validate_tree({"AGENTS.md": base + "\nRead the repository skill before editing.\n"})
+with TemporaryDirectory(prefix="lokay-harness-rule-checks-") as temporary:
+    root = Path(temporary)
+    adapter.library = Library(root / "library", "owner__repo", h2.PI_SURFACE)
+    older = adapter.library.entry_dir("older")
+    newer = adapter.library.entry_dir("newer")
+    store.write_artifact(older / "harness/AGENTS.md", base)
+    store.write_artifact(newer / "harness/AGENTS.md", drifted)
+    os.utime(older, ns=(1000000000, 1000000000))
+    os.utime(newer, ns=(2000000000, 2000000000))
+    assert adapter.base_harness() == older / "harness"
+    store.write_artifact(older / "harness/AGENTS.md", drifted_docs)
+    assert adapter.base_harness() == h2.BASE
+    assert (newer / "harness/AGENTS.md").read_text() == drifted
+    assert (older / "harness/AGENTS.md").read_text() == drifted_docs
+    adapter.spec = SimpleNamespace(runs_root=root / "runs")
+    adapter.substrate = Mock()
+    try:
+        adapter.execute("owner/repo#1", newer / "harness", "rule-checks")
+    except ValueError as exc:
+        assert comments in str(exc), exc
+    else:
+        raise AssertionError("Drifted harness execution accepted")
+    adapter.substrate.materialise.assert_not_called()
+    adapter.substrate.execute.assert_not_called()
+print("harness rule checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
