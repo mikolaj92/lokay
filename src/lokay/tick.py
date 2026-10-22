@@ -615,12 +615,12 @@ def _ensure_worktree(picked: dict) -> Path:
     return worktree
 
 
-def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | None = None) -> T:
+def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | None = None, *, worktree: bool = True) -> T:
     repo, issue = picked["repo"], picked["issue"]
     state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": node}})
     try:
         check_deadline()
-        if node in {"plan", "build", "check", "fix", "merge"}:
+        if worktree and node in {"plan", "build", "check", "fix", "merge"}:
             _ensure_worktree(picked)
         outcome = action()
         if expected is None or (isinstance(outcome, dict) and outcome.get("result") == expected):
@@ -724,7 +724,6 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(picked["repo"], picked["issue"])
     repo = repo_config(picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
-    _ensure_worktree(picked)
     if saved["difficulty"] == "too_big":
         from lokay.effects.gh import create_child_issue
 
@@ -732,7 +731,7 @@ def _prepare(picked: dict) -> tuple | dict:
         if tasks is None:
             outcome = _retry(picked, "plan", lambda: plan.split_tasks(
                 saved.get("plan_prompt") or plan.prompt_for(title, body),
-                run_dir(picked["repo"], picked["issue"]) / "split.json", cwd=plan_checkout(root)), "done")
+                run_dir(picked["repo"], picked["issue"]) / "split.json", cwd=plan_checkout(root)), "done", worktree=False)
             tasks = plan.validate_tasks(outcome["tasks"])
             state_update(picked["repo"], picked["issue"], split_tasks=tasks, children=[])
         tasks = plan.validate_tasks(tasks)
@@ -748,6 +747,7 @@ def _prepare(picked: dict) -> tuple | dict:
                      result="pending", retry_at=0, failures=0, reason=None)
         return {"result": "pending", "children": children}
 
+    _ensure_worktree(picked)
     name, issue = picked["repo"], picked["issue"]
     branch = f"lokay/{issue}"
     base = base_branch(worktree)

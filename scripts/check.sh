@@ -1074,5 +1074,62 @@ for suffix in (".mojo", ".🔥"):
             assert result.status == expected, (diff, result)
 print("mojo comment checks: green")
 PY
+uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import call, patch
+
+from lokay import plan, store, tick
+from lokay.effects import gh, git
+
+with TemporaryDirectory(prefix="lokay-split-checks-") as temporary, ExitStack() as stack:
+    directory = Path(temporary)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": str(directory)}))
+    for key, value in (("HOME", directory), ("RUNS", directory / "runs"), ("LOCKS", directory / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    name = "owner/split"
+    root = directory / "clone"
+    config = {"name": name, "clone_path": str(root)}
+    tasks = [{"title": "First task", "body": "Implement first part"},
+             {"title": "Second task", "body": "Implement second part"}]
+    stack.enter_context(patch.object(tick, "repo_config", return_value=config))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "Parent", "body": "Implement both parts"}))
+    setup = stack.enter_context(patch.object(git, "ensure_worktree", side_effect=RuntimeError("repository top-level mismatch")))
+    checkout = stack.enter_context(patch.object(git, "plan_checkout", return_value=root))
+    split = stack.enter_context(patch.object(plan, "split_tasks", return_value={"result": "done", "tasks": tasks}))
+    child = stack.enter_context(patch.object(gh, "create_child_issue", side_effect=[101, 102, 201, 202]))
+    for issue, resumed, children in ((1, False, [101, 102]), (2, True, [201, 202])):
+        store.state_update(name, issue, difficulty="too_big", **({"split_tasks": tasks} if resumed else {}))
+        picked = {"repo": name, "issue": issue, "node": "plan"}
+        outcome = tick._prepare(picked)
+        assert outcome == {"result": "pending", "children": children}, outcome
+        saved = store.state_read(name, issue)
+        assert saved["children"] == children and saved["awaiting"] == "children", saved
+        assert child.call_args_list == [call(name, issue, index, task, 0) for index, task in enumerate(tasks)]
+        child.reset_mock()
+        setup.assert_not_called()
+        if resumed:
+            split.assert_not_called()
+            checkout.assert_not_called()
+        else:
+            split.assert_called_once_with(plan.prompt_for("Parent", "Implement both parts"),
+                                          store.run_dir(name, issue) / "split.json", cwd=root)
+            checkout.assert_called_once_with(root)
+        split.reset_mock()
+        checkout.reset_mock()
+    store.state_update(name, 3, difficulty="easy")
+    try:
+        tick._prepare({"repo": name, "issue": 3, "node": "plan"})
+    except RuntimeError as exc:
+        assert str(exc) == "repository top-level mismatch", exc
+    else:
+        raise AssertionError("Build skipped worktree setup")
+    setup.assert_called_once_with(root, "lokay/3", directory / "clone-wt-3")
+    split.assert_not_called()
+    child.assert_not_called()
+print("split before worktree checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
