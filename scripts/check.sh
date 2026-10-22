@@ -1743,5 +1743,116 @@ for line, rejected in (("args = ['--add-label', 'lokay-x']", True),
     assert bool(errors) is rejected, errors
 print("split and label checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import store, tick
+from lokay.effects import git as effects
+
+service = Path("scripts/lokay-service.sh").read_text()
+startup = 'export LOKAY_VERSION="$(git -C "$ROOT" rev-parse HEAD)"'
+assert service.index(startup) < service.index('while true; do')
+assert service.count('export LOKAY_VERSION=') == 2
+name = "owner/hygiene"
+for scenario in ("dirty", "unpushed", "write failed", "remove failed"):
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        home = Path(directory)
+        root = home / "repo"
+        worktree = home / "repo-wt-5"
+        root.mkdir()
+        (root / ".git").mkdir()
+        worktree.mkdir()
+        store.write_artifact(worktree / ".git", "gitdir: unused")
+        for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+            stack.enter_context(patch.object(store, key, value))
+        store.state_update(name, 5, _event={"action": "closed"})
+        config = {"name": name, "clone_path": str(root), "merge": "on"}
+        stack.enter_context(patch.object(tick.maintenance, "sweep"))
+        stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+        stack.enter_context(patch.object(tick, "load_repos", return_value=[config]))
+        stack.enter_context(patch.object(store, "main_status", return_value={name: {"checked_at": tick.time.time()}}))
+        stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
+        stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+        stack.enter_context(patch.object(effects, "base_branch", return_value="main"))
+        commands = []
+        def fake_git(where, *args, **kwargs):
+            commands.append(args)
+            if args[0] == "for-each-ref":
+                return (0, "refs/heads/lokay/5\n", "") if len(args) == 3 else (0, "" if scenario == "unpushed" else "refs/remotes/origin/main", "")
+            if args[:2] == ("rev-parse", "--show-toplevel"):
+                return 0, str(where), ""
+            if args[:2] == ("rev-parse", "--git-common-dir"):
+                return 0, str(root / ".git"), ""
+            if args[0] == "rev-parse":
+                return (1, "", "") if args[-1].endswith("@{upstream}") else (0, "head", "")
+            if args[0] == "symbolic-ref":
+                return 0, "refs/heads/lokay/5", ""
+            if args[:2] == ("worktree", "list"):
+                return 0, f"worktree {worktree}\0branch refs/heads/lokay/5\0\0", ""
+            if args[0] == "status":
+                return 0, "" if scenario == "unpushed" else " M tracked", ""
+            if args[0] == "ls-files":
+                return 0, "new file\0", ""
+            if args[0] == "diff":
+                return (1, "untracked bytes\n", "") if "--no-index" in args else (0, "committed and working bytes\n", "")
+            return 0, "", ""
+        stack.enter_context(patch.object(effects, "git_try", side_effect=fake_git))
+        stack.enter_context(patch.object(tick, "git_try", side_effect=fake_git))
+        events = stack.enter_context(patch.object(store, "log_event"))
+        if scenario == "write failed":
+            stack.enter_context(patch.object(store, "write_artifact", side_effect=OSError("full")))
+        if scenario == "remove failed":
+            stack.enter_context(patch.object(effects.os, "rename", side_effect=OSError("busy")))
+        assert tick.pick({})["result"] == "idle"
+        expected = "failed" if "failed" in scenario else "done"
+        assert store.state_read(name, 5)["cleanup"] == expected
+        if scenario != "write failed":
+            text = (store.run_dir(name, 5) / "cleanup.patch").read_text()
+            assert "committed and working bytes" in text and "untracked bytes" in text
+        assert worktree.exists() == (expected == "failed")
+        assert sum(call.args == ("closed_cleanup",) for call in events.call_args_list) == 1
+        before = len(commands)
+        tick.pick({})
+        assert len(commands) == before
+        assert sum(call.args == ("closed_cleanup",) for call in events.call_args_list) == 1
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    store.state_update(name, 6, result="merged")
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{"name": name, "clone_path": str(home), "merge": "on"}]))
+    stack.enter_context(patch.object(store, "main_status", return_value={name: {"checked_at": tick.time.time()}}))
+    prs = [{"number": n, "headRefName": branch, "headRefOid": "head", "state": "OPEN"}
+           for n, branch in ((15, "lokay/5"), (16, "lokay/6"), (17, "fix-something"), (18, "lokay/8"), (19, "lokay/9"))]
+    stack.enter_context(patch.object(tick, "list_prs", side_effect=lambda name: tuple(prs)))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[{"number": 9, "state": "OPEN"}]))
+    looked = []
+    def remote(args, **kwargs):
+        assert args[:2] == ["issue", "view"], args
+        looked.append(args[2])
+        return {"state": "CLOSED" if args[2] == "5" else "OPEN", "closedAt": "2026-06-01T12:00:00Z", "url": "https://github.com/owner/hygiene/issues/5"}
+    stack.enter_context(patch.object(tick, "gh_json", side_effect=remote))
+    def close(args, **kwargs):
+        assert args[:3] == ["pr", "close", "15"], args
+        assert "2026-06-01T12:00:00Z" in args[-1] and "/issues/5" in args[-1]
+        prs[:] = [row for row in prs if row["number"] != 15]
+    closed = stack.enter_context(patch.object(tick, "gh_ok", side_effect=close))
+    events = stack.enter_context(patch.object(store, "log_event"))
+    stack.enter_context(patch.object(tick, "graph", wraps=tick.graph))
+    stack.enter_context(patch.object(tick.graph, "pick", side_effect=[type("Selection", (), {"repo": name, "issue": None, "kind": "prs"})(), None] * 2))
+    tick.pick({})
+    tick.pick({})
+    assert closed.call_count == 1 and "6" not in looked
+    assert "9" not in looked
+    assert any(row["number"] == 19 for row in prs)
+    assert sum(call.args == ("orphan_pr_closed",) for call in events.call_args_list) == 1
+print("hygiene checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

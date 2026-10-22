@@ -23,6 +23,7 @@ export LOKAY2_DECISION_BASE_URL="${LOKAY2_DECISION_BASE_URL-http://192.168.1.52:
 export LOKAY2_DECISION_MODEL="${LOKAY2_DECISION_MODEL-GLM-5.3-Flash-EXL3}"
 export LOKAY_TICK_SECONDS="${LOKAY_TICK_SECONDS-60}"
 ROOT="$LOKAY_ROOT"
+export LOKAY_VERSION="$(git -C "$ROOT" rev-parse HEAD)"
 # Mint GH_TOKEN only when it authenticates. A revoked token in the process
 # env overrides keyring/hosts.yml for the life of the service (see #2169).
 if [[ -z "${GH_TOKEN:-}" ]]; then

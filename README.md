@@ -63,7 +63,7 @@ Timed-out process groups are killed. Output draining and process reaping share
 a five-second cleanup budget. Tick expiry saves `pending`, without failure
 backoff; an operation timeout remains an ordinary error. Retry waits stop at the
 deadline. This is not a hard wall-clock limit on filesystem operations or guard
-cleanup.
+cleanup. Closed-issue cleanup saves dirty/unpushed changes in `cleanup.patch`, records `cleanup=done|failed` once, and never retries.
 
 Ready repositories are ordered by their latest persisted attempt, oldest first.
 Each repository saves `runs/<repo>/attempt.json` under its lock before fetching

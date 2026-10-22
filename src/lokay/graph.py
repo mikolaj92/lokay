@@ -37,6 +37,8 @@ def step(run: Run, event: Event) -> Run:
         if current.get("result") != "closed" and (not event.outcome.get("issue") or current.get("result") == "merged"):
             return run
     elif current.get("result") == "closed":
+        if set(event.fields) == {"cleanup"} and event.fields["cleanup"] in ("done", "failed") and not current.get("cleanup"):
+            return Run.from_state({**current, "cleanup": event.fields["cleanup"]})
         return run
     fields = dict(event.fields)
     outcome = event.outcome
