@@ -450,9 +450,11 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         pr = open_pr_for(name, branch)
                         saved = state_read(name, number)
                         node = saved.get("node") or ("check" if pr else "plan")
+                        now = time.time()
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
-                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=time.time())
+                                     branch=branch, pr=pr["number"] if pr else None, last_attempt=now,
+                                     **store.pick_ladder_fields(saved, now))
                     else:
                         pr = selected.target if selected.kind == "pr" else None
                         saved = state_read(name, number)
@@ -487,9 +489,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 resumed.pop("result")
                                 resumed.pop("reason")
                                 node = "plan"
+                        now = time.time()
                         state_update(name, number, _event={"action": "enter_node", "outcome": {"node": node}}, branch=branch, pr=pr["number"] if pr else None,
-                                     result="running", reason=None, last_attempt=time.time(),
-                                     **resumed)
+                                     result="running", reason=None, last_attempt=now,
+                                     **{**store.pick_ladder_fields(saved, now), **resumed})
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -860,8 +863,7 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
     now = time.time()
     if not any(saved.get(key) for key in ("diff_changed_at", "issue_since", "ladder_since")):
         state_update(repo, issue, ladder_since=now)
-    since = max(saved.get("diff_changed_at") or saved.get("issue_since")
-                or saved.get("ladder_since") or now, saved.get("ladder_since") or 0)
+    since = store.ladder_start(saved, now)
     hours = float(os.environ.get("LOKAY2_LADDER_HOURS", "6"))
     if not 0 < hours < float("inf"):
         raise ValueError("LOKAY2_LADDER_HOURS must be positive")

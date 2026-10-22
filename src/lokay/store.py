@@ -256,6 +256,18 @@ def last_activity(state: dict) -> float:
     return max(state.get("last_attempt", 0), updated_at)
 
 
+def ladder_start(state: dict, now: float) -> float:
+    return max(state.get("diff_changed_at") or state.get("issue_since")
+               or state.get("ladder_since") or now, state.get("ladder_since") or 0)
+
+
+def pick_ladder_fields(state: dict, now: float) -> dict:
+    activity = last_activity(state)
+    if any(state.get(key) for key in ("diff_changed_at", "issue_since", "ladder_since")) and activity > 0:
+        return {"ladder_since": ladder_start(state, now) + (now - activity)}
+    return {}
+
+
 def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
     if state.get("result") == "closed":
         return None

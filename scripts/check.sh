@@ -799,6 +799,38 @@ start_harness_run()
 start_harness_run()
 print("one harness2 per tick checks: green")
 PY
+uv run python - <<'PY'
+from unittest.mock import patch
+
+from lokay import store, tick
+
+now = 1_800_000_000
+picked = {"repo": "owner/repo", "issue": 1}
+for age, idle, expected in ((8 * 3600, 8 * 3600, None),
+                             (7 * 3600, 60, {"result": "pending", "next": "plan"})):
+    saved = {"node": "fix", "result": "pending", "diff_changed_at": now - age,
+             "last_attempt": now - idle}
+    fields = store.pick_ladder_fields(saved, now)
+    assert abs(fields["ladder_since"] - (now - age + idle)) <= 1, fields
+    saved.update(fields, last_attempt=now)
+    repeated = store.pick_ladder_fields(saved, now)
+    assert abs(repeated["ladder_since"] - fields["ladder_since"]) <= 1, repeated
+    with patch("lokay.tick.time.time", return_value=now), \
+         patch.dict("os.environ", {"LOKAY2_LADDER_HOURS": "6"}), \
+         patch("lokay.tick.state_read", return_value=saved), \
+         patch("lokay.tick.state_update") as update, \
+         patch("lokay.tick.rounds_append"), \
+         patch("lokay.tick.replan_prompt", return_value="replan"):
+        result = tick.escalate(picked)
+    assert result == expected, result
+    if expected is None:
+        update.assert_not_called()
+    else:
+        assert update.call_args.kwargs["_event"]["outcome"]["node"] == "plan"
+assert store.pick_ladder_fields({"last_attempt": now - 3600}, now) == {}
+assert store.pick_ladder_fields({"diff_changed_at": now - 3600}, now) == {}
+print("ladder wait checks: green")
+PY
 uv run python - "$sandbox" <<'PY'
 import os
 import sys
