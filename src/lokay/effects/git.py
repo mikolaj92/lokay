@@ -68,6 +68,18 @@ def _command(repo: Path | None, args: list[str], *, timeout: float, env: dict[st
     return run_process(argv, cwd=repo, timeout=timeout, env=env, input=input, text=text)
 
 
+def checkout_version() -> str | None:
+    root = Path(os.environ.get("LOKAY_ROOT") or Path(__file__).resolve().parents[3])
+    try:
+        return git(root, "rev-parse", "HEAD") or None
+    except (OSError, RuntimeError, TimeoutExpired):
+        return None
+
+
+def lsof_path() -> str | None:
+    return shutil.which("lsof", path=os.environ.get("PATH", os.defpath) + os.pathsep + "/usr/sbin:/sbin")
+
+
 def _remove_stale_lock(repo: Path, stderr: str) -> bool:
     match = re.search(r"Unable to create '([^']+\.lock)': File exists", stderr)
     if not match:
@@ -76,7 +88,10 @@ def _remove_stale_lock(repo: Path, stderr: str) -> bool:
     try:
         if not lock.is_file():
             return False
-        proc = run_process(["lsof", "-t", "--", str(lock)], timeout=10)
+        lsof = lsof_path()
+        if lsof is None:
+            return False
+        proc = run_process([lsof, "-t", "--", str(lock)], timeout=10)
         if proc.returncode == 0 and (proc.stdout or "").strip():
             return False
         lock.unlink(missing_ok=True)
@@ -345,18 +360,20 @@ def worktree_remove(repo: Path, path: Path, *, safe: bool = False, branch: str |
             code, upstream, _ = git_try(where, "rev-parse", "--verify", f"{ref}@{{upstream}}")
             base = upstream.strip() if code == 0 else f"origin/{base_branch(repo)}"
             refs = [base, ref] if where == repo else [base]
-            code, diff, err = git_try(where, "diff", "--binary", *refs, "--")
-            if code:
-                raise RuntimeError(err.strip() or "cleanup diff failed")
+            proc = _command(where, ["diff", "--binary", *refs, "--"], timeout=60, text=False)
+            if proc.returncode:
+                raise RuntimeError(proc.stderr.decode(errors="replace").strip() or "cleanup diff failed")
+            diff = proc.stdout
             if where != repo:
                 code, untracked, err = git_try(where, "ls-files", "--others", "--exclude-standard", "-z")
                 if code:
                     raise RuntimeError(err.strip() or "cleanup untracked lookup failed")
                 for name in filter(None, untracked.split("\0")):
-                    code, extra, err = git_try(where, "diff", "--binary", "--no-index", "--", "/dev/null", name)
-                    if code not in (0, 1):
-                        raise RuntimeError(err.strip() or "cleanup untracked diff failed")
-                    diff += extra
+                    proc = _command(where, ["diff", "--binary", "--no-index", "--", "/dev/null", name],
+                                    timeout=60, text=False)
+                    if proc.returncode not in (0, 1):
+                        raise RuntimeError(proc.stderr.decode(errors="replace").strip() or "cleanup untracked diff failed")
+                    diff += proc.stdout
             store.write_artifact(patch_path, diff)
 
         try:
