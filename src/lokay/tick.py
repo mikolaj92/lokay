@@ -16,6 +16,7 @@ from lokay import graph, store
 from dataclasses import replace
 from lokay.types import Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked, parse_event, pr_number
 from lokay.merge import merge_blocked
+from lokay.gates import gate_rows
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_base, push, worktree_remove
 from lokay.effects.git import git, git_try, head as git_head
@@ -945,6 +946,9 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
              reason: str | None = None) -> dict | None:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
+    uwagi = uwagi or (saved.get("verdict") or {}).get("uwagi", [])
+    if gate_rows(uwagi):
+        return None
     if saved.get("result") == "merged" or saved.get("awaiting") == "children":
         return None
     now = time.time()
@@ -964,8 +968,7 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
         if saved.get("no_progress", 0) < 6 and len(saved.get("fix_history", [])) < 6:
             return None
     prompt = replan_prompt(picked, reason or "No progress; increase difficulty.",
-                           uwagi or (saved.get("verdict") or {}).get("uwagi", []),
-                           saved.get("sha") or "")
+                           uwagi, saved.get("sha") or "")
     fields = store.escalation_fields(saved)
     state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": fields.pop("node")}},
                  **{**fields, "plan_prompt": prompt})
