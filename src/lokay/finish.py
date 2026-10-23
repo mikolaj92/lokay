@@ -77,9 +77,10 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
                 f"merge repo={picked['repo']} pr={pr['number']} sha={sha}: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
-        if merged["result"] != "main_red":
-            state_update(picked["repo"], picked["issue"], _event={"action": "merge_complete", "outcome": merged})
-        if merged["result"] in ("closed", "main_red"):
+        if merged["result"] in ("main_red", "parked", "empty_patch"):
+            return merged, base, sha, "merge", verdict
+        state_update(picked["repo"], picked["issue"], _event={"action": "merge_complete", "outcome": merged})
+        if merged["result"] == "closed":
             return merged, base, sha, "merge", verdict
         if merged["result"] == "merged":
             state_update(picked["repo"], picked["issue"], sha=merged["merge_sha"])
@@ -468,6 +469,10 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     fixed = fix_step(picked, "harness2", fix_action, sha)
     if fixed["result"] == "failed":
         return "return", fixed
+    if fixed.get("no_changes") and not diff:
+        from lokay.store import empty_patch
+
+        return "return", empty_patch(picked["repo"], picked["issue"])
     if fixed.get("no_changes"):
         from lokay.effects.decide import decide
         from lokay.review import QUESTIONS

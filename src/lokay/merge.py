@@ -37,8 +37,9 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
         return {"result": "merge_limit", "merge_sha": None}
     files = pr_files(repo_name, number)
     if not files:
-        state_update(repo_name, issue, result="closed", reason="empty PR diff")
-        return {"result": "closed", "merge_sha": None, "reason": "empty PR diff"}
+        from lokay.store import empty_patch
+
+        return empty_patch(repo_name, issue)
     base_path = worktree if worktree is not None else clone_path
     base = base_branch(base_path) if base_path is not None else None
     state_update(repo_name, issue, merge_attempts={**attempts, sha: attempts.get(sha, 0) + 1})

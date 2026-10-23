@@ -78,7 +78,7 @@ def act(run: Run) -> Event:
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed", "main_red"):
+        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed", "main_red", "parked", "empty_patch"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
@@ -380,8 +380,13 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             store.log_event("closed_cleanup", repo=name, issue=issue, outcome=cleanup)
                     finally:
                         release_lock(held)
+        main_sha = None
+        if root.is_dir() and any(state.get("empty_main_sha") for state in states.values()):
+            code, sha, _ = git_try(root, "rev-parse", f"origin/{base_branch(root)}")
+            if code == 0 and sha.strip():
+                main_sha = sha.strip()
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}),
-                                      states=states, busy=busy))
+                                      states=states, busy=busy, main_sha=main_sha))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
     while True:
         check_deadline()
@@ -407,9 +412,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     remote_issue = gh_json(["issue", "view", str(issue), "--repo", name,
                                             "--json", "state,closedAt,url"], error="issue view failed")
                     if remote_issue.get("state") == "CLOSED":
-                        gh_ok(["pr", "close", str(row["number"]), "--repo", name, "--comment",
-                               fit_body(f"Issue closed at {remote_issue['closedAt']}: {remote_issue['url']}")])
-                        store.log_event("orphan_pr_closed", repo=name, issue=issue, pr=row["number"])
+                        store.log_event("orphan_pr_skipped", repo=name, issue=issue, pr=row["number"])
+                        prs = tuple(pr for pr in prs if pr["number"] != row["number"])
                         continue
                 if saved.get("result") == "closed" and (name, issue) not in reopened:
                     issue_open = any(int(item["number"]) == issue and item.get("state", "OPEN") == "OPEN"
@@ -885,7 +889,7 @@ def _prepare(picked: dict) -> tuple | dict:
                                  issue_body=(body or "") + RECOVERY_EVIDENCE + evidence)
                     return {"result": "pending", "next": "build"}
             else:
-                return needs_help(picked, f"harness2: empty patch, main {main['status']}")
+                return store.empty_patch(name, issue, baseline["sha"])
         if main["status"] == "green":
             return close_empty_patch(name, issue, saved, baseline)
     if not saved.get("h2_committed"):
@@ -893,6 +897,8 @@ def _prepare(picked: dict) -> tuple | dict:
             apply_patch(worktree, patch)
         tidy_and_commit(worktree, "lokay build")
         state_update(name, issue, h2_committed=git_head(worktree))
+    if not git(worktree, "rev-list", f"origin/{base}..HEAD"):
+        return store.empty_patch(name, issue, git(worktree, "rev-parse", f"origin/{base}"))
     state_update(name, issue, _event={"action": "build_complete", "outcome": {"result": "done"}})
     def publish():
         pr = open_pr_for(picked["repo"], branch)
@@ -916,13 +922,12 @@ def _prepare(picked: dict) -> tuple | dict:
 def close_empty_patch(name: str, issue: int, saved: dict, baseline: dict) -> dict:
     from lokay.effects.gh import fit_body
 
+    if saved.get("pr"):
+        return store.empty_patch(name, issue, baseline["sha"])
     evidence = (f"{saved['h2_summary']}\n\nMain zielony. Tested SHA: `{baseline['sha']}`\n"
                 f"argv: `{dumps(baseline['argv'])}`\n"
                 f"Executed tests: {baseline['ci'].get('executed', 0)}\n"
                 f"Lock checks: {baseline['lockfile']['status']}")
-    if saved.get("pr"):
-        gh_ok(["pr", "close", str(pr_number(saved["pr"])), "--repo", name, "--comment", fit_body(evidence)],
-              error="PR close failed", strip=False)
     gh_ok(["issue", "close", str(issue), "--repo", name, "--comment", fit_body(evidence)],
           error="issue close failed", strip=False)
     state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
