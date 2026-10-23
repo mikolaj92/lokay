@@ -15,6 +15,8 @@ Rejestr ryzyk: [RISKS.md](RISKS.md). Weryfikacja incydentów: [INCIDENTS.md](INC
 
 ## Warstwy
 
+`weakened_tests` dopuszcza usunięcie całego martwego testu tylko po deterministycznym dowodzie z AST, drzew base/head i treści issue, nigdy z planu ani decyzji LLM.
+
 Lokay dopisuje do każdego promptu workera Plan/Build/Fix deterministyczny gate contract z dozwolonymi testami i zasadami asercji, komentarzy oraz docstringów.
 
 `Plan`, `Build`, `Check`, `Fix`, `Merge` są zapisanymi węzłami grafu.

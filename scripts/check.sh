@@ -908,6 +908,126 @@ with patch("lokay.config.repo", return_value={"test": ["pytest"]}), \
 print("weakened test assertion checks: green")
 PY
 uv run python - <<'PY'
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, _count_weakened_tests, weakened_tests
+from lokay.effects import git
+from lokay.gates import dead_test_candidates, dead_tests
+
+path = "tests/test_gone.py"
+source = "from pkg.gone import Thing\ndef test_thing():\n    assert Thing()\n"
+base = {"src/pkg/__init__.py": "", "src/pkg/gone.py": "class Thing: pass\n", path: source}
+head = {"src/pkg/__init__.py": "", "pyproject.toml": ""}
+def deletion(name, text):
+    return (f"diff --git a/{name} b/{name}\ndeleted file mode 100644\n"
+            f"--- a/{name}\n+++ /dev/null\n@@ -1,{len(text.splitlines())} +0,0 @@\n"
+            + "".join("-" + line + "\n" for line in text.splitlines()))
+
+production_diff = deletion("src/pkg/gone.py", base["src/pkg/gone.py"])
+diff = deletion(path, source) + production_diff
+
+def prove(text=source, body="pkg.gone", before=None, after=None, change=None):
+    old = dict(base if before is None else before)
+    old[path] = text
+    new = head if after is None else after
+    if change is None:
+        production = production_diff if before is None else (
+            "diff --git a/src/pkg/mod.py b/src/pkg/mod.py\n"
+            "--- a/src/pkg/mod.py\n+++ b/src/pkg/mod.py\n@@ -1 +0,0 @@\n-class Old: pass\n")
+        change = deletion(path, text) + production
+    result = dead_tests(change, body, old, new, old.get, new.get)
+    assert result <= dead_test_candidates(change)
+    return result
+
+assert dead_test_candidates(diff) == frozenset({path})
+assert prove() == frozenset({path})
+assert not prove(body="remove obsolete code")
+assert not prove(source + "import pkg\n")
+symbol_base = {"src/pkg/__init__.py": "", "src/pkg/mod.py": "class Old: pass\n", path: ""}
+symbol_head = {"src/pkg/__init__.py": "", "src/pkg/mod.py": "", "src/pkg/new.py": "class Old: pass\n"}
+symbol_test = "from pkg.mod import Old\ndef test_old():\n    assert Old()\n"
+assert not prove(symbol_test, "Old", symbol_base, symbol_head)
+symbol_head["src/pkg/new.py"] = ""
+assert prove(symbol_test, "Old", symbol_base, symbol_head) == frozenset({path})
+assert not prove(symbol_test, "pkg.mod", symbol_base, symbol_head)
+assert prove(symbol_test, "pkg.mod.Old", symbol_base, symbol_head) == frozenset({path})
+symbol_base["src/pkg/mod.py"] = "Old = Kept\n"
+assert not prove(symbol_test, "Old", symbol_base, symbol_head)
+assert not prove(source.replace("test_thing()", "test_thing(client)"))
+assert not prove(source.replace("test_thing()", "test_thing(self)"))
+method_source = "from pkg.gone import Thing\nclass TestThing:\n    def test_thing(self):\n        assert Thing()\n"
+assert prove(method_source) == frozenset({path})
+assert prove(method_source.replace("self", "cls")) == frozenset({path})
+assert not prove(method_source.replace("self", "tmp_path, self"))
+assert not prove(method_source.replace("self", "*, self"))
+assert not prove(method_source + "    def helper(self):\n        def test_nested(self):\n            assert Thing()\n")
+for name in ("tests/conftest.py", "tests/helper.py"):
+    change = deletion(name, source) + production_diff
+    assert not dead_test_candidates(change)
+    assert not dead_tests(change, "pkg.gone", {**base, name: source}, head,
+                          {**base, name: source}.get, head.get)
+assert prove(source.replace("test_thing()", "test_thing(monkeypatch, tmp_path)")) == frozenset({path})
+for expression in ('"pkg"', '"pyproject.toml"', "__file__"):
+    assert not prove(source + expression + "\n")
+assert not prove(change=diff.replace("deleted file mode 100644\n", ""))
+for extra in ("from .other import X\n", "from pkg.gone import *\n", "__import__('os')\n",
+              "import importlib\nimportlib.import_module('os')\n", "pytest.mark.usefixtures('client')\n"):
+    assert not prove(source + extra)
+assert not prove(body="pkg.gone_extra")
+assert not prove(text="syntax error !")
+assert not prove(source, after={**head, "src/pkg/gone.py": base["src/pkg/gone.py"]})
+assert prove(source.replace("test_thing()", "test_thing(local)")
+             + "@pytest.fixture\ndef local(tmp_path):\n    return tmp_path\n") == frozenset({path})
+
+x = CheckInput("owner/repo", 1, "head", "pkg.gone", "", diff, [], {}, Path.cwd())
+
+def fake_git(worktree, *args):
+    if args[0] == "merge-base":
+        return 0, "base\n", ""
+    if args[0] == "ls-tree":
+        return 0, "\n".join(base if args[-1] == "base" else head), ""
+    if args[0] == "show":
+        revision, name = args[1].split(":", 1)
+        text = (base if revision == "base" else head).get(name)
+        return (1, "", "missing") if text is None else (0, text, "")
+    raise AssertionError(args)
+
+kept_import = source + "import pkg\n"
+kept_diff = deletion(path, kept_import) + production_diff
+assert not dead_test_candidates(kept_diff)
+with patch.object(git, "git_try", side_effect=AssertionError("unexpected git")) as calls, patch(
+        "lokay.checks.dead_tests", side_effect=AssertionError("unexpected proof")) as proof:
+    result = weakened_tests(replace(x, diff=kept_diff))
+    assert result.status == "fail"
+    assert result.reason == "existing test changed but the issue body does not name it: " + path
+    calls.assert_not_called()
+    proof.assert_not_called()
+with patch.object(git, "base_branch", return_value="main"), patch.object(git, "git_try", side_effect=fake_git), patch(
+        "lokay.checks.dead_tests", return_value=frozenset()) as proof:
+    assert weakened_tests(x).status == "fail"
+    proof.assert_called_once()
+with patch.object(git, "base_branch", return_value="main"), patch.object(git, "git_try", side_effect=fake_git):
+    assert weakened_tests(x).status == "pass"
+    result = weakened_tests(replace(x, issue_body="remove obsolete code", plan="pkg.gone"))
+    assert result.status == "fail"
+    assert result.reason == "existing test changed but the issue body does not name it: " + path
+    base[path] += "import pkg\n"
+    assert weakened_tests(x).status == "fail"
+    base[path] = source
+assert _count_weakened_tests(x).status == "fail"
+assert _count_weakened_tests(x, frozenset({path})).status == "pass"
+for failure in ((1, "", "failed"), RuntimeError("unavailable")):
+    with patch.object(git, "base_branch", return_value="main"), patch.object(git, "git_try", side_effect=(
+            failure if isinstance(failure, Exception) else lambda *args: failure)):
+        assert weakened_tests(x).status == "fail"
+with patch.object(git, "git_try", side_effect=AssertionError("unexpected git")), patch.object(
+        git, "base_branch", side_effect=AssertionError("unexpected base branch")):
+    assert weakened_tests(replace(x, diff=diff.replace("deleted file mode 100644\n", ""))).status == "fail"
+print("dead test checks: green")
+PY
+uv run python - <<'PY'
 from pathlib import Path
 from unittest.mock import call, patch
 
