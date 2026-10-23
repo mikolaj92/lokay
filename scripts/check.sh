@@ -2636,20 +2636,18 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
         looked.append(args[2])
         return {"state": "CLOSED" if args[2] == "5" else "OPEN", "closedAt": "2026-06-01T12:00:00Z", "url": "https://github.com/owner/hygiene/issues/5"}
     stack.enter_context(patch.object(tick, "gh_json", side_effect=remote))
-    def close(args, **kwargs):
-        assert args[:3] == ["pr", "close", "15"], args
-        assert "2026-06-01T12:00:00Z" in args[-1] and "/issues/5" in args[-1]
-        prs[:] = [row for row in prs if row["number"] != 15]
-    closed = stack.enter_context(patch.object(tick, "gh_ok", side_effect=close))
+    closed = stack.enter_context(patch.object(tick, "gh_ok", side_effect=AssertionError("unexpected gh_ok")))
     events = stack.enter_context(patch.object(store, "log_event"))
     stack.enter_context(patch.object(tick, "graph", wraps=tick.graph))
     stack.enter_context(patch.object(tick.graph, "pick", side_effect=[type("Selection", (), {"repo": name, "issue": None, "kind": "prs"})(), None] * 2))
     tick.pick({})
     tick.pick({})
-    assert closed.call_count == 1 and "6" not in looked
+    closed.assert_not_called()
+    assert "6" not in looked
+    assert any(row["number"] == 15 for row in prs)
     assert "9" not in looked
     assert any(row["number"] == 19 for row in prs)
-    assert sum(call.args == ("orphan_pr_closed",) for call in events.call_args_list) == 1
+    assert sum(call.args == ("orphan_pr_skipped",) for call in events.call_args_list) == 2
 print("hygiene checks: green")
 PY
 uv run python - <<'PY'
@@ -2737,6 +2735,103 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
                 for issue in (1, 2, 3)]
     assert ("escape", "logic bug") in retro.proposals(home / "ticks", escapes=evidence)
 print("ledger and measure checks: green")
+PY
+uv run python - <<'PY'
+import ast
+from contextlib import ExitStack
+from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, graph, merge, store, tick
+from lokay.types import RepoSnapshot, Snapshot
+
+for path in Path('src/lokay').rglob('*.py'):
+    for node in ast.walk(ast.parse(path.read_text())):
+        bad = isinstance(node, ast.Constant) and isinstance(node.value, str) and 'pr close' in node.value
+        if isinstance(node, (ast.List, ast.Tuple)):
+            values = [item.value if isinstance(item, ast.Constant) else None for item in node.elts]
+            bad |= any(values[index:index + 2] == ['pr', 'close'] for index in range(len(values)))
+        assert not bad, f'{path}:{node.lineno}'
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (('HOME', root), ('RUNS', root / 'runs'), ('LOCKS', root / 'locks')):
+        stack.enter_context(patch.object(store, key, value))
+    name, issue, sha = 'owner/empty', 310, 'main-sha'
+    stack.enter_context(patch('lokay.config.repo', return_value={'clone_path': str(root)}))
+    stack.enter_context(patch('lokay.effects.git.base_branch', return_value='main'))
+    stack.enter_context(patch('lokay.effects.git.git', return_value=sha))
+    store.state_update(name, issue, _event={'action': 'enter_node', 'outcome': {'node': 'build'}}, pr=38, last_check={'result': 'merge', 'sha': 'head'})
+    assert store.empty_patch(name, issue, sha)['result'] == 'parked'
+    remote = stack.enter_context(patch.object(tick, 'gh_ok', side_effect=AssertionError('unexpected gh')))
+    assert tick.close_empty_patch(name, issue, store.state_read(name, issue), {'sha': sha})['result'] == 'empty_patch'
+    stack.enter_context(patch.object(merge, 'pr_files', return_value=[]))
+    stack.enter_context(patch('lokay.review.recompute_verdict', return_value={'result': 'merge', 'sha': 'head'}))
+    stack.enter_context(patch.object(merge, 'main_status', return_value={}))
+    stack.enter_context(patch.object(tick, 'open_pr_for', return_value={'number': 38, 'headRefOid': 'head'}))
+    stack.enter_context(patch.object(tick, '_ensure_worktree'))
+    stack.enter_context(patch.object(tick, 'check_deadline'))
+    events = stack.enter_context(patch.object(store, 'log_event'))
+    stack.enter_context(patch.object(finish, 'rounds_append', side_effect=AssertionError('unexpected merge round')))
+    store.state_update(name, issue, empty_main_sha=None)
+    for expected in ('parked', 'empty_patch'):
+        merged, *_ = finish.merge({'repo': name, 'issue': issue}, root, 'lokay/310', 'head', None,
+                                  'main', [], [], root, None)
+        assert merged['result'] == expected
+        assert store.state_read(name, issue)['node'] == 'build'
+    assert not any(call.kwargs.get('event', {}).get('action') == 'merge_complete'
+                   for call in events.call_args_list)
+    state = store.state_read(name, issue)
+    assert state['empty_main_sha'] == sha and state['result'] == 'empty_patch'
+    assert state['node'] == 'build'
+    for prs in ((), ({'number': 38, 'headRefName': 'lokay/310'},)):
+        repo = RepoSnapshot(name, 0, {'baseline': {'sha': 'guard-sha'}}, states={issue: state},
+                            prs=prs, issues=({'number': issue},), main_sha=sha)
+        assert graph.pick(Snapshot((repo,), 1000)) is None
+        assert graph.pick(Snapshot((replace(repo, main_sha=None),), 1000)) is None
+        moved = replace(repo, main_sha='new-main')
+        assert graph.pick(Snapshot((moved,), 1000)).issue == issue
+    patch_file = root / 'build.patch'
+    store.write_artifact(patch_file, 'patch')
+    store.state_update(name, issue, issue_title='Title', issue_body='Body', difficulty='easy',
+                       h2_patch=str(patch_file), h2_start='head', h2_committed='head')
+    stack.enter_context(patch.object(tick, 'gh_json', return_value={'title': 'Title', 'body': 'Body'}))
+    stack.enter_context(patch.object(tick, 'repo_config', return_value={'test': []}))
+    stack.enter_context(patch.object(tick, '_repo_paths', return_value=(root, root)))
+    stack.enter_context(patch.object(tick, '_ensure_worktree'))
+    stack.enter_context(patch.object(tick, 'check_deadline'))
+    stack.enter_context(patch.object(tick, 'base_branch', return_value='main'))
+    stack.enter_context(patch.object(tick, 'git', side_effect=lambda path, *args, **kwargs: '' if args[0] == 'rev-list' else sha))
+    stack.enter_context(patch.object(tick, 'git_head', return_value='head'))
+    stack.enter_context(patch('lokay.build.tidy_and_commit'))
+    create = stack.enter_context(patch('lokay.effects.gh.pr_create', side_effect=AssertionError('unexpected publish')))
+    import hashlib
+    from json import dumps
+    store.state_update(name, issue, h2_context=hashlib.sha256(dumps(['Title', 'Body', 'easy', []]).encode()).hexdigest())
+    assert tick._prepare({'repo': name, 'issue': issue})['result'] == 'empty_patch'
+    assert store.state_read(name, issue)['empty_main_sha'] == sha
+    from lokay.types import Run
+    stack.enter_context(patch.object(tick, '_prepare', side_effect=lambda picked: store.empty_patch(name, issue, sha)))
+    stack.enter_context(patch.object(tick, 'published_cleanup'))
+    assert tick.act(Run.from_state({'repo': name, 'issue': issue, 'node': 'build'})).outcome['result'] == 'empty_patch'
+    assert store.state_read(name, issue)['result'] == 'empty_patch'
+    create.assert_not_called()
+    remote.assert_not_called()
+    orphan = {'number': 99, 'headRefName': 'lokay/9', 'headRefOid': 'head'}
+    stack.enter_context(patch.object(tick.maintenance, 'sweep'))
+    stack.enter_context(patch.object(tick, 'probes', return_value={'host': 'ok'}))
+    stack.enter_context(patch.object(tick, 'load_repos', return_value=[{
+        'name': name, 'clone_path': str(root / 'absent'), 'merge': 'off'}]))
+    stack.enter_context(patch.object(tick, 'list_prs', return_value=[orphan]))
+    stack.enter_context(patch.object(tick, 'open_issues', return_value=[]))
+    stack.enter_context(patch.object(tick, 'gh_json', side_effect=lambda args, **kwargs: {'data': {'repository': {}}} if args[0] == 'api' else {'state': 'CLOSED'}))
+    from lokay.types import Pick
+    stack.enter_context(patch.object(tick.graph, 'pick', side_effect=[Pick(name, 0, 'prs'), None]))
+    assert tick.pick({})['result'] == 'idle'
+    remote.assert_not_called()
+print('empty patch state checks: green')
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
