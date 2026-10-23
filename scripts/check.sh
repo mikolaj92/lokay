@@ -780,19 +780,68 @@ from lokay.types import RepoSnapshot, Snapshot
 now = 1_792_512_000
 for result in ("failed", "running", "pending", "merged", "closed"):
     snapshot = Snapshot(repos=(
-        RepoSnapshot(name="owner/A", status={"status": "red", "issue": 7}, prs=(), issues=(),
+        RepoSnapshot(name="owner/A", last_attempt=100, status={"status": "red", "issue": 7}, prs=(), issues=(),
                      states={7: {"result": result, "node": "check", "retry_at": now - 10}}),
-        RepoSnapshot(name="owner/B", prs=(), issues=(),
+        RepoSnapshot(name="owner/B", last_attempt=50 if result in ("merged", "closed") else 200, prs=(), issues=(),
                      states={8: {"result": "pending", "node": "check", "retry_at": now - 20}}),
     ), now=now)
     picked = graph.pick(snapshot)
     assert picked is not None, (result, picked)
     if result in ("running", "pending"):
         assert (picked.repo, picked.issue, picked.kind) == ("owner/A", 7, "red_main"), (result, picked)
+    elif result == "failed":
+        assert (picked.repo, picked.issue) == ("owner/A", 7) and picked.kind != "red_main", (result, picked)
     else:
         assert picked.kind != "red_main", (result, picked)
         assert (picked.repo, picked.issue) == ("owner/B", 8), (result, picked)
 print("red main fairness checks: green")
+PY
+uv run python - <<'PY'
+from dataclasses import replace
+
+from lokay import graph
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+now = 1_792_512_000
+red = RepoSnapshot("o/red", last_attempt=200, status={"status": "red", "issue": 1},
+                   states={1: {"result": "pending", "node": "plan"}}, prs=(), issues=())
+fresh_issue = {"number": 5, "state": "OPEN"}
+fresh = RepoSnapshot("o/fresh", last_attempt=100, status={"status": "green"},
+                     states={5: {}}, prs=(), issues=(fresh_issue,))
+assert graph.pick(Snapshot((red, fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+red = replace(red, last_attempt=50)
+assert graph.pick(Snapshot((red, fresh), now)) == Pick("o/red", 1, "red_main")
+retry = {"result": "failed", "node": "check", "retry_at": now - 10, "pr": 20}
+assert graph.pick(Snapshot((replace(red, states={**red.states, 2: retry}),), now)) == Pick("o/red", 1, "red_main")
+due = RepoSnapshot("o/due", last_attempt=100, states={2: retry}, prs=(), issues=())
+other = RepoSnapshot("o/other", last_attempt=300,
+                     states={3: {**retry, "retry_at": now - 20, "pr": 30}}, prs=(), issues=())
+assert graph.pick(Snapshot((other, due), now)) == Pick("o/due", 2, "pr", {
+    "number": 20, "headRefName": "lokay/2"})
+assert graph.pick(Snapshot((replace(red, busy=True), fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+failed = replace(red, states={1: {"result": "failed", "node": "plan", "retry_at": now - 10}})
+assert graph.pick(Snapshot((failed, fresh), now)) == Pick("o/red", 1, "issue", {"number": 1})
+assert graph.pick(Snapshot((replace(failed, last_attempt=200), fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+repos = (red, replace(red, name="o/red2", last_attempt=60),
+         fresh, replace(fresh, name="o/fresh2", last_attempt=110))
+picked_repos = []
+for clock in range(1000, 1004):
+    picked = graph.pick(Snapshot(repos, now))
+    assert picked is not None
+    picked_repos.append(picked.repo)
+    repos = tuple(replace(repo, last_attempt=clock) if repo.name == picked.repo else repo for repo in repos)
+assert len(set(picked_repos)) == 4, picked_repos
+for empty in (RepoSnapshot("o/empty", last_attempt=1),
+              RepoSnapshot("o/empty", last_attempt=1, prs=())):
+    repos = (empty, fresh)
+    picked = graph.pick(Snapshot(repos, now))
+    assert picked == Pick("o/empty", 0, "prs" if empty.prs is None else "issues"), picked
+    if picked.kind == "prs":
+        empty = replace(empty, prs=())
+        assert graph.pick(Snapshot((empty, fresh), now)) == Pick("o/empty", 0, "issues")
+    empty = replace(empty, issues=())
+    assert graph.pick(Snapshot((empty, fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+print("fair pick checks: green")
 PY
 uv run python - <<'PY'
 from lokay import graph
