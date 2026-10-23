@@ -908,6 +908,53 @@ with patch("lokay.config.repo", return_value={"test": ["pytest"]}), \
 print("weakened test assertion checks: green")
 PY
 uv run python - <<'PY'
+from pathlib import Path
+from unittest.mock import call, patch
+
+from lokay.checks import CheckInput, weakened_tests
+from lokay.gates import gate_contract, named_test
+from lokay.h2 import LokayAdapter
+from lokay.safety import untrusted_issue_block
+
+paths = ["tests/test_version.py", "tests/test_other.py", "src/x.py"]
+body = "Update tests/test_version.py"
+contract = gate_contract(paths, body)
+assert contract.splitlines()[1] == "Existing test files you may change: tests/test_version.py"
+assert gate_contract(paths, "Update behaviour").splitlines()[1] == "Existing test files you may change: none"
+assert gate_contract(reversed(paths), body) == contract
+assert gate_contract(paths, "test_other.py, test_version.py").splitlines()[1] == (
+    "Existing test files you may change: tests/test_other.py, tests/test_version.py")
+for path in ("tests/test_other.py", "tests/test_special[1].py"):
+    name = Path(path).name
+    diff = (f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n"
+            "@@ -1 +1 @@\n-assert old\n+assert current\n")
+    for text, expected in (("", False), (path, True), (name, True), (f"`{path}`", True),
+                           (f"({name})", True), (f"prefix{name}", False),
+                           (f"{path}.bak", False), (f"other/{name}", False),
+                           (f"-{name}", False), (f"{name}_", False),
+                           (f"/{path}", False), (f"{name}-suffix", False)):
+        assert named_test(path, text) == expected, (path, text)
+        with patch("lokay.config.repo", return_value={"test": ["pytest"]}), \
+                patch("lokay.effects.tests.base_tests_on_head", return_value={"result": "green"}):
+            x = CheckInput("owner/repo", 1, "head", text, "", diff, [],
+                           {"result": "green", "sha": "head"}, Path.cwd())
+            assert (weakened_tests(x).status == "fail") == (not named_test(path, text)), (path, text)
+findings = [{"plik": "src/x.py", "zmiana": "repair"}]
+for rows in (None, findings):
+    with patch("lokay.h2.git.git", side_effect=["start-sha", "\n".join(paths)]) as tracked, \
+            patch("lokay.h2.PiSubstrate"), patch("lokay.h2.Library"):
+        adapter = LokayAdapter("owner/repo", 1, Path.cwd(), "HEAD", "Repair", body, findings=rows)
+    assert tracked.call_args_list == [call(Path.cwd(), "rev-parse", "HEAD"),
+                                     call(Path.cwd(), "ls-tree", "-r", "--name-only", "start-sha")]
+    prefix = untrusted_issue_block("Repair", body) + "\n\n" + contract
+    assert adapter.prompt.startswith(prefix)
+    if rows is not None:
+        assert adapter.prompt[len(prefix):].startswith("\n\nCheck findings:\n")
+    else:
+        assert adapter.prompt == prefix
+print("gate contract checks: green")
+PY
+uv run python - <<'PY'
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch

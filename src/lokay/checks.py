@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
+from lokay.gates import named_test
 from lokay.lint import diff_lines, lint_diff, unit_test_hints
 from lokay.scope import ASSERTION, is_artifact, is_test, kind as change_kind
 from lokay.types import CheckResult, Finding, parse_finding
@@ -198,9 +199,7 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         lines = [text for _, _, kind, text in diff_lines("diff --git " + block) if kind in {"-", "+"}]
         if is_test(path, lines):
             changed.add(path)
-    unapproved = sorted(path for path in changed if not re.search(
-        r"(?<![\w./-])" + re.escape(path) + r"(?![\w./-])", x.issue_body)
-        and not re.search(r"(?<![\w./-])" + re.escape(Path(path).name) + r"(?![\w./-])", x.issue_body))
+    unapproved = sorted(path for path in changed if not named_test(path, x.issue_body))
     if unapproved:
         reason = "existing test changed but the issue body does not name it: " + ", ".join(unapproved)
         findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in unapproved)

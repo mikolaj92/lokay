@@ -17,6 +17,7 @@ from lokay import store
 from lokay.config import HOME
 from lokay.effects import git
 from lokay.effects.pi import harness_session, start_harness_run, tick_deadline
+from lokay.gates import gate_contract
 from lokay.safety import untrusted_issue_block
 
 PI_SURFACE = SurfaceSpec(
@@ -84,6 +85,7 @@ class LokayAdapter:
         self.root = root
         self.start = git.git(root, "rev-parse", start)
         self.prompt = untrusted_issue_block(title, body)
+        self.prompt += "\n\n" + gate_contract(git.git(root, "ls-tree", "-r", "--name-only", self.start).splitlines(), body)
         if findings is not None:
             self.prompt += "\n\nCheck findings:\n" + json.dumps(findings, ensure_ascii=False)
         self.substrate = PiSubstrate(self._launch)
