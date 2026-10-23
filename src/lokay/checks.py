@@ -48,6 +48,11 @@ def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: 
 
 
 def ci_green(x: CheckInput) -> CheckResult:
+    if x.ci.get("sha") == x.sha and x.ci.get("ci") == "inherited" and x.ci.get("inherited"):
+        inherited = x.ci["inherited"]
+        details = "; ".join(f"{item['check']}: {', '.join(item['steps'])}" for item in inherited)
+        return CheckResult("ci_green", "pass",
+                           f"GitHub checks fail only on steps that also fail on fresh main {inherited[0]['main_sha']}: {details}", ())
     if x.ci.get("ci") == "no_ci" and x.ci.get("sha") == x.sha:
         return CheckResult("ci_green", "pass", "not applicable: no CI configured", ())
     if x.ci.get("ci") in (None, "pending") and x.ci.get("sha") == x.sha:

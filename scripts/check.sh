@@ -689,6 +689,91 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
 print("red main subset checks: green")
 PY
 uv run python - <<'PY'
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import checks
+from lokay.effects import gh
+
+step = "Check stable HTTP releases"
+marker = f"<!-- lokay main check: {step} -->"
+names = ["pytest (3.12)", "pytest (3.14)"]
+
+with TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}):
+    def scenario(conclusion="failure", stale=False, status="completed", extra=False, touched=False,
+                 issues=(), missing=False, identity=True):
+        calls = []
+        def fake(argv, **kwargs):
+            calls.append(argv)
+            if argv[:2] == ["pr", "view"]:
+                return 0, json.dumps({"headRefOid": "head", "statusCheckRollup": [
+                    {"__typename": "CheckRun", "name": name, "status": "COMPLETED", "conclusion": "FAILURE",
+                     "detailsUrl": f"https://github.com/owner/repo/actions/runs/1/job/{i}" if identity else "",
+                     "startedAt": "2026-10-23T19:21:10Z"} for i, name in enumerate(names, 10)]}), ""
+            if argv[:2] == ["run", "view"]:
+                return 0, "failed log tail", ""
+            if argv[0] == "api" and "/check-runs?" in argv[-1]:
+                return 0, json.dumps([{"check_runs": [] if missing else [
+                    {"id": i, "name": name, "status": status, "conclusion": conclusion,
+                     "details_url": f"https://github.com/owner/repo/actions/runs/2/job/{i}",
+                     "started_at": "2026-10-23T08:08:43Z" if stale else "2026-10-23T19:22:10Z"}
+                    for i, name in enumerate(names, 20)]}]), ""
+            if argv[0] == "api" and "/actions/jobs/" in argv[-1]:
+                job = int(argv[-1].rsplit("/", 1)[1])
+                steps = [{"name": step, "conclusion": "failure"}, {"name": "Install", "conclusion": "success"}]
+                if extra and job < 20:
+                    steps.append({"name": "Check all projects", "conclusion": "failure"})
+                return 0, json.dumps({"steps": steps}), ""
+            if argv[:2] == ["issue", "list"]:
+                return 0, json.dumps(list(issues)), ""
+            if argv[:2] in (["issue", "create"], ["issue", "reopen"], ["run", "rerun"]):
+                return 0, "", ""
+            raise AssertionError(argv)
+        with patch.object(gh, "_gh", side_effect=fake):
+            remote = gh.pr_checks("owner/repo", 158, "head")
+            result = gh.main_inherited("owner/repo", "main", remote, touched)
+        ci = {**result, "ci": result["result"], "failed": [
+            {"warstwa": "GitHub CI", "log": name} for name in result["failed"]]}
+        x = checks.CheckInput(repo="owner/repo", issue=158, sha="head", issue_body="", plan="",
+                              diff="", hunks=[], ci=ci, worktree=Path(directory))
+        gate = checks.ci_green(x)
+        assert gate.status == {"inherited": "pass", "red": "fail", "pending": "unknown"}[result["result"]], gate
+        assert not any(argv[:2] in (["pr", "close"], ["issue", "close"]) for argv in calls), calls
+        return result, calls, x
+
+    result, calls, x = scenario()
+    assert result["result"] == "inherited" and len(result["inherited"]) == 2, result
+    assert all(item["steps"] == [step] and item["main_sha"] == "main" for item in result["inherited"])
+    assert result["failed"] == names and result["failed_logs"], result
+    creates = [argv for argv in calls if argv[:2] == ["issue", "create"]]
+    assert len(creates) == 1 and marker in creates[0][creates[0].index("--body") + 1].splitlines(), calls
+    x.ci.update(result="red", tested=True, executed=1)
+    assert checks.local_tests(x).status == "pass"
+    for rows, expected in (([{"number": 7, "state": "OPEN", "body": marker}], []),
+                           ([{"number": 9, "state": "CLOSED", "body": marker},
+                             {"number": 3, "state": "CLOSED", "body": marker}],
+                            [["issue", "reopen", "3", "--repo", "owner/repo"]])):
+        result, calls, _ = scenario(issues=rows)
+        assert result["result"] == "inherited", result
+        assert [argv for argv in calls if argv[0] == "issue" and argv[1] != "list"] == expected, calls
+    for options in ({"conclusion": "success"}, {"extra": True}, {"missing": True}, {"identity": False}):
+        result, calls, _ = scenario(**options)
+        assert result["result"] == "red", result
+        assert not any(argv[0] == "issue" for argv in calls), calls
+    for status, count in (("completed", 1), ("in_progress", 0)):
+        result, calls, _ = scenario(stale=True, status=status)
+        assert result["result"] == "pending" and result["pending"] == ["main checks refresh"], result
+        assert len([argv for argv in calls if argv[:2] == ["run", "rerun"]]) == count, calls
+        assert not any(argv[0] == "issue" for argv in calls), calls
+    result, calls, _ = scenario(touched=True)
+    assert result["result"] == "red", result
+    assert not any(argv[0] == "api" for argv in calls), calls
+print("main inherited checks: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import RepoSnapshot, Snapshot
 

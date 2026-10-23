@@ -1278,6 +1278,21 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             sha = remote["sha"]
             pending = "check"
             continue
+        if remote["result"] == "red":
+            from lokay.effects.gh import main_inherited
+
+            def compare_main_checks():
+                code, main_sha, err = git_try(clone_path, "rev-parse", f"origin/{base}")
+                if code != 0:
+                    raise RuntimeError(err or "main checks revision lookup failed")
+                code, paths, err = git_try(worktree, "diff", "--name-only", "--no-renames", f"origin/{base}...{sha}")
+                if code != 0:
+                    raise RuntimeError(err or "checks paths lookup failed")
+                return main_inherited(picked["repo"], main_sha.strip(), remote,
+                                      any(path.startswith(".github/") for path in paths.splitlines()))
+
+            remote = _retry(picked, "check", compare_main_checks)
+            state_update(picked["repo"], picked["issue"], ci=remote["result"])
         if remote["result"] == "pending":
             state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="pending", verdict=None)
             rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, GitHub CI pending")
@@ -1288,8 +1303,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             {"warstwa": "GitHub CI", "plik": "", "check": name,
              "log": name + "\n" + (remote.get("failed_logs") or {}).get(name, name)}
             for name in remote.get("failed") or []
-        ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
-            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+        ], "ci": remote["result"],
+            **({"inherited": remote["inherited"]} if remote.get("inherited") else {}),
+            "notes": [*ci["notes"], *(remote.get("notes") or [])],
+            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci", "inherited") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
         decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)

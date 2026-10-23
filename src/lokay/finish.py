@@ -492,7 +492,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         if not (head == sha == verdict.get("sha")
                 and checks.get("sha") == sha and checks.get("result") == "green"
                 and not checks.get("failed")
-                and checks.get("ci", saved.get("ci")) in ("green", "no_ci")
+                and checks.get("ci", saved.get("ci")) in ("green", "no_ci", "inherited")
                 and sha not in current.get("dispute_rechecks", [])):
             return replan()
         justification = current.get("pi_response") or ""
