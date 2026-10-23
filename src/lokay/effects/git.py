@@ -114,6 +114,55 @@ def git(path: Path, *args: str, timeout: float = 30) -> str:
     return out.strip()
 
 
+def gate_tasks(worktree: Path, base: str, sha: str, rows: list[dict]) -> list[dict]:
+    from lokay.gates import gate_location
+    from lokay.types import parse_finding
+    import shlex
+
+    revision = git(worktree, "merge-base", f"origin/{base}", sha)
+    tasks = []
+    for row in rows:
+        path, line, kind = gate_location(row)
+        target = worktree / path
+        if Path(path).is_absolute() or not target.resolve().is_relative_to(worktree.resolve()) or ".git" in Path(path).parts:
+            raise ValueError("gate path outside worktree")
+        exists = bool(git(worktree, "--literal-pathspecs", "ls-tree", "--name-only", revision, "--", path))
+        if kind == "no_new_comments":
+            noun = "docstring" if "docstring" in parse_finding(row).zmiana.lower() else "comment"
+            instruction = f"MUST delete the {noun} at {path}:{line}; change nothing else"
+        elif kind == "weakened_tests" or exists:
+            instruction = (f"MUST restore {path}:{line} to merge-base {revision[:12]} "
+                           f"(git --literal-pathspecs checkout {revision} -- {shlex.quote(path)}); "
+                           "do not change or remove its assertions")
+        else:
+            instruction = f"MUST remove the generated file {path}:{line}"
+        tasks.append({**row, "instruction": instruction, "gate_base": revision, "gate_exists": exists})
+    return tasks
+
+
+def revert_gates(worktree: Path, rows: list[dict]) -> None:
+    from lokay.gates import gate_location, remove_comment
+
+    grouped = {}
+    for row in rows:
+        path, line, kind = gate_location(row)
+        grouped.setdefault(path, []).append((line, kind, row))
+    for path, entries in grouped.items():
+        target = worktree / path
+        restores = [row for _, kind, row in entries if kind != "no_new_comments"]
+        if restores:
+            row = restores[0]
+            if row["gate_exists"] or gate_location(row)[2] == "weakened_tests":
+                git(worktree, "--literal-pathspecs", "checkout", row["gate_base"], "--", path)
+            else:
+                git(worktree, "--literal-pathspecs", "rm", "-f", "--", path)
+        elif target.is_file():
+            source = target.read_bytes().decode()
+            for line, _, _ in sorted(entries, key=lambda entry: entry[0], reverse=True):
+                source = remove_comment(source, line, target.suffix in {".py", ".pyi"})
+            store.write_artifact(target, source.encode())
+
+
 def restart_from_base(worktree: Path, base: str) -> None:
     ref = f"origin/{base}"
     commit = git(worktree, "commit-tree", f"{ref}^{{tree}}", "-p", "HEAD", "-p", ref,

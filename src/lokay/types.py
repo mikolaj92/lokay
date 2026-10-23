@@ -126,7 +126,7 @@ def parse_event(raw: dict) -> Event:
         "enter_node": EnteredNode, "dispatched": Dispatched,
         "needs_help": Failed, "replan": Planned, "build_complete": Built,
         "retry_succeeded": Retried, "fix_to_build": FixToBuild, "synthesis": Synthesized,
-        "published": Published, "verdict": Checked, "fix_complete": Fixed,
+        "published": Published, "verdict": Checked, "fix_complete": Fixed, "gate_task": Updated,
         "merge_complete": Merged, "closed": Closed, "reopened": Reopened, "red_main": RedMain,
     }
     action = raw.get("action")

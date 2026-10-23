@@ -4,6 +4,7 @@ import re
 from typing import assert_never
 
 from lokay.scope import kind as change_kind
+from lokay.gates import gate_rows
 from lokay.types import (
     PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Reopened, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, Snapshot, Pick, pr_number,
@@ -93,7 +94,7 @@ def step(run: Run, event: Event) -> Run:
             if outcome["result"] == "fix":
                 rounds = current.get("fix_rounds", 0) + 1
                 fields["fix_rounds"] = rounds
-                if rounds >= FIX_ROUND_LIMIT:
+                if rounds >= FIX_ROUND_LIMIT and not gate_rows(outcome.get("uwagi")):
                     if current.get("pr") is not None or current.get("fix_limit_hits", 0) == 0:
                         fields.update(node="plan", **deepcopy(PLAN_RESET), fix_rounds=0,
                                       fix_limit_hits=current.get("fix_limit_hits", 0) + 1, result="pending",
