@@ -854,6 +854,23 @@ for findings, expected in ((rows, "fix"), (rows + [{"pytanie": "check_correctnes
                          Checked(0, outcome={"result": "fix", "uwagi": findings}))
         assert run.state["node"] == expected, run.state
         assert bool(run.state.get("split_pending")) == (expected == "plan" and hits == 1)
+gate_uwagi = [{"pytanie": "weakened_tests", "plik": "tests/test_version.py", "linie": [36, 36],
+               "zmiana": "Removes 2 test assertions: tests/test_version.py", "uzasadnienie": ""}]
+for findings, expected in ((gate_uwagi, None),
+                           ([{"pytanie": "scope", "zmiana": "Restore the requested behavior"}],
+                            {"result": "pending", "next": "plan"})):
+    saved = {"node": "fix", "fix_history": [{} for _ in range(6)], "no_progress": 6,
+             "ladder_since": 1, "verdict": {"uwagi": findings}}
+    with patch("lokay.tick.state_read", return_value=saved), \
+         patch("lokay.tick.state_update") as update, \
+         patch("lokay.tick.rounds_append"), \
+         patch("lokay.tick.replan_prompt", return_value="revise plan"), \
+         patch("lokay.tick.time.time", return_value=1000000), \
+         patch.dict("os.environ", {"LOKAY2_LADDER_HOURS": "6"}):
+        assert tick.escalate(picked) == expected
+        if expected is None:
+            assert tick.escalate(picked, gate_uwagi, force=True) is None
+            update.assert_not_called()
 print("gate exit checks: green")
 PY
 .venv/bin/python - <<'PY'
