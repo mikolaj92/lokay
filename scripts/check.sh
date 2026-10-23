@@ -55,6 +55,30 @@ for rollup, expected in (([success, cancelled], "green"), ([cancelled], "red"),
     assert result["result"] == expected, result
 print("superseded checks: green")
 PY
+uv run python - <<'PY'
+import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay.setup import repair_venvs
+
+for outcome, kept in ((subprocess.TimeoutExpired("probe", 10), True),
+                      (subprocess.CompletedProcess([], 1), False),
+                      (OSError("missing python"), False),
+                      (subprocess.CompletedProcess([], 0), True)):
+    with TemporaryDirectory() as directory:
+        worktree = Path(directory)
+        (worktree / "pyproject.toml").touch()
+        venv = worktree / ".venv"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "bin/python").touch()
+        with patch("lokay.setup.run_process", side_effect=outcome if isinstance(outcome, Exception) else None,
+                   return_value=outcome), patch("lokay.setup.git", return_value=""):
+            repair_venvs(worktree)
+        assert venv.is_dir() == kept, outcome
+print("venv repair checks: ok")
+PY
 .venv/bin/python - <<'PY'
 from lokay.review import verdict
 from lokay.types import CheckResult
