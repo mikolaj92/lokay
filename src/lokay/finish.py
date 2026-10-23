@@ -441,7 +441,71 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     if fixed["result"] == "failed":
         return "return", fixed
     if fixed.get("no_changes"):
-        return replan()
+        from lokay.effects.decide import decide
+        from lokay.review import QUESTIONS
+        import re
+
+        current = state_read(picked["repo"], picked["issue"])
+        checks = saved.get("local_ci") or {}
+        kinds = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
+        categories = {}
+        for row in uwagi:
+            kind = parse_finding(row).lens or row.get("warstwa")
+            if kind not in kinds or row.get("warstwa") not in (None, "", "scope"):
+                return replan()
+            categories.setdefault(kind, []).append(row)
+        if not (head == sha == verdict.get("sha")
+                and checks.get("sha") == sha and checks.get("result") == "green"
+                and not checks.get("failed")
+                and checks.get("ci", saved.get("ci")) in ("green", "no_ci")
+                and sha not in current.get("dispute_rechecks", [])):
+            return replan()
+        justification = current.get("pi_response") or ""
+        section = re.search(r"^## Dispute\s*\n(.*?)(?=^## |\Z)", justification, re.M | re.S)
+        if section:
+            justification = section.group(1).strip()
+        rejected = []
+        dispute = {}
+        for kind, rows in categories.items():
+            answer = _retry(picked, "fix", lambda: decide({
+                "state": {"justification": justification, "diff": diff or "",
+                          "issue_goal": saved.get("issue_body") or "", "findings": rows},
+                "questions": [{"id": "valid", "type": "bool",
+                               "instructions": "Is the finding still valid and actionable given the "
+                                               "justification, the diff and the issue goal?",
+                               "options": {"true": "upheld", "false": "rejected"}}],
+            }))["valid"]
+            upheld = answer["choice"] == "true"
+            dispute[kind] = answer
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Dispute: {kind} {'upheld' if upheld else 'rejected'} "
+                          f"(p={dumps(answer['probabilities'])})")
+            if not upheld:
+                rejected.extend(rows)
+        check_history = deepcopy(current.get("check_history", []))
+        if check_history:
+            check_history[-1]["dispute"] = dispute
+        state_update(picked["repo"], picked["issue"], check_history=check_history)
+        if rejected:
+            dismissed = current.get("dispute_dismissed") or {}
+            keys = list(dismissed.get("keys", [])) if dismissed.get("sha") == sha else []
+            notes = list(current.get("check_notes", []))
+            for row in rejected:
+                if dismissed_key(row) not in keys:
+                    keys.append(dismissed_key(row))
+                if row not in notes:
+                    notes.append(row)
+            state_update(picked["repo"], picked["issue"], check_notes=notes,
+                         dispute_dismissed={"sha": sha, "keys": keys})
+            _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
+        if any(answer["choice"] == "true" for answer in dispute.values()):
+            return replan()
+        state_update(picked["repo"], picked["issue"],
+                     _event={"action": "enter_node", "outcome": {"node": "check"}},
+                     dispute_rechecks=[*current.get("dispute_rechecks", []), sha],
+                     verdict=None, local_ci=None, fix_reason=None, result="check")
+        rounds_append(picked["repo"], picked["issue"], "Fix -> Check: dispute, re-check")
+        return "return", {"result": "check", "sha": sha}
     pushed = fix_step(picked, "fix_publish", lambda: push(worktree, branch, sha), sha)
     if pushed["result"] == "failed":
         return "return", pushed
