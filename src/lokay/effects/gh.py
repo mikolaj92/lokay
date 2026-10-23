@@ -11,6 +11,7 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
+from lokay import store
 from lokay.effects.pi import run_process
 from lokay.effects.retry import retry
 from lokay.redact import redact_text
@@ -313,7 +314,8 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
 
 def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     code, out, err = _gh(
-        ["pr", "merge", str(number), "--repo", repo, "--merge", "--match-head-commit", expected_head_sha]
+        ["pr", "merge", str(number), "--repo", repo, "--merge", "--match-head-commit", expected_head_sha,
+         "--body", f"Lokay-Merge: {store.TICK}"]
     )
     if code != 0:
         blob = (err or out).lower()

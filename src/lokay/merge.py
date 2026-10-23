@@ -35,7 +35,8 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
     if attempts.get(sha, 0) >= 2:
         state_update(repo_name, issue, merge_conflict_sha=sha)
         return {"result": "merge_limit", "merge_sha": None}
-    if not pr_files(repo_name, number):
+    files = pr_files(repo_name, number)
+    if not files:
         state_update(repo_name, issue, result="closed", reason="empty PR diff")
         return {"result": "closed", "merge_sha": None, "reason": "empty PR diff"}
     base_path = worktree if worktree is not None else clone_path
@@ -49,6 +50,9 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
     sha = outcome["merge_sha"]
     state_update(repo_name if "/" in repo_name else f"{owner}/{repo_name}", issue, **{**rounds, "result": "merged", "sha": sha,
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
+    from lokay.measure import record_merge
+
+    record_merge(repo_name, issue, number, sha, files)
     if clone_path is None:
         from lokay.config import repo
 

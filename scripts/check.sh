@@ -2652,5 +2652,91 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     assert sum(call.args == ("orphan_pr_closed",) for call in events.call_args_list) == 1
 print("hygiene checks: green")
 PY
+uv run python - <<'PY'
+import io
+import json
+from contextlib import ExitStack, redirect_stdout
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, measure, merge, retro, store, tick
+from lokay.effects import gh
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(config, "HOME", home))
+    argv = []
+    def remote(args, **kwargs):
+        argv.append(args)
+        return (0, json.dumps({"mergeCommit": {"oid": "M"}}) if args[:2] == ["pr", "view"] else "", "")
+    stack.enter_context(patch.object(gh, "_gh", side_effect=remote))
+    assert gh.merge("o/r", 5, "S")["merge_sha"] == "M"
+    assert argv[0][argv[0].index("--body") + 1] == "Lokay-Merge: " + store.TICK
+    pr = {"number": 5, "headRefName": "lokay/1", "headRefOid": "S", "labels": []}
+    store.state_update("o/r", 1, _event={"action": "enter_node", "outcome": {"node": "check"}}, pr=5)
+    for target, name, value in ((tick.maintenance, "sweep", None), (tick, "probes", {"host": "ok"}),
+                               (tick, "load_repos", [{"name": "o/r", "clone_path": str(home / "absent"), "merge": "off"}]),
+                               (tick, "list_prs", [pr]), (tick, "open_issues", []),
+                               (tick, "gh_json", {"data": {"repository": {}}})):
+        stack.enter_context(patch.object(target, name, return_value=value))
+    picked = tick.pick({"LOKAY2_REPO": "o/r"})
+    assert picked["result"] == "picked", picked
+    tick.release_lock(picked["held"])
+    pick = measure.ledger(home)[0]
+    assert pick["kind"] == "pick" and pick["issue"] == 1 and pick["reason"] == "pr", pick
+    for day, values in ((pick["ts"][:10], (1000, 2000)), ("2000-01-01", (99999,))):
+        store.write_text_atomic(home / "ticks" / (day + ".jsonl"), "".join(json.dumps(
+            {"kind": "call", "call": "pi", "repo": "o/r", "issue": 1, "ts": pick["ts"], "ms": ms}) + "\n"
+            for ms in values))
+    stack.enter_context(patch.object(merge, "merge_allowed", return_value=True))
+    stack.enter_context(patch("lokay.review.recompute_verdict", return_value={"result": "merge", "sha": "S"}))
+    stack.enter_context(patch.object(merge, "pr_files", return_value=["src/app.py"]))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(merge, "check_main"))
+    outcome = merge.merge_sha("o/r", 5, "S", None, None, "o", 1,
+                              {"plan_rounds": 1, "check_rounds": 2}, clone_path=home)
+    assert outcome["result"] == "merged", outcome
+    merged = measure.ledger(home)[-1]
+    assert (merged["kind"], merged["sha"], merged["pr"], merged["fix_rounds"], merged["pi_ms"],
+            merged["picked_at"], merged["change_kind"]) == ("merged", "M", 5, 2, 3000, pick["ts"], "code"), merged
+    old = datetime.now(timezone.utc) - timedelta(hours=49)
+    store.write_text_atomic(home / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in (
+        {**merged, "ts": old.isoformat(), "picked_at": (old - timedelta(minutes=20)).isoformat()},
+        {**merged, "issue": 2, "sha": "N", "change_kind": "docs"})))
+    def lookup(args, **kwargs):
+        if args[0] == "issue":
+            return {"state": "OPEN", "stateReason": "REOPENED"}
+        assert args == ["api", f"repos/o/r/commits?sha=main&since={old.isoformat()}", "--paginate", "--slurp"], args
+        return [[]]
+    lookups = stack.enter_context(patch.object(measure, "gh_json", side_effect=lookup))
+    output = io.StringIO()
+    with redirect_stdout(output):
+        assert measure.main([]) == 0
+    assert all(text in output.getvalue() for text in ("escape_rate_48h=1/1", "p50", "merges_per_day")), output.getvalue()
+    calls = lookups.call_count
+    with redirect_stdout(io.StringIO()):
+        assert measure.main([]) == 0
+    assert lookups.call_count == calls
+    assert len([row for row in measure.ledger(home) if row["kind"] == "escape_check"]) == 1
+    store.ledger_append({**merged, "sha": "FAIL"})
+    rows = measure.ledger(home)
+    rows[-1]["ts"] = old.isoformat()
+    store.write_text_atomic(home / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in rows))
+    with patch.object(measure, "gh_json", side_effect=RuntimeError("offline")):
+        assert len(measure.escapes(home)) == 1
+    assert not any(row["kind"] == "escape_check" and row["sha"] == "FAIL" for row in measure.ledger(home))
+    with redirect_stdout(io.StringIO()), patch.object(measure, "merges", side_effect=lambda home, ticks: (
+            ticks.extend([old - timedelta(hours=2), old]) or [])):
+        assert measure.main(["--baseline", (old - timedelta(hours=3)).isoformat(),
+                             "--since", (old - timedelta(hours=1)).isoformat()]) == 0
+    evidence = [{"repo": "o/r", "issue": issue, "pr": 5, "sha": "M", "why": ["issue reopened"]}
+                for issue in (1, 2, 3)]
+    assert ("escape", "logic bug") in retro.proposals(home / "ticks", escapes=evidence)
+print("ledger and measure checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
