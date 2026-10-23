@@ -1293,11 +1293,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
             "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
-        decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
+        decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix, main_sha)
         if replan_deleted_files(picked, verdict, sha):
             return {"result": "pending", "next": "plan"}
         derived = graph.step(store.load(picked["repo"], picked["issue"]),

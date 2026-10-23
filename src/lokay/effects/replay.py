@@ -67,6 +67,8 @@ def compatible_checks(actual, expected) -> Any:
     if not isinstance(actual, dict) or not isinstance(expected, dict):
         return actual
     actual = actual.copy()
+    if "main_sha" not in expected and actual.get("main_sha") is None:
+        actual.pop("main_sha", None)
     for key in actual.keys() & expected.keys():
         value, recorded = actual[key], expected[key]
         if key in {"checks", "results"} and isinstance(value, list) and isinstance(recorded, list):
@@ -361,12 +363,12 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
                     "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
                 store.state_update(repo, issue, local_ci=ci)
                 rounds = before.get("check_rounds", 0)
-                decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
+                decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
                     picked, worktree, base, sha, saved, diff, check_rows, ci, rounds)
                 verdict, rounds = finish.complete_check(
                     picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
                     check_results, pr_number, rounds, check_notes, hashlib.sha256(diff.encode()).hexdigest(),
-                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
+                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log), main_sha=main_sha)
                 store.state_update(repo, issue, _event={"action": "verdict", "outcome": verdict})
             except Boundary:
                 outcome = (recorded[-1] if rerecord is not None else transitions[-1])["event"]["outcome"]

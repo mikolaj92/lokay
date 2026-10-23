@@ -150,7 +150,7 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
     from lokay.review import test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
-    if (main["lockfile"]["status"] != "pass" or ci.get("tested") is not True
+    if (ci.get("tested") is not True
             or main["ci"].get("tested") is not True or main["ci"]["result"] != "red") or any(
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):
