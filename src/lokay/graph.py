@@ -20,6 +20,10 @@ def merge_allowed(state: dict, sha: str) -> bool:
     return bool(sha) and recorded.get("sha") == sha and recorded.get("result") == "merge"
 
 
+def red_main_allows(status: dict, issue: int, children: list) -> bool:
+    return status.get("status") != "red" or issue == status.get("issue") or issue in children
+
+
 def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
     return (state.get("result") == "closed" and issue_open
             and pr.get("state", "OPEN") == "OPEN" and bool(pr.get("headRefOid"))
