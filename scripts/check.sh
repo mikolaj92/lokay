@@ -522,15 +522,17 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch("lokay.review.recompute_verdict", side_effect=lambda sha, state: state["verdict"]))
     name = "owner/red"
     verdict = {"result": "merge", "sha": "S"}
-    red = {"status": "red", "issue": 9}
+    red = {"status": "red", "issue": 9, "baseline": {"sha": "MAIN"}}
     store.save_main_status(name, red)
     store.state_update(name, 9, children=[11])
     for issue in (3, 9, 11):
         store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
-                           sha="S", verdict=verdict, result="running", pr=issue + 100)
+                           sha="S", verdict=verdict, last_check=verdict, result="running", pr=issue + 100,
+                           check_inputs={"main_sha": "MAIN"})
     def merge_issue(issue):
         return merge.merge_sha(name, issue + 100, "S", verdict, None, "owner", issue, {}, clone_path=home)
 
+    store.save_main_status(name, {"status": "red", "issue": 9})
     blocked = merge_issue(3)
     assert blocked == {"result": "main_red", "merge_sha": None}, blocked
     gh_merge.assert_not_called()
@@ -542,11 +544,23 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     snapshot = Snapshot(repos=(RepoSnapshot(name=name, prs=(), issues=(), states={3: saved}),),
                         now=store.last_activity(saved) + 301)
     assert graph.pick(snapshot) is None
-    for issue in (9, 11):
+    store.save_main_status(name, red)
+    for issue, inputs in ((4, {"main_sha": "OLD"}), (5, {})):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                           sha="S", verdict=verdict, last_check=verdict, result="running", check_inputs=inputs)
+        assert merge_issue(issue) == {"result": "check", "sha": "S", "merge_sha": None}
+        gh_merge.assert_not_called()
+        files.assert_not_called()
+        saved = store.state_read(name, issue)
+        assert saved["node"] == "check" and saved["result"] == "check", saved
+        assert saved["verdict"] is None, saved
+    for issue in (3, 9, 11):
         gh_merge.reset_mock()
         assert merge_issue(issue)["result"] == "merged"
         gh_merge.assert_called_once_with(name, issue + 100, "S")
     store.save_main_status(name, {"status": "green"})
+    store.state_update(name, 3, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                       sha="S", verdict=verdict, result="running", merge_attempts={})
     gh_merge.reset_mock()
     assert merge_issue(3)["result"] == "merged"
     gh_merge.assert_called_once_with(name, 103, "S")
@@ -554,6 +568,76 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     for issue, expected in ((9, True), (11, True), (3, False)):
         assert graph.red_main_allows(red, issue, [11]) is expected
 print("red main merge invariant: green")
+PY
+uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import checks, main_guard, merge, store
+from lokay.build import LOCKFILES
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory}))
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    worktree = home / "worktree"
+    worktree.mkdir()
+    assert "pixi.lock" in LOCKFILES
+    for name in ("pixi.lock", "other/pixi.lock"):
+        path = worktree / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    baseline = {"sha": "9794f581", "lockfile": {
+        "status": "fail", "findings": [{"plik": "pixi.lock"}]},
+        "ci": {"tested": True, "result": "green", "log": "", "failed": []}}
+    x = checks.CheckInput(repo="owner/fala", issue=315, sha="S", issue_body="", plan="",
+                          diff="", hunks=[], ci={"log": "lockfile drift: pixi.lock"},
+                          worktree=worktree, main=baseline)
+    result = checks.lockfile(x)
+    assert result.status == "pass" and "inherited" in result.reason, result
+    assert "pixi.lock" in result.reason and baseline["sha"] in result.reason, result
+    x.ci["log"] += "\nlockfile drift: other/pixi.lock"
+    result = checks.lockfile(x)
+    assert result.status == "fail" and [f.plik for f in result.findings] == ["other/pixi.lock"], result
+    x.main = None
+    x.ci["log"] = "lockfile drift: pixi.lock"
+    result = checks.lockfile(x)
+    assert result.status == "fail" and [f.plik for f in result.findings] == ["pixi.lock"], result
+    baseline["ci"] = {"tested": True, "result": "red", "log": "FAILED tests/a.py::x", "failed": []}
+    with patch.object(main_guard, "check_main", return_value={"status": "red", "baseline": baseline}):
+        ci = {"tested": True, "result": "red", "log": "FAILED tests/a.py::x", "failed": []}
+        result = main_guard.local_baseline("owner/fala", worktree, ci)
+        assert result["result"] == "green" and result["baseline"]["sha"] == baseline["sha"], result
+        ci["log"] += "\nFAILED tests/b.py::y"
+        result = main_guard.local_baseline("owner/fala", worktree, ci)
+        assert result["result"] == "red", result
+        assert [f["plik"] for f in result["failed"]] == ["tests/b.py::y"], result
+    name = "owner/red"
+    store.save_main_status(name, {"status": "red", "baseline": {"sha": "MAIN"}})
+    verdict = {"result": "merge", "sha": "S"}
+    gh_merge = stack.enter_context(patch.object(merge, "gh_merge", return_value={
+        "result": "merged", "merge_sha": "merged-S"}))
+    stack.enter_context(patch.object(merge, "pr_files", return_value=["file.py"]))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(merge, "check_main", return_value={
+        "status": "green", "baseline": {"ci": {"executed": 3}, "lockfile": {"status": "pass"}}}))
+    stack.enter_context(patch("lokay.review.recompute_verdict", side_effect=lambda sha, state: state["verdict"]))
+    for issue, main_sha, expected in ((1, "MAIN", "merged"), (2, "OLD", "check")):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                           sha="S", verdict=verdict, last_check=verdict, result="running", check_inputs={"main_sha": main_sha})
+        gh_merge.reset_mock()
+        result = merge.merge_sha(name, issue + 100, "S", verdict, None, "owner", issue, {}, clone_path=home)
+        assert result["result"] == expected, result
+        if expected == "merged":
+            gh_merge.assert_called_once_with(name, issue + 100, "S")
+        else:
+            gh_merge.assert_not_called()
+            assert result == {"result": "check", "sha": "S", "merge_sha": None}, result
+print("red main subset checks: green")
 PY
 uv run python - <<'PY'
 from lokay import graph
@@ -2381,7 +2465,7 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(git_effects, "plan_checkout", return_value=root))
     stack.enter_context(patch.object(finish, "local_checks", return_value={"result": "green", "failed": [], "notes": []}))
     stack.enter_context(patch.object(finish, "remote_checks", return_value=(7, {"result": "green"})))
-    stack.enter_context(patch.object(finish, "lenses", return_value=([], [], [], [], "", [], False)))
+    stack.enter_context(patch.object(finish, "lenses", return_value=([], [], [], [], "", [], False, None)))
     stack.enter_context(patch.object(finish, "complete_check", return_value=(verdict, 8)))
     splitter = stack.enter_context(patch.object(plan, "split_tasks", return_value={"result": "done", "tasks": tasks}))
     publisher = stack.enter_context(patch.object(retro, "publish"))

@@ -27,6 +27,7 @@ class CheckInput:
     worktree: Path
     title: str = ""
     red_main: bool = False
+    main: dict | None = None
 
 
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
@@ -393,6 +394,11 @@ def lockfile(x: CheckInput) -> CheckResult:
                 drifted.add(path.relative_to(root).as_posix())
             elif status == "unknown":
                 errors.append(f"{path.relative_to(root)}: {reason}")
+    inherited = set()
+    if x.main and x.main.get("lockfile", {}).get("status") == "fail":
+        inherited = {f["plik"] for f in x.main["lockfile"]["findings"]}
+    inherited_drift = drifted & inherited
+    drifted -= inherited
     if drifted:
         message = "uv.lock is out of date with pyproject.toml: run `uv lock`"
         findings = tuple(Finding(name, 1, 1, message if Path(name).name == "uv.lock" else
@@ -403,6 +409,9 @@ def lockfile(x: CheckInput) -> CheckResult:
         errors.append("uv lock checks unavailable: uv not found")
     if errors:
         return CheckResult("lockfile", "unknown", "; ".join(map(str, errors)), ())
+    if inherited_drift:
+        return CheckResult("lockfile", "pass",
+                           "; ".join(sorted(inherited_drift)) + f": drift inherited from red main {x.main['sha']}", ())
     reason = "uv unavailable" if not available else "uv lock checks passed" if locks else "no applicable uv locks"
     return CheckResult("lockfile", "pass", reason, ())
 
