@@ -19,7 +19,7 @@ from lokay.merge import merge_blocked
 from lokay.gates import gate_rows
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_base, push, worktree_remove
-from lokay.effects.git import git, git_try, head as git_head
+from lokay.effects.git import git, git_bytes, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
@@ -817,9 +817,7 @@ def _prepare(picked: dict) -> tuple | dict:
         git(worktree, "fetch", "origin", base, timeout=300)
         if not saved.get("h2_start"):
             if git(worktree, "status", "--porcelain", "--untracked-files=no"):
-                code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
-                if code:
-                    raise RuntimeError(err or "patch export failed")
+                out = git_bytes(worktree, "diff", "--binary", "HEAD", timeout=300)
                 artifact = run_dir(name, issue) / f"build-leftover-{git_head(worktree)[:12]}-{time.time_ns()}.patch"
                 store.write_artifact(artifact, out)
                 rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
@@ -888,7 +886,7 @@ def _prepare(picked: dict) -> tuple | dict:
                         and not any(row.get("warstwa") == "setup" for row in failing["ci"].get("failed", []))):
                     parents = git(worktree, "rev-list", "--parents", "-n", "1", culprit["sha"]).split()
                     git(worktree, "revert", "--no-commit", *(["-m", "1"] if len(parents) > 2 else []), culprit["sha"])
-                    store.write_artifact(patch, git(worktree, "diff", "--binary", "HEAD"))
+                    store.write_artifact(patch, git_bytes(worktree, "diff", "--binary", "HEAD"))
                     tidy_and_commit(worktree, f"Revert culprit PR #{culprit['pr']}")
                     state_update(name, issue, h2_summary=f"Revert culprit PR #{culprit['pr']}",
                                  h2_committed=git_head(worktree))

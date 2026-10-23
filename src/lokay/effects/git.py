@@ -68,6 +68,13 @@ def _command(repo: Path | None, args: list[str], *, timeout: float, env: dict[st
     return run_process(argv, cwd=repo, timeout=timeout, env=env, input=input, text=text)
 
 
+def git_bytes(path: Path, *args: str, timeout: float = 30) -> bytes:
+    proc = _command(path, list(args), timeout=timeout, text=False)
+    if proc.returncode:
+        raise RuntimeError(proc.stderr.decode(errors="replace") or "patch export failed")
+    return proc.stdout
+
+
 def checkout_version() -> str | None:
     root = Path(os.environ.get("LOKAY_ROOT") or Path(__file__).resolve().parents[3])
     try:
@@ -335,14 +342,11 @@ def detached_worktree(root: Path, path: Path, start: str) -> None:
     git(root, "worktree", "add", "--detach", str(path), start, timeout=300)
 
 
-def worktree_patch(worktree: Path) -> str:
+def worktree_patch(worktree: Path) -> bytes:
     names = git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")
     for name in filter(None, names):
         git(worktree, "--literal-pathspecs", "add", "--intent-to-add", "--", name)
-    code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
-    if code:
-        raise RuntimeError(err or "patch export failed")
-    return out
+    return git_bytes(worktree, "diff", "--binary", "HEAD", timeout=300)
 
 
 def apply_patch(worktree: Path, patch: Path) -> None:
