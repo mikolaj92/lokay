@@ -190,6 +190,7 @@ def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round
     token = tick_deadline.set(None)
     try:
         adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
+        store.rounds_append(repo, issue, ("Fix" if findings is not None else "Build") + " prompt:\n" + adapter.prompt)
         adapter.substrate.preflight()
         tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
         result = run_task(adapter.task_id, k=1,

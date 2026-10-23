@@ -1029,11 +1029,11 @@ print("dead test checks: green")
 PY
 uv run python - <<'PY'
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import MagicMock, call, patch
 
 from lokay.checks import CheckInput, weakened_tests
 from lokay.gates import gate_contract, named_test
-from lokay.h2 import LokayAdapter
+from lokay.h2 import LokayAdapter, run_issue
 from lokay.safety import untrusted_issue_block
 
 paths = ["tests/test_version.py", "tests/test_other.py", "src/x.py"]
@@ -1072,6 +1072,20 @@ for rows in (None, findings):
         assert adapter.prompt[len(prefix):].startswith("\n\nCheck findings:\n")
     else:
         assert adapter.prompt == prefix
+prompt = "PROMPT\n=== GATE CONTRACT (lokay; overrides the issue where they conflict) ===\nX\n=== END GATE CONTRACT ==="
+for rows in (None, findings):
+    adapter = MagicMock()
+    adapter.prompt = prompt
+    adapter.substrate.preflight.side_effect = RuntimeError("stop")
+    with patch("lokay.h2.LokayAdapter", return_value=adapter), \
+            patch("lokay.h2.store.rounds_append") as rounds_append, \
+            patch("lokay.h2.start_harness_run"):
+        try:
+            run_issue("owner/repo", 1, Path.cwd(), "HEAD", "Repair", body, findings=rows)
+        except RuntimeError as error:
+            assert str(error) == "stop"
+        assert rounds_append.call_args_list == [
+            call("owner/repo", 1, ("Fix" if rows is not None else "Build") + " prompt:\n" + prompt)]
 print("gate contract checks: green")
 PY
 uv run python - <<'PY'
