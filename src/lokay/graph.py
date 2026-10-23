@@ -39,7 +39,9 @@ def reopen_issue_allowed(state: dict, issue_open: bool, open_pr: bool,
 def step(run: Run, event: Event) -> Run:
     current = dict(run.state)
     if isinstance(event, Reopened):
-        if current.get("result") != "closed" and (not event.outcome.get("issue") or current.get("result") == "merged"):
+        if (current.get("result") != "closed"
+                and (not event.outcome.get("issue") or current.get("result") == "merged")
+                and not event.outcome.get("main_sha")):
             return run
     elif current.get("result") == "closed":
         if set(event.fields) == {"cleanup"} and event.fields["cleanup"] in ("done", "failed") and not current.get("cleanup"):
@@ -132,6 +134,9 @@ def step(run: Run, event: Event) -> Run:
         case RedMain():
             fields.update(node=current.get("node") or ("check" if outcome.get("pr") else "plan"),
                           result="running", reason=None, retry_at=0)
+            if current.get("awaiting") == "children":
+                fields.update(node="plan", awaiting=None, children=[], split_tasks=None,
+                              split_generation=current.get("split_generation", 0) + 1)
         case Progress():
             counts = outcome["counts"]
             stalled = (run.diff_hash == outcome["diff_hash"]
@@ -205,6 +210,11 @@ def pick(snapshot: Snapshot) -> Pick | None:
                          and repo.status["exhausted_sha"] == repo.status.get("baseline", {}).get("sha"))):
             state = repo.states.get(number, {})
             children = state.get("children", []) if state.get("waiting_on") == "children" else [number]
+            if (state.get("waiting_on") == "children"
+                    and all(repo.states.get(child, {}).get("result") in ("failed", "merged", "closed", "empty_patch")
+                            for child in children)
+                    and (snapshot.only_issue is None or snapshot.only_issue == number)):
+                return Pick(repo.name, number, "red_main")
             for child in children:
                 child_state = repo.states.get(child, {})
                 if (child_state.get("waiting_on") != "children"

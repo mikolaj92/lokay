@@ -213,7 +213,16 @@ def escapes(home) -> list[dict]:
 
 
 def report(home):
-    rows = [row for row in ledger(home) if row.get("kind") == "merged"]
+    entries = ledger(home)
+    red_main = {}
+    for repo, status in store.main_status(home).items():
+        if status.get("status") == "red":
+            since = datetime.fromtimestamp(status["since"], timezone.utc)
+            red_main[repo] = {"hours": (datetime.now(timezone.utc) - since).total_seconds() / 3600,
+                              "picks": sum(row.get("kind") == "pick" and row.get("reason") == "red_main"
+                                           and row.get("repo") == repo and timestamp(row.get("ts")) is not None
+                                           and timestamp(row["ts"]) >= since for row in entries)}
+    rows = [row for row in entries if row.get("kind") == "merged"]
     days = {}
     counts = {}
     for row in rows:
@@ -226,7 +235,9 @@ def report(home):
     def mean(field, divisor=1):
         values = [row[field] / divisor for row in rows if isinstance(row.get(field), (int, float))]
         return sum(values) / len(values) if values else None
-    return {"merges_per_day": days, "change_counts": counts, "mean_fix_rounds": mean("fix_rounds"),
+    return {"red_main": red_main,
+            "red_main_errors": [repo for repo, row in red_main.items() if row["hours"] > 2 and not row["picks"]],
+            "merges_per_day": days, "change_counts": counts, "mean_fix_rounds": mean("fix_rounds"),
             "pi_minutes_per_merge": mean("pi_ms", 60000),
             "pick_to_merge_p50_minutes": durations[math.ceil(len(durations) * .5) - 1] if durations else None,
             "pick_to_merge_p90_minutes": durations[math.ceil(len(durations) * .9) - 1] if durations else None,
@@ -247,7 +258,7 @@ def main(argv: list[str]) -> int:
         if not args.baseline:
             data = report(config.HOME)
             print(json.dumps(data) if args.json else "measure " + " | ".join(f"{key}={value}" for key, value in data.items()))
-            return 0
+            return 1 if data["red_main_errors"] else 0
         start_a, start_b = boundary(args.baseline), boundary(args.since)
         end_a = boundary(args.baseline_until) if args.baseline_until else start_b
         end_b = boundary(args.until) if args.until else datetime.now(timezone.utc)

@@ -293,8 +293,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
             saved = state_read(name, issue)
             if (saved.get("awaiting") == "children"
                     and not (statuses.get(name, {}).get("issue") == issue
-                             and any(state_read(name, child).get("recovery_sha")
-                                     for child in saved.get("children", [])))):
+                             and (statuses.get(name, {}).get("status") == "red"
+                                  or any(state_read(name, child).get("recovery_sha")
+                                         for child in saved.get("children", []))))):
                 from lokay.effects.gh import children_done
 
                 held = acquire_lock(lock_path(name.split("/")[0], name))
@@ -475,7 +476,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     if selected.kind == "red_main":
                         pr = open_pr_for(name, branch)
                         saved = state_read(name, number)
-                        node = saved.get("node") or ("check" if pr else "plan")
+                        node = "plan" if saved.get("awaiting") == "children" else saved.get("node") or ("check" if pr else "plan")
                         now = time.time()
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
