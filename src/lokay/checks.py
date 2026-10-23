@@ -407,6 +407,26 @@ def lockfile(x: CheckInput) -> CheckResult:
     return CheckResult("lockfile", "pass", reason, ())
 
 
+def tracked_agent_state(x: CheckInput) -> CheckResult:
+    from lokay.effects.git import git_try
+
+    code, output, error = git_try(x.worktree, "ls-tree", "-r", "-z", "--name-only", x.sha,
+                                 "--", ".lokay", ".omo")
+    if code:
+        raise RuntimeError(error or "could not inspect tracked agent state")
+    paths = output.split("\0")[:-1] if output else []
+    if (output and not output.endswith("\0")) or any(
+            not path or Path(path).is_absolute() or ".." in Path(path).parts
+            or Path(path).parts[0] not in {".lokay", ".omo"} for path in paths):
+        raise ValueError("invalid tracked agent state listing")
+    findings = tuple(Finding(path, 1, 1,
+                            "remove tracked agent state; ignore rules do not remove tracked files",
+                            "tracked_agent_state") for path in paths)
+    return CheckResult("tracked_agent_state", "fail" if findings else "pass",
+                       "tracked agent state: " + ", ".join(paths) if findings
+                       else "no tracked agent state", findings)
+
+
 def junk(x: CheckInput) -> CheckResult:
     paths = set()
     for block in x.diff.split("diff --git ")[1:]:
@@ -437,7 +457,7 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
-CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
+CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk, tracked_agent_state,
           no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
 
 
