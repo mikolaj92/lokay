@@ -355,12 +355,18 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
             try:
                 ci = finish.local_checks(picked, worktree, configured, sha, root, base, tests, check_rows)
                 pr_number, remote = finish.remote_checks(picked, branch, sha)
-                if remote["result"] not in ("green", "no_ci"):
+                if remote["result"] not in ("green", "no_ci", "inherited"):
                     raise Mismatch(f"unsupported check remote result: {remote['result']}")
-                if remote.get("failed"):
+                if remote.get("failed") and remote["result"] != "inherited":
                     raise Mismatch(f"unsupported check remote failures: {remote['failed']}")
-                ci = {**ci, "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
-                    "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+                ci = {**ci, "ci": remote["result"],
+                    **({"inherited": remote["inherited"]} if remote.get("inherited") else {}),
+                    "failed": ci["failed"] + [
+                        {"warstwa": "GitHub CI", "plik": "", "check": name,
+                         "log": name + "\n" + (remote.get("failed_logs") or {}).get(name, name)}
+                        for name in remote.get("failed") or []],
+                    "notes": [*ci["notes"], *(remote.get("notes") or [])],
+                    "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci", "inherited") else "red"}
                 store.state_update(repo, issue, local_ci=ci)
                 rounds = before.get("check_rounds", 0)
                 decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
