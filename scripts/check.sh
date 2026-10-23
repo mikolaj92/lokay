@@ -3225,6 +3225,8 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(tick, "load_repos", return_value=[{"name": name, "clone_path": str(root / "absent"), "merge": "on"}]))
     stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
     stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
     picked = tick.pick({"LOKAY2_REPO": name})
     assert picked["result"] == "picked" and picked["issue"] == 307 and picked["node"] == "plan", picked
     tick.release_lock(picked["held"])
@@ -3313,6 +3315,7 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
     stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
     stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
     stack.enter_context(patch.object(gh, "children_done", return_value=False))
     store.state_update(name, 11, _event={"action": "closed"})
     selected = tick.pick({})
@@ -3328,6 +3331,66 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
             assert measure.main(["--json"]) == expected
         assert json.loads(output.getvalue())["blocked_pick_errors"] == expected
 print("dependency checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import graph, store, tick
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+name = "owner/replan"
+rows = [{"number": child, "body": f"Lokay parent: #307; split: {generation}; task: 0" +
+         ("\nLokay after: #311" if child == 312 else "")}
+        for child, generation in ((310, 0), (311, 1), (312, 1), (313, 2), (314, 2),
+                                  (315, 1), (316, 1), (317, 2), (318, 1))]
+states = {307: {"split_generation": 2, "children": [313, 314]},
+          310: {"result": "failed"}, 311: {"result": "empty_patch"},
+          312: {"blocked_by": [311]}, 313: {"result": "running"},
+          314: {"result": "merged"}, 316: {"pr": 900}, 318: {"result": "merged"}}
+prs = ({"number": 901, "headRefName": "lokay/315"},)
+assert graph.superseded(RepoSnapshot(name, states=states, prs=prs), rows) == {310: 307, 311: 307, 312: 307}
+for result in ("closed", "failed", "empty_patch"):
+    current = {307: {"awaiting": "children", "children": [313, 314]},
+               313: {"result": result}, 314: {"blocked_by": [313]}}
+    for status in ({}, {"status": "red", "issue": 307}):
+        assert graph.pick(Snapshot((RepoSnapshot(name, states=current, status=status),), 10000)) == Pick(name, 307, "replan")
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    for issue, saved in states.items():
+        store.state_update(name, issue, **saved)
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{
+        "name": name, "clone_path": str(root / "absent"), "merge": "off"}]))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=rows))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=prs))
+    remote = stack.enter_context(patch.object(tick, "gh_ok"))
+    with patch.object(tick, "acquire_lock", return_value={"result": "busy"}), patch.object(graph, "pick", return_value=None) as select:
+        tick.pick({})
+        repo = select.call_args.args[0].repos[0]
+        assert not repo.busy and 315 not in repo.states and 317 not in repo.states
+        remote.assert_not_called()
+    with patch.object(graph, "pick", return_value=None) as select:
+        tick.pick({})
+        repo = select.call_args.args[0].repos[0]
+        assert 315 not in repo.states and 317 not in repo.states
+    calls = [call.args[0] for call in remote.call_args_list]
+    assert {int(argv[2]) for argv in calls} == {310, 311, 312}, calls
+    assert len(calls) == 3 and all(argv[:2] == ["issue", "close"] for argv in calls), calls
+    assert all(argv[argv.index("--reason") + 1] == "not planned" for argv in calls)
+    assert not any("pr" in argv and "close" in argv for argv in calls)
+    for issue in (310, 311, 312):
+        saved = store.state_read(name, issue)
+        assert saved["result"] == "closed" and saved["closed_on_github"]
+    selected = graph.pick(Snapshot((repo,), 10000))
+    assert selected is None or selected.issue != 312, selected
+print("replan orphan checks: green")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

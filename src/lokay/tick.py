@@ -314,6 +314,28 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         release_lock(held)
             if saved:
                 states[issue] = saved
+        if any(saved.get("split_generation", 0) > 0 for saved in states.values()):
+            rows = list_issues(name)
+            superseded = graph.superseded(RepoSnapshot(name, states=states, prs=cached_prs(name)), rows)
+            if superseded:
+                held = acquire_lock(lock_path(name.split("/")[0], name))
+                if held["result"] == "held":
+                    try:
+                        for issue, parent in superseded.items():
+                            saved = state_read(name, issue)
+                            if saved.get("result") == "merged" or saved.get("pr"):
+                                continue
+                            current = states[parent]
+                            tasks = ", ".join(f"#{child}" for child in current.get("children", [])) or "none"
+                            gh_ok(["issue", "close", str(issue), "--repo", name, "--reason", "not planned",
+                                   "--comment", fit_body(f"Duplicate: #{parent} was replanned (split {current['split_generation']}); "
+                                                         f"its tasks are now {tasks}.")], error="superseded issue close failed")
+                            state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
+                            store.log_event("superseded_closed", repo=name, issue=issue, parent=parent)
+                            states[issue] = state_read(name, issue)
+                            issue_lists[name] = tuple(row for row in issue_lists[name] if int(row["number"]) != issue)
+                    finally:
+                        release_lock(held)
         busy = False
         active = {issue: saved for issue, saved in states.items()
                   if saved.get("result") not in ("merged", "closed")
