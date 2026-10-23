@@ -156,6 +156,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     from lokay.effects.git import git_try
     from lokay.review import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
     from lokay.checks import CheckInput, run_checks
+    from lokay.graph import red_main_allows
     from lokay.effects.decide import decide
 
     def read_stat():
@@ -165,10 +166,15 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
         return out
 
     plan_text = saved.get("issue_body") or ""
+    status = store.main_status().get(picked["repo"], {})
+    red_issue = status.get("issue") if status.get("status") == "red" else None
+    children = state_read(picked["repo"], red_issue).get("children", []) if red_issue else []
     check_input = CheckInput(
         repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
         issue_body=saved.get("issue_body") or "",
         plan=plan_text, diff=diff or "", hunks=rows, ci=ci, worktree=worktree,
+        title=saved.get("issue_title") or "",
+        red_main=bool(red_issue) and red_main_allows(status, int(picked["issue"]), children),
     )
     check_results = run_checks(check_input)
     checks_failed = any(result.status == "fail" for result in check_results)
