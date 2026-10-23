@@ -1298,7 +1298,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             prompt += "\n\nEvery Check finding:\n" + dumps(findings, ensure_ascii=False)
             state_update(picked["repo"], picked["issue"],
                          _event={"action": "verdict", "outcome": verdict}, plan_prompt=prompt)
-            _retry(picked, "check", publish)
+            _retry(picked, "plan", publish)
             rounds_append(picked["repo"], picked["issue"],
                           "Fix round limit → split" if split else f"Fix round limit → Plan (hit {derived['fix_limit_hits']})")
             store.log_event("fix_round_limit", hit=derived["fix_limit_hits"], repo=picked["repo"], issue=picked["issue"],

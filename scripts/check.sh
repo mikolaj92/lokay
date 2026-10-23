@@ -2250,6 +2250,7 @@ from lokay import finish, graph, lint, plan, retro, store, tick
 from lokay.effects import gh, git as git_effects
 from lokay.types import Checked, RepoSnapshot, Run, Snapshot
 
+real_retry = tick._retry
 name = "owner/split"
 sha = "a" * 40
 finding = {"plik": "src/a.py", "linia_od": 1, "linia_do": 1,
@@ -2354,6 +2355,19 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
         assert not store.state_read(name, 3).get("split_pending")
         assert calls == [], calls
         print("existing PR fix round limit checks: ok")
+        with patch.object(tick, "_retry", real_retry), patch.object(tick, "_ensure_worktree"):
+            store.state_update(name, 3, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                               result="pending", difficulty="hard", issue_title="existing PR", issue_body="spec",
+                               pr=7, sha=sha, fix_rounds=graph.FIX_ROUND_LIMIT - 1, fix_limit_hits=1,
+                               check_history=[{"sha": sha, "findings": findings}])
+            result = tick._finish(picked_pr, root, "lokay/3", sha, [])
+            saved = store.state_read(name, 3)
+            assert result == {"result": "pending", "next": "plan"}, result
+            assert saved["node"] == "plan" and saved["pr"] == 7, saved
+            snapshot = Snapshot(repos=(RepoSnapshot(name=name, prs=(), issues=(), states={3: saved}),),
+                                now=store.last_activity(saved) + 301)
+            assert graph.pick(snapshot) is None
+            print("round limit keeps plan node: green")
     for hits in (0, 1, 2, 99):
         normalized = {"pr": 7, "difficulty": "too_big", "fix_limit_hits": hits}
         store.normalize_state(normalized)
