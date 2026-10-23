@@ -1385,6 +1385,8 @@ def select(snapshot):
     return selected if selected is None or selected.kind in ("prs", "issues") else None
 
 def remote(args, **kwargs):
+    if args[:2] == ["issue", "view"]:
+        return {"title": "Restore content", "body": "Restore keep.txt"}
     if args[:2] == ["api", "graphql"]:
         assert "prc_" not in " ".join(args), args
         return {"data": {"repository": {"issue_1": {"state": remote_issue}, "pr_7": {"state": "CLOSED"}}}}
@@ -1505,6 +1507,64 @@ with ExitStack() as stack:
             restart.assert_not_called()
             merge.assert_called_once_with(repo, "base")
 print("fresh start after closed PR checks: green")
+PY
+uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import store, tick
+
+class Prepared(Exception):
+    pass
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    state_dir = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory}))
+    for key, value in (("HOME", state_dir), ("RUNS", state_dir / "runs"), ("LOCKS", state_dir / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    name = "owner/refresh"
+    config = {"name": name, "clone_path": directory, "merge": "off"}
+    stack.enter_context(patch.object(tick, "repo_config", return_value=config))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(state_dir, state_dir)))
+    stack.enter_context(patch.object(tick, "_ensure_worktree", side_effect=Prepared))
+    remote = stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "Title", "body": "Body"}))
+    updates = stack.enter_context(patch.object(tick, "state_update", wraps=store.state_update))
+    for issue, title, body, changed in (
+        (1, "Title", "Old body", True),
+        (2, "Title", "Body", False),
+        (3, "Title", "Body" + tick.RECOVERY_EVIDENCE + "{}", False),
+        (4, "Old title", "Body", True),
+    ):
+        store.state_update(name, issue, issue_title=title, issue_body=body,
+                           difficulty="easy", pr=None, plan_prompt="old prompt")
+        before = store.state_read(name, issue)
+        updates.reset_mock()
+        remote.reset_mock()
+        try:
+            tick._prepare({"repo": name, "issue": issue})
+        except Prepared:
+            pass
+        else:
+            raise AssertionError("Prepare did not reach worktree setup")
+        remote.assert_called_once_with(
+            ["issue", "view", str(issue), "--repo", name, "--json", "title,body"],
+            error="issue view failed")
+        saved = store.state_read(name, issue)
+        rounds = store.run_dir(name, issue) / "rounds.md"
+        line = "Plan: issue changed on GitHub; refreshed issue text and reset plan prompt"
+        if changed:
+            assert saved["issue_title"] == "Title", saved
+            assert saved["issue_body"] == "Body", saved
+            assert saved["plan_prompt"] is None, saved
+            assert line in rounds.read_text()
+        else:
+            assert saved == before, saved
+            updates.assert_not_called()
+            assert not rounds.exists() or line not in rounds.read_text()
+print("issue refresh checks: green")
 PY
 uv run python - <<'PY'
 from pathlib import Path
@@ -1991,6 +2051,7 @@ for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhaust
         stack.enter_context(patch.object(build, "build_publish", return_value={"result": "pr_open", "sha": "revert-sha", "pr": 99}))
         stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, fn, *args: fn()))
         remote = stack.enter_context(patch.object(tick, "gh_ok"))
+        stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "repair", "body": "spec"}))
         result = tick._prepare({"repo": name, "issue": 11})
         saved = store.state_read(name, 11)
         if scenario == "revert":
@@ -2098,6 +2159,11 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(gh, "gh_json", return_value=[]))
     stack.enter_context(patch.object(gh, "gh_ok", side_effect=remote))
     stack.enter_context(patch.object(tick, "gh_ok", side_effect=remote))
+    texts = {3: {"title": "existing PR", "body": "spec"}, 2: {"title": "ops", "body": "<!-- lokay-host-ops: repair -->"}}
+    def view(args, **kwargs):
+        assert args[:2] == ["issue", "view"] and args[3:] == ["--repo", name, "--json", "title,body"], args
+        return texts[int(args[2])]
+    stack.enter_context(patch.object(tick, "gh_json", side_effect=view))
     stack.enter_context(patch.object(tick, "repo_config", return_value={"test": []}))
     stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
     stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, fn, *args, **kwargs: fn()))
