@@ -903,9 +903,14 @@ def _prepare(picked: dict) -> tuple | dict:
         if main["status"] == "green":
             return close_empty_patch(name, issue, saved, baseline)
     if not saved.get("h2_committed"):
+        leftovers = set(filter(None, git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
+        if leftovers:
+            rounds_append(name, issue, "Build: leaving untracked leftovers untouched: "
+                          + ", ".join(sorted({path.split("/")[0] for path in leftovers})))
         if git_head(worktree) == saved["h2_start"]:
             apply_patch(worktree, patch)
-        tidy_and_commit(worktree, "lokay build")
+        paths = set(filter(None, git(worktree, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+        tidy_and_commit(worktree, "lokay build", paths=paths)
         state_update(name, issue, h2_committed=git_head(worktree))
     if not git(worktree, "rev-list", f"origin/{base}..HEAD"):
         return store.empty_patch(name, issue, git(worktree, "rev-parse", f"origin/{base}"))
