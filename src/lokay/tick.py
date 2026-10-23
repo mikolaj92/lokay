@@ -32,6 +32,7 @@ from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir,
 
 
 dumps = partial(json.dumps, default=store.json_default)
+RECOVERY_EVIDENCE = "\n\nMain recovery setup/lock evidence:\n"
 
 
 def tick(repo: str, issue: int, act: Callable[[Run], Event]) -> Run:
@@ -737,15 +738,22 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay.effects.git import apply_patch, git_try
 
     saved = state_read(picked["repo"], picked["issue"])
+    loaded = gh_json(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"],
+                     error="issue view failed")
+    if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
+        raise RuntimeError("issue title is missing or invalid")
+    body = loaded.get("body")
+    if body is not None and not isinstance(body, str):
+        raise RuntimeError("issue body is invalid")
     if "issue_title" not in saved or "issue_body" not in saved:
-        loaded = gh_json(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"],
-                         error="issue view failed")
-        if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
-            raise RuntimeError("issue title is missing or invalid")
-        body = loaded.get("body")
-        if body is not None and not isinstance(body, str):
-            raise RuntimeError("issue body is invalid")
         state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body)
+        saved = state_read(picked["repo"], picked["issue"])
+    elif (loaded["title"] != saved["issue_title"]
+          or (saved["issue_body"] != body
+              and not (saved["issue_body"] or "").startswith((body or "") + RECOVERY_EVIDENCE))):
+        state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body, plan_prompt=None)
+        rounds_append(picked["repo"], picked["issue"],
+                      "Plan: issue changed on GitHub; refreshed issue text and reset plan prompt")
         saved = state_read(picked["repo"], picked["issue"])
     title, body = saved["issue_title"], saved["issue_body"]
     if host_ops(body):
@@ -872,7 +880,7 @@ def _prepare(picked: dict) -> tuple | dict:
                     state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "build"}},
                                  result="pending", recovery_sha=baseline["sha"], h2_patch=None,
                                  h2_start=None, h2_context=None, h2_committed=None,
-                                 issue_body=(body or "") + "\n\nMain recovery setup/lock evidence:\n" + evidence)
+                                 issue_body=(body or "") + RECOVERY_EVIDENCE + evidence)
                     return {"result": "pending", "next": "build"}
             else:
                 return needs_help(picked, f"harness2: empty patch, main {main['status']}")
