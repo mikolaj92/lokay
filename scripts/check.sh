@@ -128,6 +128,103 @@ with TemporaryDirectory() as directory:
         assert all(isinstance(value[1], bytes) and value[1] for value in status.values()), status
 print("patch bytes checks: green")
 PY
+uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import build, store
+from lokay.effects.git import apply_patch, git, worktree_patch
+from lokay.scope import is_artifact
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    repo = root / "repo"
+    sibling = root / "worktree"
+    store.ensure_directory(repo)
+    git(repo, "init", "-b", "main")
+    git(repo, "config", "user.name", "worktree checks")
+    git(repo, "config", "user.email", "checks@example.invalid")
+    for name, content in {"tracked.py": "before\n", "src/old.py": "original\n",
+                          "notes/run.log": "before\n", "deps.lock": "before\n",
+                          ".gitignore": ".pixi/\n", "config/.pixi-version": "version\n"}.items():
+        store.write_artifact(repo / name, content)
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "worktree", "add", "-b", "checks", str(sibling))
+    leftovers = {".local-checks/pixi-cache/pkgs/zstd-1/info/index.json": "{}",
+                 ".local-checks/env/conda-meta/history": "history",
+                 ".local-checks/env/CACHEDIR.TAG": "cache",
+                 "notes/old.txt": "keep"}
+    for name, content in leftovers.items():
+        store.write_artifact(repo / name, content)
+    store.write_artifact(sibling / "src/new.py", "new\n")
+    store.write_artifact(sibling / "tracked.py", "after\n")
+    patch = root / "build.patch"
+    store.write_artifact(patch, worktree_patch(sibling))
+    apply_patch(repo, patch)
+    paths = set(filter(None, git(repo, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+    committed, _ = build.tidy_and_commit(repo, "lokay build", paths=paths)
+    assert set(committed) == {"src/new.py", "tracked.py"}, committed
+    assert set(git(repo, "diff", "--name-only", "origin/main..HEAD").splitlines()) == {"src/new.py", "tracked.py"}
+    for name, content in leftovers.items():
+        assert (repo / name).read_text() == content, name
+    store.write_artifact(repo / "env/pyvenv.cfg", "venv")
+    store.write_artifact(repo / "env/bin/python", "python")
+    store.write_artifact(repo / "tagged/CACHEDIR.TAG", "cache")
+    store.write_artifact(repo / "tagged/file", "cache")
+    store.write_artifact(repo / "conda/conda-meta/history", "history")
+    assert all(is_artifact(name, repo) for name in (
+        ".local-checks/pixi-cache/pkgs/zstd-1/info/index.json",
+        ".local-checks/env/conda-meta/history", "env/bin/python", "tagged/file",
+        "conda/conda-meta/history"))
+    assert not is_artifact("src/new.py", repo)
+    store.write_artifact(sibling / "fresh-env/pyvenv.cfg", "venv")
+    store.write_artifact(sibling / "fresh-env/bin/python", "junk")
+    exported = worktree_patch(sibling)
+    assert b"fresh-env" not in exported and b"src/new.py" in exported
+    git(sibling, "mv", "src/old.py", "src/moved.py")
+    exported = worktree_patch(sibling)
+    assert b"deleted file mode" in exported and b"a/src/old.py" in exported
+    assert b"new file mode" in exported and b"b/src/moved.py" in exported
+    git(sibling, "reset", "--hard", "HEAD")
+    git(sibling, "mv", "src/old.py", "src/moved.py")
+    store.write_artifact(patch, worktree_patch(sibling))
+    apply_patch(repo, patch)
+    paths = set(filter(None, git(repo, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+    build.tidy_and_commit(repo, "lokay build", paths=paths)
+    assert not (repo / "src/old.py").exists()
+    assert git(repo, "show", "HEAD:src/moved.py") == "original"
+    git(repo, "add", "-f", ".local-checks/pixi-cache/pkgs/zstd-1/info/index.json")
+    store.write_artifact(repo / "notes/run.log", "after\n")
+    store.write_artifact(repo / "deps.lock", "after\n")
+    git(repo, "add", "notes/run.log", "deps.lock")
+    git(repo, "commit", "-m", "branch changes")
+    build.tidy_and_commit(repo, "tidy")
+    assert ".local-checks/pixi-cache/pkgs/zstd-1/info/index.json" not in git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+    assert git(repo, "show", "HEAD:notes/run.log") == "after"
+    assert git(repo, "show", "HEAD:deps.lock") == "after"
+    for name in (".local-checks/ember-source/README.md", ".local-checks/mojo.conda"):
+        store.write_artifact(repo / name, "junk\n")
+        git(repo, "add", "-f", "--", name)
+    git(repo, "commit", "-m", "branch leftovers")
+    previous = git(repo, "rev-parse", "HEAD")
+    build.tidy_and_commit(repo, "Fix #55")
+    assert git(repo, "rev-parse", "HEAD") != previous
+    assert git(repo, "rev-parse", "HEAD^") == previous
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+    assert ".local-checks/ember-source/README.md" not in tree
+    assert ".local-checks/mojo.conda" not in tree
+    assert "src/new.py" in tree
+    store.write_artifact(repo / ".pixi/envs/default/bin/python", "junk\n")
+    git(repo, "add", "-f", ".pixi/envs/default/bin/python")
+    git(repo, "commit", "-m", "ignored branch leftovers")
+    build.tidy_and_commit(repo, "tidy")
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+    assert ".pixi/envs/default/bin/python" not in tree
+    assert "config/.pixi-version" in tree
+print("worktree junk checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay.review import verdict
 from lokay.types import CheckResult

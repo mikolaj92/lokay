@@ -10,7 +10,7 @@ from lokay import store
 from lokay.effects.git import base_branch, git_try, commit_paths, git, git_bytes, push
 from lokay.effects.gh import checks_table, pr_create
 from lokay.effects.tests import check_uv_lock
-from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
+from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache, is_junk
 
 LOCKFILES = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
              "package-lock.json": "package.json", "pnpm-lock.yaml": "package.json",
@@ -28,8 +28,12 @@ def exclude_caches(worktree: Path) -> None:
                           + "\n".join(missing) + "\n")
 
 
-def worktree_status(worktree: Path) -> dict[str, tuple[str, bytes]]:
-    code, out, err = git_try(worktree, "status", "--porcelain", "-z", "--untracked-files=all", timeout=30)
+def worktree_status(worktree: Path, paths: set[str] | None = None) -> dict[str, tuple[str, bytes]]:
+    if paths == set():
+        return {}
+    code, out, err = git_try(worktree, "--literal-pathspecs", "status", "--porcelain", "-z",
+                             "--untracked-files=all", *(["--", *sorted(paths)] if paths is not None else []),
+                             timeout=30)
     if code:
         raise RuntimeError((err or out).strip())
     entries = iter(out.split("\0"))
@@ -71,7 +75,8 @@ def generated_cleanup(worktree: Path):
             git(worktree, "--literal-pathspecs", "clean", "-fd", "--", *sorted(generated))
 
 
-def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) -> tuple[list[str], list[str]]:
+def tidy_and_commit(worktree: Path, message: str, before: dict | None = None,
+                    paths: set[str] | None = None) -> tuple[list[str], list[str]]:
     merge_head = worktree / git(worktree, "rev-parse", "--git-path", "MERGE_HEAD")
     if merge_head.exists():
         if git(worktree, "ls-files", "-u"):
@@ -104,7 +109,14 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     junk = sorted(path for path in modified - valid_locks if path not in stale_locks and Path(path).name in siblings
                   and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
     tracked = names(["ls-tree", "-r", "--name-only", "-z", "HEAD"])
-    cache_paths = {path for path in modified | branch_changes if is_cache(path)}
+    cache_paths = {path for path in modified | branch_changes if is_cache(path) or is_junk(path, worktree)}
+    candidates = branch_changes - names(["ls-tree", "-r", "--name-only", "-z", base])
+    if candidates:
+        code, out, err = git_try(worktree, "check-ignore", "--no-index", "--stdin", "-z",
+                                 input="\0".join(sorted(candidates)) + "\0")
+        if code not in (0, 1):
+            raise RuntimeError((err or out).strip())
+        cache_paths.update(filter(None, out.split("\0")))
     if cache_paths:
         git(worktree, "--literal-pathspecs", "rm", "-r", "-f", "--ignore-unmatch", "--", *sorted(cache_paths))
     artifacts = {path for path in modified if is_artifact(path, worktree)
@@ -118,6 +130,8 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
         git(worktree, "rm", "-r", "--cached", "-f", "--ignore-unmatch", "--", *added)
     untracked = names(["ls-files", "--others", "--exclude-standard", "-z"])
     untracked |= names(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
+    if paths is not None:
+        untracked &= paths
     directories = set()
     for name in sorted(untracked):
         path = Path(name)
@@ -131,7 +145,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
         for parent in path.parents:
             if is_cache(parent.as_posix()):
                 directories.add(worktree / parent)
-    for root, dirs, _ in os.walk(worktree, followlinks=False):
+    for root, dirs, _ in (os.walk(worktree, followlinks=False) if paths is None else ()):
         dirs[:] = [name for name in dirs if name != ".git"]
         relative = Path(root).relative_to(worktree)
         if is_cache(relative.as_posix()):
@@ -142,17 +156,18 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
         except OSError:
             pass
     exclude_caches(worktree)
-    after = worktree_status(worktree)
+    after = worktree_status(worktree, paths | cache_paths | set(stale_locks) | valid_locks
+                            if paths is not None else None)
     selected = sorted(path for path in after if path != ".lokay" and not path.startswith(".lokay/")
                       and (path in cache_paths or path in stale_locks or path in valid_locks
                            or before is None or before.get(path) != after[path]))
     index_paths = names(["ls-files", "-z"])
     stage = [path for path in selected
              if not path.endswith("/") and not (worktree / path).is_dir()
-             and (not is_artifact(path, worktree)
+             and (not is_artifact(path, worktree) or path in tracked
                  or (path in index_paths and not (worktree / path).exists()
                      and not (worktree / path).is_symlink()))
-             and (path in index_paths or (worktree / path).exists()
+             and (path in tracked or path in index_paths or (worktree / path).exists()
                   or (worktree / path).is_symlink())]
     committed = commit_paths(worktree, stage, message)
     return committed, junk
