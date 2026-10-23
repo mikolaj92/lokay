@@ -205,6 +205,12 @@ def log_event(kind: str, *, _env=None, **fields) -> None:
         return
 
 
+def ledger_append(row: dict) -> None:
+    path = RUNS.parent / "ledger.jsonl"
+    with shared_file_lock(path.with_suffix(".lock")):
+        append_text(path, dumps({**row, "ts": datetime.now(timezone.utc).isoformat(), "tick": TICK}) + "\n")
+
+
 def run_dir(repo: str, issue: int) -> Path:
     return RUNS / repo.replace("/", "__") / str(issue)
 

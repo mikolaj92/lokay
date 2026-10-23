@@ -515,6 +515,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         state_update(name, number, _event={"action": "enter_node", "outcome": {"node": node}}, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=now,
                                      **{**store.pick_ladder_fields(saved, now), **resumed})
+                    store.ledger_append({"kind": "pick", "repo": name, "issue": number,
+                                         "attempt": now, "reason": selected.kind or node})
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
