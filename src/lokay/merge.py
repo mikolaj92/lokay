@@ -5,8 +5,8 @@ from pathlib import Path
 
 from lokay.effects.gh import merge as gh_merge, pr_files
 from lokay.effects.git import base_branch, worktree_remove
-from lokay.graph import merge_allowed
-from lokay.store import state_read, state_update
+from lokay.graph import merge_allowed, red_main_allows
+from lokay.store import main_status, state_read, state_update
 from lokay.main_guard import check_main
 
 
@@ -24,6 +24,11 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
         return {"result": "check", "sha": sha, "merge_sha": None}
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
+    status = main_status().get(repo_name, {})
+    children = state_read(repo_name, status["issue"]).get("children", []) if status.get("issue") else []
+    if not red_main_allows(status, issue, children):
+        state_update(repo_name, issue, result="pending", reason="main red: merge waits for green main")
+        return {"result": "main_red", "merge_sha": None}
     if worktree is not None and clone_path is None:
         raise ValueError("clone_path is required to remove a worktree")
     attempts = state_read(repo_name, issue).get("merge_attempts", {})

@@ -498,6 +498,63 @@ assert run.state["sha"] == "merge-sha", run.state
 print("merged state checks: green")
 PY
 uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import graph, merge, store
+from lokay.types import RepoSnapshot, Snapshot
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory}))
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    gh_merge = stack.enter_context(patch.object(merge, "gh_merge", return_value={
+        "result": "merged", "merge_sha": "merged-S"}))
+    files = stack.enter_context(patch.object(merge, "pr_files", return_value=["file.py"]))
+    stack.enter_context(patch.object(merge, "check_main", return_value={}))
+    stack.enter_context(patch.object(merge, "worktree_remove", return_value={"result": "removed"}))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch("lokay.review.recompute_verdict", side_effect=lambda sha, state: state["verdict"]))
+    name = "owner/red"
+    verdict = {"result": "merge", "sha": "S"}
+    red = {"status": "red", "issue": 9}
+    store.save_main_status(name, red)
+    store.state_update(name, 9, children=[11])
+    for issue in (3, 9, 11):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                           sha="S", verdict=verdict, result="running", pr=issue + 100)
+    def merge_issue(issue):
+        return merge.merge_sha(name, issue + 100, "S", verdict, None, "owner", issue, {}, clone_path=home)
+
+    blocked = merge_issue(3)
+    assert blocked == {"result": "main_red", "merge_sha": None}, blocked
+    gh_merge.assert_not_called()
+    files.assert_not_called()
+    saved = store.state_read(name, 3)
+    assert saved["node"] == "merge" and saved["result"] == "pending", saved
+    assert saved["reason"] == "main red: merge waits for green main", saved
+    assert saved["verdict"] == verdict, saved
+    snapshot = Snapshot(repos=(RepoSnapshot(name=name, prs=(), issues=(), states={3: saved}),),
+                        now=store.last_activity(saved) + 301)
+    assert graph.pick(snapshot) is None
+    for issue in (9, 11):
+        gh_merge.reset_mock()
+        assert merge_issue(issue)["result"] == "merged"
+        gh_merge.assert_called_once_with(name, issue + 100, "S")
+    store.save_main_status(name, {"status": "green"})
+    gh_merge.reset_mock()
+    assert merge_issue(3)["result"] == "merged"
+    gh_merge.assert_called_once_with(name, 103, "S")
+    assert graph.red_main_allows({"status": "green"}, 3, [])
+    for issue, expected in ((9, True), (11, True), (3, False)):
+        assert graph.red_main_allows(red, issue, [11]) is expected
+print("red main merge invariant: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import RepoSnapshot, Snapshot
 
