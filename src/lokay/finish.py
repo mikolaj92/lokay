@@ -337,7 +337,11 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     from lokay.effects.git import apply_patch, git_try, push, restore_head
     import hashlib
 
-    escalated = escalate(picked, verdict.get("uwagi"))
+    from lokay.gates import gate_rows, gate_location
+    from lokay.effects.git import gate_tasks, revert_gates
+
+    gate_only = gate_rows(verdict.get("uwagi"))
+    escalated = None if gate_only else escalate(picked, verdict.get("uwagi"))
     if escalated:
         return "return", escalated
     uwagi = verdict["uwagi"]
@@ -387,8 +391,16 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         pending = "plan"
         return "continue", (sha, pending, verdict)
 
-    if stalled:
+    if stalled and not gate_only:
         return replan()
+
+    tasks = uwagi
+    if gate_only:
+        tasks = gate_tasks(worktree, base, sha, uwagi)
+        rounds_append(picked["repo"], picked["issue"],
+                      "Fix: gate task: " + "\n".join(row["instruction"] for row in tasks))
+        state_update(picked["repo"], picked["issue"], _event={"action": "gate_task"},
+                     gate_task={"sha": sha, "rows": tasks})
 
     def fix_action():
         current = state_read(picked["repo"], picked["issue"])
@@ -401,7 +413,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         outcome = h2.run_issue(
             picked["repo"], int(picked["issue"]), clone_path, sha,
             saved.get("issue_title") or "", saved.get("issue_body") or "",
-            findings=uwagi,
+            findings=tasks,
             fix_round=saved.get("fix_rounds", 0),
         )
         if outcome["result"] != "done":
@@ -429,6 +441,15 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
             code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
             if code:
                 raise RuntimeError(err or "fix HEAD lookup failed")
+        if fixed_head.strip() == sha and gate_only:
+            revert_gates(worktree, tasks)
+            tidy_and_commit(worktree, f"Revert gate violations #{picked['issue']}")
+            code, fixed_head, err = git_try(worktree, "rev-parse", "HEAD")
+            if code:
+                raise RuntimeError(err or "gate revert HEAD lookup failed")
+            if fixed_head.strip() != sha:
+                rounds_append(picked["repo"], picked["issue"], "Fix: gate revert: " + ", ".join(
+                    f"{path}:{line}" for path, line, _ in map(gate_location, tasks)))
         if fixed_head.strip() == sha:
             rounds_append(picked["repo"], picked["issue"],
                           "Fix: no changes" + (f": {summary.splitlines()[0]}" if summary else ""))

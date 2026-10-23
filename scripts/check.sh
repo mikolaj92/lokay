@@ -717,6 +717,145 @@ for choice, checks, failure, eligible in (
             assert result == ("continue", (sha, "plan", verdict)), result
 print("dispute exit checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, graph, tick
+from lokay.effects import git
+from lokay.types import Checked, Run, parse_event
+
+picked = {"repo": "owner/repo", "issue": 1}
+rows = [{"pytanie": "no_new_comments", "plik": "src/x.py", "linie": [1, 1],
+         "zmiana": "docstring -> delete it"},
+        {"lens": "weakened_tests", "plik": "tests/existing.py", "linia_od": 1,
+         "zmiana": "existing test changed but the issue body does not name it"}]
+for mode in ("empty", "changed", "mixed", "stalled"):
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        root = Path(directory)
+        worktree = root / "repo"
+        worktree.mkdir()
+        git.git(worktree, "init", "-b", "main")
+        git.git(worktree, "config", "user.name", "mikolaj92")
+        git.git(worktree, "config", "user.email", "checks@example.invalid")
+        (worktree / "src").mkdir()
+        (worktree / "tests").mkdir()
+        source = worktree / "src/x.py"
+        test = worktree / "tests/existing.py"
+        source.write_text("value = 1\n")
+        original_test = "assert value == 1\n"
+        test.write_text(original_test)
+        git.git(worktree, "add", "--", "src/x.py", "tests/existing.py")
+        git.git(worktree, "commit", "-m", "Base")
+        base = git.head(worktree)
+        git.git(worktree, "update-ref", "refs/remotes/origin/main", base)
+        if mode == "empty":
+            from lokay.gates import remove_comment
+
+            for text, line, expected in (
+                ('def f():\n    """Only body."""\n', 2, 'def f():\n    pass\n'),
+                ('value = "# literal"  # trailing\n', 1, 'value = "# literal"  \n'),
+                ('# full line\nvalue = 1\n', 1, 'value = 1\n'),
+            ):
+                assert remove_comment(text, line, True) == expected
+            source.unlink()
+            test.write_text("assert True\n")
+            generated = worktree / "generated.py"
+            generated.write_text("generated = True\n")
+            git.git(worktree, "add", "--", "src/x.py", "tests/existing.py", "generated.py")
+            git.git(worktree, "commit", "-m", "Gate examples")
+            cases = [{"name": "junk", "plik": "src/x.py"},
+                     {"lens": "junk", "plik": "tests/existing.py"},
+                     {"lens": "no_unit_tests", "plik": "generated.py"}]
+            git.revert_gates(worktree, git.gate_tasks(worktree, "main", git.head(worktree), cases))
+            assert source.read_text() == "value = 1\n"
+            assert test.read_text() == original_test and not generated.exists()
+            git.git(worktree, "commit", "-m", "Revert examples")
+        source.write_text('"""Added text."""\nvalue = 1\n')
+        test.write_text("assert True\n")
+        git.git(worktree, "add", "--", "src/x.py", "tests/existing.py")
+        git.git(worktree, "commit", "-m", "Change")
+        sha = git.head(worktree)
+        findings = rows + ([{"pytanie": "check_correctness", "plik": "src/x.py",
+                             "linia_od": 2, "zmiana": "wrong value"}] if mode == "mixed" else [])
+        verdict = {"sha": sha, "result": "fix", "uwagi": findings}
+        saved = {"node": "fix", "sha": sha, "issue_title": "Repair", "issue_body": "Repair x",
+                 "no_progress": 6 if mode == "stalled" else 0,
+                 "diff_fingerprint": "same" if mode == "stalled" else None}
+        events = []
+
+        def update(repo, issue, **fields):
+            event = fields.pop("_event", None)
+            if event:
+                events.append(event)
+                saved.update(graph.step(Run.from_state(saved), parse_event({
+                    "ts": 0, **event, "fields": fields})).state)
+            saved.update(fields)
+
+        patch_file = root / "fix.patch"
+        patch_file.write_text("diff --git a/src/x.py b/src/x.py\n--- a/src/x.py\n+++ b/src/x.py\n"
+                              '@@ -1,2 +1 @@\n-"""Added text."""\n value = 1\n' if mode == "changed" else "")
+        stack.enter_context(patch.object(finish, "state_read", side_effect=lambda *args: deepcopy(saved)))
+        stack.enter_context(patch.object(finish, "state_update", side_effect=update))
+        rounds = stack.enter_context(patch.object(finish, "rounds_append"))
+        escalate = stack.enter_context(patch.object(tick, "escalate", return_value=None))
+        help_call = stack.enter_context(patch.object(tick, "needs_help"))
+        stack.enter_context(patch.object(tick, "fix_step", side_effect=lambda picked, node, action, sha: action()))
+        stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, action, *args: action()))
+        prompt = stack.enter_context(patch.object(tick, "replan_prompt", return_value="revise plan"))
+        stack.enter_context(patch.object(tick, "pushed_pr", return_value=True))
+        stack.enter_context(patch.object(tick, "refresh_body", return_value={"result": "updated"}))
+        harness = stack.enter_context(patch("lokay.h2.run_issue", return_value={
+            "result": "done", "patch": str(patch_file), "summary": "No changes"}))
+        stack.enter_context(patch.object(git, "base_branch", return_value="main"))
+        stack.enter_context(patch("lokay.build.base_branch", return_value="main"))
+        push = stack.enter_context(patch.object(git, "push", side_effect=lambda *args: {
+            "result": "pushed", "sha": git.head(worktree)}))
+        result = finish.fix(picked, worktree, "lokay/1", sha, verdict, "diff", sha,
+                            "same", {}, worktree, "main", lambda: "new diff", lambda: None)
+        logs = [call.args[2] for call in rounds.call_args_list]
+        if mode == "mixed":
+            assert result == ("continue", (sha, "plan", verdict)), result
+            assert "gate_task" not in saved
+            assert not any(log.startswith("Fix: gate") for log in logs)
+            assert harness.call_args.kwargs["findings"] == findings
+            escalate.assert_called_once()
+            push.assert_not_called()
+            continue
+        new_sha = git.head(worktree)
+        assert new_sha != sha and saved["h2_fix_committed"] == new_sha
+        assert result == ("continue", (new_sha, "check", verdict)), result
+        assert source.read_text() == "value = 1\n" or source.read_text() == "\nvalue = 1\n"
+        assert test.read_text() == ("assert True\n" if mode == "changed" else original_test)
+        tasks = harness.call_args.kwargs["findings"]
+        assert all(task.items() <= enriched.items() for task, enriched in zip(rows, tasks))
+        assert "MUST" in tasks[0]["instruction"] and "src/x.py:1" in tasks[0]["instruction"]
+        assert "MUST restore tests/existing.py:1" in tasks[1]["instruction"]
+        assert base[:12] in tasks[1]["instruction"]
+        assert any(log.startswith("Fix: gate revert:") for log in logs) == (mode != "changed")
+        assert saved["gate_task"] == {"sha": sha, "rows": tasks}
+        assert [event["action"] for event in events] == ["gate_task", "fix_complete"]
+        prompt.assert_not_called()
+        escalate.assert_not_called()
+        help_call.assert_not_called()
+        push.assert_called_once_with(worktree, "lokay/1", sha)
+        if mode == "empty":
+            resumed = finish.fix(picked, worktree, "lokay/1", sha, verdict, "diff", sha,
+                                 "same", {}, worktree, "main", lambda: "new diff", lambda: None)
+            assert resumed == result and git.head(worktree) == new_sha
+            harness.assert_called_once()
+for findings, expected in ((rows, "fix"), (rows + [{"pytanie": "check_correctness", "plik": "src/x.py"}], "plan")):
+    for hits in (0, 1):
+        run = graph.step(Run.from_state({"node": "check", "fix_rounds": graph.FIX_ROUND_LIMIT - 1,
+                                        "fix_limit_hits": hits}),
+                         Checked(0, outcome={"result": "fix", "uwagi": findings}))
+        assert run.state["node"] == expected, run.state
+        assert bool(run.state.get("split_pending")) == (expected == "plan" and hits == 1)
+print("gate exit checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay import graph
 from lokay.finish import removed_assertions
