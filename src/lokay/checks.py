@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
-from lokay.gates import named_test
+from lokay.gates import dead_test_candidates, dead_tests, named_test
 from lokay.lint import diff_lines, lint_diff, unit_test_hints
 from lokay.scope import ASSERTION, is_artifact, is_test, kind as change_kind
 from lokay.types import CheckResult, Finding, parse_finding
@@ -199,6 +199,31 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         lines = [text for _, _, kind, text in diff_lines("diff --git " + block) if kind in {"-", "+"}]
         if is_test(path, lines):
             changed.add(path)
+    dead = frozenset()
+    if dead_test_candidates(x.diff):
+        from lokay.effects.git import base_branch, git_try
+
+        try:
+            code, base, _ = git_try(x.worktree, "merge-base", x.sha, "origin/" + base_branch(x.worktree))
+            if code:
+                raise ValueError("merge-base failed")
+            base = base.strip()
+            code, base_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", base)
+            if code:
+                raise ValueError("base tree failed")
+            code, head_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", x.sha)
+            if code:
+                raise ValueError("head tree failed")
+
+            def source(revision, path):
+                code, text, _ = git_try(x.worktree, "show", f"{revision}:{path}")
+                return None if code else text
+
+            dead = dead_tests(x.diff, x.issue_body, base_paths.splitlines(), head_paths.splitlines(),
+                              lambda path: source(base, path), lambda path: source(x.sha, path))
+        except Exception:
+            dead = frozenset()
+    changed -= dead
     unapproved = sorted(path for path in changed if not named_test(path, x.issue_body))
     if unapproved:
         reason = "existing test changed but the issue body does not name it: " + ", ".join(unapproved)
@@ -208,22 +233,22 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         return CheckResult("weakened_tests", "pass", "no existing tests changed", ())
     config = repo_config(x.repo)
     if x.ci.get("result") != "green" or not config.get("test") or config.get("syntax_only"):
-        return _count_weakened_tests(x)
+        return _count_weakened_tests(x, dead)
     paths = sorted(changed)
     result = base_tests_on_head(x.worktree, x.sha, paths, config, x.issue)
     if result.get("result") == "green":
-        counted = _count_weakened_tests(x)
+        counted = _count_weakened_tests(x, dead)
         if counted.status == "fail":
             return counted
         return CheckResult("weakened_tests", "pass",
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
-    return _count_weakened_tests(x)
+    return _count_weakened_tests(x, dead)
 
 
-def _count_weakened_tests(x: CheckInput) -> CheckResult:
+def _count_weakened_tests(x: CheckInput, dead=frozenset()) -> CheckResult:
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
-        if kind in {"-", "+"} and ASSERTION.match(text):
+        if path not in dead and kind in {"-", "+"} and ASSERTION.match(text):
             change = changes.setdefault(path, {"-": [], "+": []})
             change[kind].append((number, text))
     findings = []
