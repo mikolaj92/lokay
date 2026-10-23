@@ -2,8 +2,27 @@ import ast
 import io
 import re
 import tokenize
+from pathlib import Path
 
+from lokay.scope import is_test
 from lokay.types import Finding, parse_finding
+
+
+def named_test(path, body):
+    return any(re.search(r"(?<![\w./-])" + re.escape(name) + r"(?![\w./-])", body)
+               for name in (path, Path(path).name))
+
+
+def gate_contract(paths, body) -> str:
+    allowed = ", ".join(sorted(path for path in paths if is_test(path) and named_test(path, body)))
+    return "\n".join((
+        "=== GATE CONTRACT (lokay; overrides the issue where they conflict) ===",
+        "Existing test files you may change: " + (allowed or "none"),
+        "In those files the number of assertion lines must not drop; replace each outdated assertion with its own equivalent assertion of the current behaviour; never merge, delete or skip assertions.",
+        "Do not change, delete, rename or skip any other existing test file, even if the issue asks for it; if the issue's change would require that, implement the rest and report it as a blocker.",
+        "Do not add or edit comments or docstrings in code; where the issue asks to fix a comment or docstring, delete it instead.",
+        "=== END GATE CONTRACT ===",
+    ))
 
 
 def gate_rows(rows):

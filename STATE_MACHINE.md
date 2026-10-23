@@ -15,6 +15,8 @@ Rejestr ryzyk: [RISKS.md](RISKS.md). Weryfikacja incydentów: [INCIDENTS.md](INC
 
 ## Warstwy
 
+Lokay dopisuje do każdego promptu workera Plan/Build/Fix deterministyczny gate contract z dozwolonymi testami i zasadami asercji, komentarzy oraz docstringów.
+
 `Plan`, `Build`, `Check`, `Fix`, `Merge` są zapisanymi węzłami grafu.
 `idle`, `failed`, `pending`, `pr_open`, `check`, `merged` są wynikami operacji lub ticka.
 Tick oznacza jedno wywołanie `lokay start`. Backoff oznacza czasową niedostępność pracy, nie szósty węzeł.
