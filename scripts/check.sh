@@ -1294,6 +1294,40 @@ with patch("lokay.tick.state_update", side_effect=update), \
 print("deleted files scope checks: green")
 PY
 uv run python - <<'PY'
+from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, intent, run_checks
+from lokay.retro import CATEGORIES
+from lokay.types import Finding
+
+diff = ("diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n"
+        "@@ -1 +1 @@\n-old\n+new\n")
+with TemporaryDirectory() as directory:
+    x = CheckInput("owner/repo", 1, "head", "", "", diff, [], {}, Path(directory),
+                   title="[code-audit] X")
+    result = intent(x)
+    assert result.status == "fail", result
+    assert "docs/plan only instead of code" in result.reason, result
+    assert result.findings == (Finding("README.md", 1, 1,
+        "issue needs a code change; implement it instead of editing docs", "intent"),)
+    with patch("lokay.effects.git.merge_conflicts", return_value=[]), \
+            patch("lokay.lint.git_output", return_value=""):
+        assert any(row.name == "intent" and row.status == "fail" for row in run_checks(x))
+    assert intent(replace(x, diff=diff.replace("README.md", "src/x.py"))).status == "pass"
+    assert intent(replace(x, title="", red_main=True,
+                          diff=diff.replace("README.md", "docs/plan.md"))).status == "fail"
+    docs = replace(x, title="[docs-audit] X")
+    assert intent(docs).status == "pass"
+    assert intent(replace(docs, issue_body="Change src/x.py and Tests/A.swift",
+                          plan="Change src/x.py and Tests/A.swift")).status == "pass"
+    assert intent(replace(x, diff="")).status == "pass"
+assert "docs/plan only instead of code" in CATEGORIES
+print("intent check: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import PLAN_RESET, Run, event_record, parse_event
 

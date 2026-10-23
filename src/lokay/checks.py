@@ -1,6 +1,7 @@
 import ast
 import os
 import re
+import shlex
 import shutil
 from collections import Counter
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ class CheckInput:
     hunks: list[dict]
     ci: dict
     worktree: Path
+    title: str = ""
+    red_main: bool = False
 
 
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
@@ -318,6 +321,22 @@ def encoded_rewrite(x: CheckInput) -> CheckResult:
                        "percent-encoded rewrites found" if findings else "no percent-encoded rewrites", tuple(findings))
 
 
+def intent(x: CheckInput) -> CheckResult:
+    from lokay.review import docs_only
+
+    signals = [tag for tag in ("[code-audit]", "[test-audit]") if tag in x.title.lower()]
+    if x.red_main:
+        signals.append("red main")
+    if signals and x.diff and docs_only(x.diff):
+        paths = sorted({token[2:] for line in x.diff.splitlines() if line.startswith("diff --git ")
+                        for token in shlex.split(line)[2:]})
+        findings = tuple(Finding(path, 1, 1,
+                                 "issue needs a code change; implement it instead of editing docs", "intent")
+                         for path in paths)
+        return CheckResult("intent", "fail", "docs/plan only instead of code: " + ", ".join(signals), findings)
+    return CheckResult("intent", "pass", "no code intent mismatch", ())
+
+
 def docs(x: CheckInput) -> CheckResult:
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
@@ -419,7 +438,7 @@ def junk(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, docs]
+          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
