@@ -53,12 +53,15 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     from lokay.measure import record_merge
 
-    record_merge(repo_name, issue, number, sha, files)
     if clone_path is None:
         from lokay.config import repo
 
         clone_path = Path(repo(repo_name)["clone_path"]).expanduser()
-    check_main(repo_name, clone_path, sha, number, base=base)
+    main = None
+    try:
+        main = check_main(repo_name, clone_path, sha, number, base=base)
+    finally:
+        record_merge(repo_name, issue, number, sha, files, main)
     if worktree is not None:
         try:
             removed = worktree_remove(clone_path, worktree)
