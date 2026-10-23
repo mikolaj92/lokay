@@ -34,7 +34,9 @@ def repair_venvs(worktree: Path) -> None:
                                env=scrubbed_env(os.environ), timeout=10)
             if proc.returncode == 0:
                 continue
-        except (OSError, TimeoutExpired):
+        except TimeoutExpired:
+            continue
+        except OSError:
             pass
         remove_venv(worktree, venv)
 
