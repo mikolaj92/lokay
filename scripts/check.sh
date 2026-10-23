@@ -2920,5 +2920,85 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
         assert data["red_main"][name]["hours"] >= 3 and data["red_main"][name]["picks"] == (0 if expected else 1)
 print("red main exit checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack, redirect_stdout
+import io
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, graph, measure, plan, store, tick
+from lokay.effects import gh
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+tasks = [{"title": "A", "body": "First"}, {"title": "B", "body": "Second", "after": [0]}]
+assert plan.validate_tasks(tasks)[1]["after"] == [0]
+for after in ([1], [2], [99], [-1], ["0"], [True], None, 0):
+    try:
+        plan.validate_tasks([tasks[0], {**tasks[1], "after": after}])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(after)
+name = "owner/dependencies"
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(config, "HOME", root))
+    stack.enter_context(patch.object(gh, "gh_json", return_value=[]))
+    create = stack.enter_context(patch.object(gh, "gh_ok", side_effect=[
+        f"https://github.com/{name}/issues/11", f"https://github.com/{name}/issues/12"]))
+    store.state_update(name, 10, split_tasks=tasks, split_generation=3)
+    assert tick._split_issue({"repo": name, "issue": 10}, root)["children"] == [11, 12]
+    assert "Lokay after: #11" in create.call_args.args[0][-1]
+    assert store.state_read(name, 12)["blocked_by"] == [11]
+    for source in ("state", "body", "issue_body", "remote_body"):
+        for lane in ("issue", "pr", "due", "red_main"):
+            child = {"blocked_by": [11] if source == "state" else []}
+            if source in ("issue_body", "remote_body"):
+                child[source] = "Lokay after: #11"
+            if lane == "due":
+                child.update(node="check", retry_at=1, pr=22)
+            states = {11: {"result": "pending"}, 12: child}
+            repo = RepoSnapshot(name, prs=({"number": 22, "headRefName": "lokay/12"},) if lane == "pr" else (),
+                                issues=({"number": 12, "body": "Lokay after: #11" if source == "body" else ""},), states=states,
+                                status={"status": "red", "issue": 12} if lane == "red_main" else {})
+            snapshot = Snapshot((repo,), 10000, 12)
+            assert graph.pick(snapshot) is None, (source, lane)
+            states[11] = {"result": "merged"}
+            selected = graph.pick(snapshot)
+            assert selected is not None and selected.issue == 12, (source, lane, selected)
+    for result in ("closed", "failed", "empty_patch"):
+        states = {issue: store.state_read(name, issue) for issue in (10, 11, 12)}
+        states[11]["result"] = result
+        repo = RepoSnapshot(name, prs=(), issues=(), states=states)
+        assert graph.pick(Snapshot((repo,), 10000)) == Pick(name, 10, "replan")
+        assert graph.pick(Snapshot((RepoSnapshot(name, states={**states, 13: {}},
+                         status={"status": "red", "issue": 13}),), 10000)) == Pick(name, 13, "red_main")
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{
+        "name": name, "clone_path": str(root / "absent"), "merge": "off"}]))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+    stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    stack.enter_context(patch.object(gh, "children_done", return_value=False))
+    store.state_update(name, 11, _event={"action": "closed"})
+    selected = tick.pick({})
+    assert selected["issue"] == 10 and selected["node"] == "plan", selected
+    tick.release_lock(selected["held"])
+    parent = store.state_read(name, 10)
+    assert parent["split_generation"] == 4 and parent["awaiting"] is None
+    assert parent["children"] == [] and parent["split_tasks"] is None
+    assert measure.ledger(root)[-1]["reason"] == "replan"
+    stack.enter_context(patch.object(measure, "escapes", return_value=[]))
+    for blockers, expected in (({11: "pending"}, 1), ({11: "merged"}, 0), ({}, 0)):
+        with patch.object(measure, "ledger", return_value=[{"kind": "pick", "blocked_by": blockers}]), redirect_stdout(io.StringIO()) as output:
+            assert measure.main(["--json"]) == expected
+        assert json.loads(output.getvalue())["blocked_pick_errors"] == expected
+print("dependency checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

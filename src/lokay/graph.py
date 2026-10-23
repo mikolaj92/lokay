@@ -7,7 +7,7 @@ from lokay.scope import kind as change_kind
 from lokay.gates import gate_rows
 from lokay.types import (
     PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Reopened, Failed,
-    Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, Snapshot, Pick, pr_number,
+    Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, RepoSnapshot, Snapshot, Pick, pr_number,
 )
 
 
@@ -184,6 +184,16 @@ def _kind(row: dict, pr: bool = False) -> int:
     return int(change_kind(paths) == "docs")
 
 
+def blockers(repo: RepoSnapshot, issue: int) -> dict:
+    state = repo.states.get(issue, {})
+    body = "\n".join([state.get("issue_body") or "", state.get("remote_body") or "",
+                      *(row.get("body") or "" for row in repo.issues or () if row["number"] == issue)])
+    numbers = set(state.get("blocked_by") or [])
+    for line in re.findall(r"^Lokay after: (#[1-9]\d*(?:, #[1-9]\d*)*)\s*$", body or "", re.MULTILINE):
+        numbers.update(int(number) for number in re.findall(r"#(\d+)", line))
+    return {number: repo.states.get(number, {}).get("result") for number in sorted(numbers)}
+
+
 def pick(snapshot: Snapshot) -> Pick | None:
     from lokay.store import derive_waiting_on, last_activity
 
@@ -197,6 +207,8 @@ def pick(snapshot: Snapshot) -> Pick | None:
                                  and repo.main_sha is not None and repo.main_sha != state.get("empty_main_sha")
                                  else state for issue, state in repo.states.items()})
         for repo in snapshot.repos))
+    blocked = {(repo.name, issue) for repo in snapshot.repos for issue in repo.states
+               if any(result != "merged" for result in blockers(repo, issue).values())}
     repos = sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name))
     for repo in repos:
         if repo.busy:
@@ -205,7 +217,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         unhealthy = (repo.status.get("status") == "red"
                      or (repo.status.get("status") == "unknown"
                          and snapshot.now - repo.status.get("since", snapshot.now) >= 3600))
-        if (unhealthy and number
+        if (unhealthy and number and (repo.name, number) not in blocked
                 and not (repo.status.get("exhausted_sha")
                          and repo.status["exhausted_sha"] == repo.status.get("baseline", {}).get("sha"))):
             state = repo.states.get(number, {})
@@ -217,16 +229,26 @@ def pick(snapshot: Snapshot) -> Pick | None:
                 return Pick(repo.name, number, "red_main")
             for child in children:
                 child_state = repo.states.get(child, {})
-                if (child_state.get("waiting_on") != "children"
+                if ((repo.name, child) not in blocked and child_state.get("waiting_on") != "children"
                         and child_state.get("result") not in ("failed", "merged", "closed", "empty_patch")
                         and (snapshot.only_issue is None or snapshot.only_issue == child)):
                     return Pick(repo.name, child, "red_main")
+    for repo in repos:
+        if repo.busy:
+            continue
+        for parent, state in repo.states.items():
+            if (state.get("waiting_on") == "children"
+                    and (snapshot.only_issue is None or snapshot.only_issue == parent)
+                    and (repo.name, parent) not in blocked
+                    and any(result in ("closed", "failed", "empty_patch") for child in state.get("children", [])
+                            for result in blockers(repo, child).values())):
+                return Pick(repo.name, parent, "replan")
     due = []
     for repo in snapshot.repos:
         if repo.busy:
             continue
         for issue, state in repo.states.items():
-            if (state.get("result") in ("merged", "closed", "empty_patch")
+            if ((repo.name, issue) in blocked or state.get("result") in ("merged", "closed", "empty_patch")
                     or state.get("waiting_on") == "children"
                     or (snapshot.only_issue is not None and snapshot.only_issue != issue)):
                 continue
@@ -268,7 +290,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             if snapshot.only_issue is not None and snapshot.only_issue != issue:
                 continue
             state = repo.states[issue]
-            if state.get("result") in ("closed", "merged", "empty_patch"):
+            if (repo.name, issue) in blocked or state.get("result") in ("closed", "merged", "empty_patch"):
                 continue
             parked = state.get("result") == "parked"
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
@@ -287,7 +309,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             return Pick(repo.name, 0, "issues")
         for issue in sorted(repo.issues, key=lambda row: (_kind(row), row.get("createdAt") or "", row["number"])):
             number = issue["number"]
-            if (issue.get("state", "OPEN") == "OPEN"
+            if ((repo.name, number) not in blocked and issue.get("state", "OPEN") == "OPEN"
                     and (snapshot.only_issue is None or snapshot.only_issue == number)
                     and repo.states[number].get("result") not in ("merged", "closed", "empty_patch")
                     and (repo.states[number].get("result") == "parked"
