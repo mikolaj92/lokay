@@ -1028,6 +1028,102 @@ with patch.object(git, "git_try", side_effect=AssertionError("unexpected git")),
 print("dead test checks: green")
 PY
 uv run python - <<'PY'
+from collections import Counter
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, weakened_tests
+from lokay.gates import dead_tests, moved_test_candidates, moved_tests
+from lokay.lint import lint_diff, unit_test_hints
+
+path = "tests/test_fala_store.py"
+target = "tests/test_import.py"
+imports = "import builtins\nimport pytest\n"
+helper = ("def _block(monkeypatch):\n"
+          "    original = builtins.__import__\n"
+          "    monkeypatch.setattr(builtins, \"__import__\", original)\n")
+import_test = ("def test_import_ok(monkeypatch):\n"
+               "    # Given\n"
+               "    _block(monkeypatch)\n"
+               "    import pkg\n"
+               "    assert pkg.__name__ == 'pkg'\n")
+remaining = ("def test_requires(monkeypatch):\n"
+             "    from pkg.fala import FalaStore\n"
+             "    _block(monkeypatch)\n"
+             "    assert FalaStore()\n"
+             "def test_round_trip():\n"
+             "    from pkg import Store\n"
+             "    from pkg.fala import FalaStore\n"
+             "    assert isinstance(FalaStore(), Store)\n")
+base = {"src/pkg/__init__.py": "from pkg.protocols import Store\n",
+        "src/pkg/protocols.py": "from typing import Protocol\nclass Store(Protocol):\n    def save(self): ...\n",
+        "src/pkg/fala.py": "from pkg.protocols import Store\nclass FalaStore(Store): pass\nclass Backend: pass\n",
+        path: imports + helper + import_test + remaining}
+head = {name: source for name, source in base.items() if name != path}
+head["src/pkg/fala.py"] = "from pkg.protocols import Store\nclass Backend: pass\n"
+head[target] = imports + helper + import_test
+body = ("Remove FalaStore from pkg.fala and delete tests/test_fala_store.py; "
+        "move test_import_ok with _block to tests/test_import.py")
+
+def change(before, after):
+    old, new = before[path], after[target]
+    return (f"diff --git a/{path} b/{path}\ndeleted file mode 100644\n"
+            f"--- a/{path}\n+++ /dev/null\n@@ -1,{len(old.splitlines())} +0,0 @@\n"
+            + "".join("-" + line + "\n" for line in old.splitlines())
+            + f"diff --git a/{target} b/{target}\nnew file mode 100644\n"
+            f"--- /dev/null\n+++ b/{target}\n@@ -0,0 +1,{len(new.splitlines())} @@\n"
+            + "".join("+" + line + "\n" for line in new.splitlines())
+            + "diff --git a/src/pkg/fala.py b/src/pkg/fala.py\n"
+            "--- a/src/pkg/fala.py\n+++ b/src/pkg/fala.py\n@@ -1,3 +1,2 @@\n"
+            " from pkg.protocols import Store\n"
+            + "-" + before["src/pkg/fala.py"].splitlines()[1] + "\n"
+            " class Backend: pass\n")
+
+diff = change(base, head)
+moved = moved_tests(diff, base, head, base.get, head.get)
+assert moved_test_candidates(diff)
+assert moved["names"] == {path: frozenset({"_block", "test_import_ok"})}
+assert moved["added"] == {target: frozenset(range(1, len(head[target].splitlines()) + 1))}
+assert moved["removed"] == {path: Counter((helper + import_test).splitlines())}
+assert dead_tests(diff, body, base, head, base.get, head.get, moved=moved["names"]) == {path}
+assert unit_test_hints(diff, moved["added"]) == {}
+assert target in unit_test_hints(diff)
+with patch("lokay.lint.git_output", side_effect=lambda cwd, args: head[args[-1].split(":", 1)[1]]):
+    assert not any(target in error for error in lint_diff(diff, "head", Path.cwd(), False, neutral=moved["added"]))
+    errors = lint_diff(diff, "head", Path.cwd(), False)
+    assert any(target in error and "comment" in error for error in errors)
+    assert any(target in error and "unit test" in error for error in errors)
+x = CheckInput("owner/repo", 2245, "head", body, "", diff, [], {}, Path.cwd())
+with patch("lokay.checks._revisions", return_value=(base, head, base.get, head.get)):
+    assert weakened_tests(x).status == "pass"
+changed_head = {**head, target: head[target].replace("== 'pkg'", "!= 'other'")}
+changed_diff = change(base, changed_head)
+rejected = moved_tests(changed_diff, base, changed_head, base.get, changed_head.get)
+assert rejected == {"names": {}, "added": {}, "removed": {}}
+assert target in unit_test_hints(changed_diff, rejected["added"])
+assert not dead_tests(changed_diff, body, base, changed_head, base.get, changed_head.get, moved=rejected["names"])
+with patch("lokay.checks._revisions", return_value=(base, changed_head, base.get, changed_head.get)), patch(
+        "lokay.config.repo", return_value={}):
+    assert weakened_tests(replace(x, diff=changed_diff)).status == "fail"
+for before in (
+        {**base, path: base[path] + "    from pkg.fala import Backend\n"},
+        {**base, "src/pkg/fala.py": base["src/pkg/fala.py"].replace("FalaStore(Store)", "FalaStore")},
+        {**base, path: base[path] + "    x = _block\n"}):
+    negative = change(before, head)
+    moves = moved_tests(negative, before, head, before.get, head.get)
+    assert moves["names"] == moved["names"]
+    assert not dead_tests(negative, body, before, head, before.get, head.get, moved=moves["names"])
+docs = "docs/test_import.py"
+docs_head = {name: source for name, source in head.items() if name != target}
+docs_head[docs] = head[target]
+docs_diff = diff.replace(target, docs)
+docs_moves = moved_tests(docs_diff, base, docs_head, base.get, docs_head.get)
+assert docs_moves["names"] == {}
+assert docs in unit_test_hints(docs_diff, docs_moves["added"])
+print("moved test checks: green")
+PY
+uv run python - <<'PY'
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 

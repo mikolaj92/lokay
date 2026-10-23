@@ -2,11 +2,12 @@ import ast
 import os
 import re
 import shutil
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
-from lokay.gates import dead_test_candidates, dead_tests, named_test
+from lokay.gates import dead_test_candidates, dead_tests, moved_test_candidates, moved_tests, named_test
 from lokay.lint import diff_lines, lint_diff, unit_test_hints
 from lokay.scope import ASSERTION, is_artifact, is_test, kind as change_kind
 from lokay.types import CheckResult, Finding, parse_finding
@@ -100,6 +101,42 @@ def secrets(x: CheckInput) -> CheckResult:
                        "possible secret" if findings else "no secrets found", findings)
 
 
+def _revisions(x):
+    from lokay.effects.git import base_branch, git_try
+
+    try:
+        code, base, _ = git_try(x.worktree, "merge-base", x.sha, "origin/" + base_branch(x.worktree))
+        if code:
+            return None
+        base = base.strip()
+        code, base_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", base)
+        if code:
+            return None
+        code, head_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", x.sha)
+        if code:
+            return None
+
+        def source(revision, path):
+            try:
+                code, text, _ = git_try(x.worktree, "show", f"{revision}:{path}")
+                return None if code else text
+            except Exception:
+                return None
+
+        return (base_paths.splitlines(), head_paths.splitlines(),
+                lambda path: source(base, path), lambda path: source(x.sha, path))
+    except Exception:
+        return None
+
+
+def _moved(x):
+    if moved_test_candidates(x.diff):
+        revisions = _revisions(x)
+        if revisions is not None:
+            return moved_tests(x.diff, *revisions)
+    return {"names": {}, "added": {}, "removed": {}}
+
+
 def no_new_comments(x: CheckInput) -> CheckResult:
     ignored = {".md", ".rst", ".txt", ".json", ".lock"}
     markers = {
@@ -127,7 +164,8 @@ def no_new_comments(x: CheckInput) -> CheckResult:
                       for marker, extensions in markers.items())
         if comment:
             offenders.append((f"{path}:{number}", stripped))
-    errors = lint_diff(x.diff, x.sha, x.worktree, lokay_rules=x.repo.rsplit("/", 1)[-1] == "lokay")
+    errors = lint_diff(x.diff, x.sha, x.worktree, lokay_rules=x.repo.rsplit("/", 1)[-1] == "lokay",
+                       neutral=_moved(x)["added"])
     errors.extend(f"{location}: added comment -> remove it" for location, _ in offenders)
     if errors:
         findings = []
@@ -142,7 +180,7 @@ def no_new_comments(x: CheckInput) -> CheckResult:
 
 
 def no_unit_tests(x: CheckInput) -> CheckResult:
-    paths = unit_test_hints(x.diff)
+    paths = unit_test_hints(x.diff, neutral=_moved(x)["added"])
     if paths:
         first_added = {}
         for path, number, kind, _ in diff_lines(x.diff):
@@ -199,30 +237,21 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         lines = [text for _, _, kind, text in diff_lines("diff --git " + block) if kind in {"-", "+"}]
         if is_test(path, lines):
             changed.add(path)
+    moved = _moved(x)
+    for path in sorted(changed):
+        lines = [(number, kind, text) for p, number, kind, text in diff_lines(x.diff)
+                 if p == path and kind in {"+", "-"}]
+        if (lines and all(number in moved["added"].get(path, ()) for number, kind, _ in lines if kind == "+")
+                and Counter(text for _, kind, text in lines if kind == "-") <= moved["removed"].get(path, Counter())):
+            changed.remove(path)
     dead = frozenset()
-    if dead_test_candidates(x.diff):
-        from lokay.effects.git import base_branch, git_try
-
-        try:
-            code, base, _ = git_try(x.worktree, "merge-base", x.sha, "origin/" + base_branch(x.worktree))
-            if code:
-                raise ValueError("merge-base failed")
-            base = base.strip()
-            code, base_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", base)
-            if code:
-                raise ValueError("base tree failed")
-            code, head_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", x.sha)
-            if code:
-                raise ValueError("head tree failed")
-
-            def source(revision, path):
-                code, text, _ = git_try(x.worktree, "show", f"{revision}:{path}")
-                return None if code else text
-
-            dead = dead_tests(x.diff, x.issue_body, base_paths.splitlines(), head_paths.splitlines(),
-                              lambda path: source(base, path), lambda path: source(x.sha, path))
-        except Exception:
-            dead = frozenset()
+    if dead_test_candidates(x.diff, moved["names"]):
+        revisions = _revisions(x)
+        if revisions is not None:
+            try:
+                dead = dead_tests(x.diff, x.issue_body, *revisions, moved=moved["names"])
+            except Exception:
+                dead = frozenset()
     changed -= dead
     unapproved = sorted(path for path in changed if not named_test(path, x.issue_body))
     if unapproved:
@@ -233,28 +262,31 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         return CheckResult("weakened_tests", "pass", "no existing tests changed", ())
     config = repo_config(x.repo)
     if x.ci.get("result") != "green" or not config.get("test") or config.get("syntax_only"):
-        return _count_weakened_tests(x, dead)
+        return _count_weakened_tests(x, dead, moved)
     paths = sorted(changed)
     result = base_tests_on_head(x.worktree, x.sha, paths, config, x.issue)
     if result.get("result") == "green":
-        counted = _count_weakened_tests(x, dead)
+        counted = _count_weakened_tests(x, dead, moved)
         if counted.status == "fail":
             return counted
         return CheckResult("weakened_tests", "pass",
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
-    return _count_weakened_tests(x, dead)
+    return _count_weakened_tests(x, dead, moved)
 
 
-def _count_weakened_tests(x: CheckInput, dead=frozenset()) -> CheckResult:
+def _count_weakened_tests(x: CheckInput, dead=frozenset(), moved=None) -> CheckResult:
+    moved = moved or {"added": {}, "removed": {}}
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
-        if path not in dead and kind in {"-", "+"} and ASSERTION.match(text):
+        if (path not in dead and kind in {"-", "+"} and ASSERTION.match(text)
+                and not (kind == "+" and number in moved["added"].get(path, ()))):
             change = changes.setdefault(path, {"-": [], "+": []})
             change[kind].append((number, text))
     findings = []
     reasons = []
     for path, change in changes.items():
-        removed = len(change["-"]) - len(change["+"])
+        removed = len(change["-"]) - len(change["+"]) - sum(
+            count for text, count in moved["removed"].get(path, {}).items() if ASSERTION.match(text))
         if removed > 0 and is_test(path, [text for lines in change.values() for _, text in lines]):
             reason = f"Removes {removed} test assertions: {path}"
             line = max(1, change["-"][0][0])
