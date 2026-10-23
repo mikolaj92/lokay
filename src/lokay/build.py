@@ -7,7 +7,7 @@ from pathlib import Path
 
 from lokay import store
 
-from lokay.effects.git import base_branch, git_try, commit_paths, git, push
+from lokay.effects.git import base_branch, git_try, commit_paths, git, git_bytes, push
 from lokay.effects.gh import checks_table, pr_create
 from lokay.effects.tests import check_uv_lock
 from lokay.scope import CACHE_PATTERNS, is_artifact, is_cache
@@ -28,7 +28,7 @@ def exclude_caches(worktree: Path) -> None:
                           + "\n".join(missing) + "\n")
 
 
-def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
+def worktree_status(worktree: Path) -> dict[str, tuple[str, bytes]]:
     code, out, err = git_try(worktree, "status", "--porcelain", "-z", "--untracked-files=all", timeout=30)
     if code:
         raise RuntimeError((err or out).strip())
@@ -46,7 +46,7 @@ def worktree_status(worktree: Path) -> dict[str, tuple[str, str]]:
         content = (os.readlink(file).encode() if file.is_symlink() else
                    file.read_bytes() if file.is_file() else b"")
         result[name] = (hashlib.sha256(content).hexdigest(),
-                        git(worktree, "diff", "--cached", "--binary", "--", name))
+                        git_bytes(worktree, "diff", "--cached", "--binary", "--", name))
     return result
 
 

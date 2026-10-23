@@ -79,6 +79,55 @@ for outcome, kept in ((subprocess.TimeoutExpired("probe", 10), True),
         assert venv.is_dir() == kept, outcome
 print("venv repair checks: ok")
 PY
+uv run python - <<'PY'
+import os
+import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import build, h2, store
+from lokay.effects.git import worktree_patch
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    home = root / "home"
+    repo = root / "repo"
+    store.ensure_directory(home)
+    store.ensure_directory(repo)
+    with patch.dict(os.environ, {"HOME": str(home), "GIT_CONFIG_NOSYSTEM": "1"}):
+        def git(*args):
+            return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+        git("init")
+        git("config", "user.name", "patch checks")
+        git("config", "user.email", "patch-checks@example.invalid")
+        store.write_artifact(repo / "data.bin", b"a\n")
+        store.write_artifact(repo / "text.txt", "text\n")
+        git("add", ".")
+        git("commit", "-m", "patch checks")
+        data = b"\xe2\x28\xa1 byte\n" * 3
+        new = b"\xff\xfe\xe2\n"
+        store.write_artifact(repo / "data.bin", data)
+        store.write_artifact(repo / "new.bin", new)
+        exported = worktree_patch(repo)
+        assert isinstance(exported, bytes)
+        assert b"\xe2\x28\xa1 byte\n" in exported or b"GIT binary patch" in exported
+        run_dir = root / "run"
+        artifact = run_dir / "patch.diff"
+        store.write_artifact(artifact, exported)
+        displayed = h2.LokayAdapter.deliverable_text(None, run_dir)
+        assert isinstance(displayed, str) and "diff --git" in displayed
+        git("reset", "--hard")
+        git("clean", "-fd")
+        git("apply", str(artifact))
+        assert (repo / "data.bin").read_bytes() == data
+        assert (repo / "new.bin").read_bytes() == new
+        git("add", "data.bin", "new.bin")
+        status = build.worktree_status(repo)
+        assert set(status) == {"data.bin", "new.bin"}, status
+        assert all(isinstance(value[1], bytes) and value[1] for value in status.values()), status
+print("patch bytes checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay.review import verdict
 from lokay.types import CheckResult
@@ -2325,11 +2374,10 @@ for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhaust
         def git(path, *args, **kwargs):
             if args[0] == "rev-list":
                 return "merge parent other"
-            if args[0] == "diff":
-                return "revert patch"
             assert args == ("revert", "--no-commit", "-m", "1", "merge"), args
             return ""
         commands = stack.enter_context(patch.object(tick, "git", side_effect=git))
+        patch_bytes = stack.enter_context(patch.object(tick, "git_bytes", return_value=b"revert patch\xe2\x28\xa1\n"))
         stack.enter_context(patch.object(tick, "git_head", return_value="revert-sha"))
         commit = stack.enter_context(patch.object(build, "tidy_and_commit"))
         stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
@@ -2344,7 +2392,8 @@ for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhaust
             assert saved["h2_committed"] == "revert-sha" and saved["node"] == "check", saved
             assert saved["h2_summary"] == "Revert culprit PR #42", saved
             commit.assert_called_once_with(root, "Revert culprit PR #42")
-            assert artifact.read_text() == "revert patch"
+            assert artifact.read_bytes() == b"revert patch\xe2\x28\xa1\n"
+            patch_bytes.assert_called_once_with(root, "diff", "--binary", "HEAD")
             assert [call.kwargs.get("revision") for call in guard.call_args_list] == [None, "merge", "merge^1"]
         elif scenario == "exhausted":
             assert result["result"] == "closed" and saved["recovery_exhausted"], (result, saved)
