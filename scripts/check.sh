@@ -633,6 +633,90 @@ for changed, stalled in ((False, False), (True, False), (False, True)):
                 rounds.assert_any_call(picked["repo"], picked["issue"], "Fix: no changes: Bez zmian")
 print("fix no change checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from copy import deepcopy
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, graph, review, tick
+from lokay.types import Run, dismissed_key, parse_event
+
+picked = {"repo": "owner/repo", "issue": 1}
+sha = "checked-head"
+findings = [{"pytanie": kind, "plik": "src/x.py", "linia_od": 1, "linia_do": 1,
+             "zmiana": "already resolved"} for kind in ("correctness", "scope")]
+for choice, checks, failure, eligible in (
+    ("false", "green", False, True), ("true", "green", False, True),
+    ("false", "red", False, False), ("false", "green", True, False),
+    ("false", "remote-red", False, False), ("false", "rechecked", False, False),
+    ("false", "stale", False, False),
+):
+    rows = findings + ([{"warstwa": "tests", "plik": "src/x.py", "log": "failure"}] if failure else [])
+    verdict = {"result": "fix", "sha": sha, "uwagi": rows}
+    saved = {"node": "fix", "sha": sha, "issue_title": "Repair", "issue_body": "Repair x",
+             "local_ci": {"sha": "old" if checks == "stale" else sha,
+                          "result": "red" if checks == "red" else "green", "failed": [],
+                          "ci": "red" if checks == "remote-red" else "no_ci"},
+             "check_history": [{"sha": sha, "dispute": {}}],
+             "dispute_rechecks": [sha] if checks == "rechecked" else []}
+
+    def update(repo, issue, **fields):
+        event = fields.pop("_event", None)
+        if event:
+            saved.update(graph.step(Run.from_state(saved), parse_event({"ts": 0, **event, "fields": fields})).state)
+        saved.update(fields)
+
+    with TemporaryDirectory() as directory, ExitStack() as stack:
+        worktree = Path(directory)
+        patch_file = worktree / "fix.patch"
+        patch_file.write_text("")
+        stack.enter_context(patch.object(finish, "state_read", side_effect=lambda *args: deepcopy(saved)))
+        stack.enter_context(patch.object(finish, "state_update", side_effect=update))
+        rounds = stack.enter_context(patch.object(finish, "rounds_append"))
+        stack.enter_context(patch.object(tick, "escalate", return_value=None))
+        stack.enter_context(patch.object(tick, "fix_step", side_effect=lambda picked, node, action, sha: action()))
+        stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, action, *args: action()))
+        prompt = stack.enter_context(patch.object(tick, "replan_prompt", return_value="revise plan"))
+        refresh = stack.enter_context(patch.object(tick, "refresh_body", return_value={"result": "updated"}))
+        stack.enter_context(patch("lokay.h2.run_issue", return_value={
+            "result": "done", "patch": str(patch_file),
+            "summary": "No changes\n## Dispute\nAlready resolved.\n## Other\nNot justification."}))
+        decide = stack.enter_context(patch("lokay.effects.decide.decide", side_effect=lambda request: {
+            "valid": {"choice": choice, "probabilities": {"true": float(choice == "true"),
+                                                        "false": float(choice == "false")}}}))
+        git = stack.enter_context(patch("lokay.effects.git.git", side_effect=AssertionError("unexpected git")))
+        stack.enter_context(patch("lokay.effects.git.git_try", side_effect=AssertionError("unexpected git")))
+        stack.enter_context(patch.object(tick, "gh_json", side_effect=AssertionError("unexpected gh")))
+        result = finish.fix(picked, worktree, "lokay/1", sha, verdict, "diff", sha,
+                            "diff-hash", {}, worktree, "main", lambda: "diff", lambda: None)
+        assert decide.call_count == (2 if eligible else 0), decide.call_args_list
+        if eligible:
+            assert all(call.args[0]["state"]["justification"] == "Already resolved."
+                       for call in decide.call_args_list)
+            assert set(saved["check_history"][-1]["dispute"]) == {"correctness", "scope"}
+        if eligible and choice == "false":
+            keys = [dismissed_key(row) for row in findings]
+            assert saved["dispute_dismissed"] == {"sha": sha, "keys": keys}, saved
+            assert saved["check_notes"] == findings, saved
+            assert saved["dispute_rechecks"] == [sha] and saved["node"] == "check", saved
+            assert saved["verdict"] is None and saved["local_ci"] is None and saved["fix_reason"] is None
+            assert result == ("return", {"result": "check", "sha": sha}), result
+            prompt.assert_not_called()
+            refresh.assert_called_once()
+            decisions = [{"sha": sha, "next": "issue", "uwagi": findings}]
+            assert review.verdict(sha, {"sha": sha, "result": "green"}, decisions, ())["result"] == "fix"
+            assert review.verdict(sha, {"sha": sha, "result": "green"}, decisions, (),
+                                  dismissed_keys=keys)["result"] == "merge"
+        else:
+            assert saved["node"] == "plan" and saved["plan_prompt"].startswith("revise plan"), saved
+            assert "dispute_dismissed" not in saved, saved
+            prompt.assert_called_once()
+            refresh.assert_not_called()
+            assert result == ("continue", (sha, "plan", verdict)), result
+print("dispute exit checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay import graph
 from lokay.finish import removed_assertions
