@@ -167,6 +167,7 @@ class RepoSnapshot:
     states: dict[int, dict] = field(default_factory=dict)
     open_prs: frozenset[int] = frozenset()
     busy: bool = False
+    main_sha: str | None = None
 
 
 @dataclass(frozen=True)

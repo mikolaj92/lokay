@@ -76,7 +76,12 @@ def step(run: Run, event: Event) -> Run:
         case Planned():
             fields.update(node="plan", **deepcopy(PLAN_RESET))
         case Built():
-            if outcome.get("result") == "failed":
+            if outcome.get("no_changes"):
+                fields.update(node="build", result="empty_patch" if current.get("empty_main_sha") == outcome["main_sha"] else "parked",
+                              empty_main_sha=outcome["main_sha"], reason="empty patch", retry_at=0,
+                              h2_patch=None, h2_start=None, h2_context=None, h2_committed=None,
+                              h2_published=False)
+            elif outcome.get("result") == "failed":
                 fields.update(node="plan", **deepcopy(PLAN_RESET),
                               result="failed", reason=outcome.get("reason") or "build failed",
                               failures=current.get("failures", 0) + 1, retry_at=0)
@@ -181,6 +186,12 @@ def pick(snapshot: Snapshot) -> Pick | None:
         replace(repo, states={issue: {**state, "waiting_on": derive_waiting_on(state, snapshot.now)}
                               for issue, state in repo.states.items()})
         for repo in snapshot.repos))
+    snapshot = replace(snapshot, repos=tuple(
+        replace(repo, states={issue: {**state, "result": "parked"}
+                                 if state.get("result") == "empty_patch"
+                                 and repo.main_sha is not None and repo.main_sha != state.get("empty_main_sha")
+                                 else state for issue, state in repo.states.items()})
+        for repo in snapshot.repos))
     repos = sorted(snapshot.repos, key=lambda row: (row.last_attempt, row.name))
     for repo in repos:
         if repo.busy:
@@ -197,7 +208,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             for child in children:
                 child_state = repo.states.get(child, {})
                 if (child_state.get("waiting_on") != "children"
-                        and child_state.get("result") not in ("failed", "merged", "closed")
+                        and child_state.get("result") not in ("failed", "merged", "closed", "empty_patch")
                         and (snapshot.only_issue is None or snapshot.only_issue == child)):
                     return Pick(repo.name, child, "red_main")
     due = []
@@ -205,7 +216,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
         if repo.busy:
             continue
         for issue, state in repo.states.items():
-            if (state.get("result") in ("merged", "closed")
+            if (state.get("result") in ("merged", "closed", "empty_patch")
                     or state.get("waiting_on") == "children"
                     or (snapshot.only_issue is not None and snapshot.only_issue != issue)):
                 continue
@@ -247,7 +258,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             if snapshot.only_issue is not None and snapshot.only_issue != issue:
                 continue
             state = repo.states[issue]
-            if state.get("result") in ("closed", "merged"):
+            if state.get("result") in ("closed", "merged", "empty_patch"):
                 continue
             parked = state.get("result") == "parked"
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
@@ -268,7 +279,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             number = issue["number"]
             if (issue.get("state", "OPEN") == "OPEN"
                     and (snapshot.only_issue is None or snapshot.only_issue == number)
-                    and repo.states[number].get("result") not in ("merged", "closed")
+                    and repo.states[number].get("result") not in ("merged", "closed", "empty_patch")
                     and (repo.states[number].get("result") == "parked"
                          or repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready")
                     and number not in repo.open_prs):
