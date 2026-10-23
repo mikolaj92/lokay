@@ -152,7 +152,7 @@ def ledger(home: Path) -> list[dict]:
     return list(json_rows([home / "ledger.jsonl"]))
 
 
-def record_merge(repo, issue, pr, sha, files):
+def record_merge(repo, issue, pr, sha, files, main=None):
     picked = None
     for row in ledger(store.RUNS.parent):
         if (row.get("repo"), row.get("issue")) == (repo, issue):
@@ -171,6 +171,8 @@ def record_merge(repo, issue, pr, sha, files):
     store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": pr, "sha": sha,
                          "picked_at": picked, "attempt": state.get("last_attempt"), "pi_ms": pi_ms,
                          "fix_rounds": state.get("check_rounds"),
+                         "main": {"status": main["status"], "executed": main["baseline"]["ci"].get("executed", 0),
+                                  "lock": main["baseline"]["lockfile"]["status"]} if isinstance(main, dict) else None,
                          "change_kind": kind([{"path": path} if isinstance(path, str) else path for path in files]) if files else None})
 
 
@@ -230,6 +232,23 @@ def report(home):
         days[day] = days.get(day, 0) + 1
         change = row.get("change_kind") or "unknown"
         counts[change] = counts.get(change, 0) + 1
+    readiness, regressions = {}, []
+    recorded = 0
+    for row in rows:
+        main = row.get("main")
+        if main is None:
+            continue
+        recorded += 1
+        previous = readiness.get(row["repo"])
+        if previous is not None:
+            why = ([f"status green->{main['status']}"] if previous["status"] == "green" and main["status"] in ("red", "unknown") else [])
+            if main["executed"] < previous["executed"]:
+                why.append(f"executed {previous['executed']}->{main['executed']}")
+            if previous["lock"] == "pass" and main["lock"] == "fail":
+                why.append("lock pass->fail")
+            if why:
+                regressions.append({key: row.get(key) for key in ("repo", "issue", "pr", "sha")} | {"why": why})
+        readiness[row["repo"]] = main
     durations = sorted((utc(row["ts"]) - utc(row["picked_at"])).total_seconds() / 60
                        for row in rows if timestamp(row.get("picked_at")) and timestamp(row.get("ts")))
     def mean(field, divisor=1):
@@ -242,6 +261,7 @@ def report(home):
             "pi_minutes_per_merge": mean("pi_ms", 60000),
             "pick_to_merge_p50_minutes": durations[math.ceil(len(durations) * .5) - 1] if durations else None,
             "pick_to_merge_p90_minutes": durations[math.ceil(len(durations) * .9) - 1] if durations else None,
+            "readiness": readiness, "readiness_regressions": regressions, "readiness_recorded": f"{recorded}/{len(rows)}",
             "escape_rate_48h": f"{len(escapes(home))}/{len(matured(home))}"}
 
 

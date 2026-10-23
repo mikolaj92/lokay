@@ -515,7 +515,8 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     gh_merge = stack.enter_context(patch.object(merge, "gh_merge", return_value={
         "result": "merged", "merge_sha": "merged-S"}))
     files = stack.enter_context(patch.object(merge, "pr_files", return_value=["file.py"]))
-    stack.enter_context(patch.object(merge, "check_main", return_value={}))
+    stack.enter_context(patch.object(merge, "check_main", return_value={
+        "status": "green", "baseline": {"ci": {"executed": 3}, "lockfile": {"status": "pass"}}}))
     stack.enter_context(patch.object(merge, "worktree_remove", return_value={"result": "removed"}))
     stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
     stack.enter_context(patch("lokay.review.recompute_verdict", side_effect=lambda sha, state: state["verdict"]))
@@ -2693,11 +2694,13 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch("lokay.review.recompute_verdict", return_value={"result": "merge", "sha": "S"}))
     stack.enter_context(patch.object(merge, "pr_files", return_value=["src/app.py"]))
     stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
-    stack.enter_context(patch.object(merge, "check_main"))
+    stack.enter_context(patch.object(merge, "check_main", return_value={
+        "status": "green", "baseline": {"ci": {"executed": 3}, "lockfile": {"status": "pass"}}}))
     outcome = merge.merge_sha("o/r", 5, "S", None, None, "o", 1,
                               {"plan_rounds": 1, "check_rounds": 2}, clone_path=home)
     assert outcome["result"] == "merged", outcome
     merged = measure.ledger(home)[-1]
+    assert merged["main"] == {"status": "green", "executed": 3, "lock": "pass"}, merged
     assert (merged["kind"], merged["sha"], merged["pr"], merged["fix_rounds"], merged["pi_ms"],
             merged["picked_at"], merged["change_kind"]) == ("merged", "M", 5, 2, 3000, pick["ts"], "code"), merged
     old = datetime.now(timezone.utc) - timedelta(hours=49)
@@ -2734,6 +2737,65 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
                 for issue in (1, 2, 3)]
     assert ("escape", "logic bug") in retro.proposals(home / "ticks", escapes=evidence)
 print("ledger and measure checks: green")
+PY
+uv run python - <<'PY'
+import io
+import os
+from contextlib import ExitStack, redirect_stdout
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, measure, merge, store
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_STATE_DIR": directory}))
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(config, "HOME", home))
+    stack.enter_context(patch.object(merge, "merge_allowed", return_value=True))
+    stack.enter_context(patch("lokay.review.recompute_verdict", return_value={"result": "merge", "sha": "S"}))
+    stack.enter_context(patch.object(merge, "pr_files", return_value=["src/app.py"]))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(merge, "gh_merge", return_value={"result": "merged", "merge_sha": "M"}))
+    stack.enter_context(patch.object(measure, "escapes", return_value=[]))
+    stack.enter_context(patch.object(measure, "gh_json", side_effect=AssertionError("unexpected network")))
+    with patch.object(merge, "check_main", return_value={
+            "status": "red", "baseline": {"ci": {"executed": 80}, "lockfile": {"status": "fail"}}}):
+        assert merge.merge_sha("o/r", 5, "S", None, None, "o", 1, {}, clone_path=home)["result"] == "merged"
+    merged = measure.ledger(home)[-1]
+    assert merged["main"] == {"status": "red", "executed": 80, "lock": "fail"}, merged
+    failure = RuntimeError("readiness unavailable")
+    with patch.object(merge, "check_main", side_effect=failure):
+        try:
+            merge.merge_sha("o/r", 6, "S", None, None, "o", 2, {}, clone_path=home)
+        except RuntimeError as exc:
+            assert exc is failure
+        else:
+            raise AssertionError("readiness exception did not propagate")
+    failed = measure.ledger(home)[-1]
+    assert failed["kind"] == "merged" and failed["issue"] == 2 and failed["main"] is None, failed
+    store.write_text_atomic(home / "ledger.jsonl", "")
+    for repo, issue, main in (
+            ("o/r", 1, {"status": "green", "executed": 120, "lock": "pass"}),
+            ("o/s", 3, {"status": "green", "executed": 10, "lock": "pass"}),
+            ("o/r", 2, None),
+            ("o/r", 4, merged["main"]),
+            ("o/s", 5, {"status": "green", "executed": 12, "lock": "pass"})):
+        store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": issue + 10,
+                             "sha": str(issue), "main": main})
+    report = measure.report(home)
+    assert report["readiness_regressions"] == [{"repo": "o/r", "issue": 4, "pr": 14, "sha": "4",
+        "why": ["status green->red", "executed 120->80", "lock pass->fail"]}], report
+    assert report["readiness"]["o/r"]["status"] == "red", report
+    assert report["readiness"]["o/s"] == {"status": "green", "executed": 12, "lock": "pass"}, report
+    assert report["readiness_recorded"] == "4/5", report
+    output = io.StringIO()
+    with redirect_stdout(output):
+        assert measure.main([]) == 0
+    assert "readiness_regressions" in output.getvalue(), output.getvalue()
+print("readiness checks: green")
 PY
 uv run python - <<'PY'
 import ast
