@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from uuid import uuid4
+from tempfile import TemporaryDirectory
 from subprocess import CompletedProcess, TimeoutExpired
 from typing import Any
 from pathlib import Path
@@ -575,9 +576,9 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
     return retry(push_once, attempts, transient, delay=lambda attempt: 0.2 * (attempt + 1))
 
 
-def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
-    def checked(args: list[str]) -> str:
-        code, out, err = git_try(repo, "--literal-pathspecs", *args)
+def commit_paths(repo: Path, paths: list[str], message: str, removed: set[str] | None = None) -> list[str]:
+    def checked(args: list[str], env: dict[str, str] | None = None) -> str:
+        code, out, err = git_try(repo, "--literal-pathspecs", *args, env=env)
         if code:
             raise RuntimeError((err or out).strip())
         return out
@@ -586,11 +587,21 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     if not paths:
         return []
     indexed = set(filter(None, checked(["ls-files", "-z", "--", *paths]).split("\0")))
-    add_paths = [path for path in paths if path in indexed or (repo / path).exists() or (repo / path).is_symlink()]
+    removed = set(paths) & (removed or set())
+    add_paths = [path for path in paths if path not in removed
+                 and (path in indexed or (repo / path).exists() or (repo / path).is_symlink())]
     if add_paths:
         checked(["add", "--", *add_paths])
     staged = set(filter(None, checked(["diff", "--cached", "--name-only", "-z"]).split("\0")))
     committed = sorted(set(paths) & staged)
-    if committed:
+    if committed and removed:
+        with TemporaryDirectory() as directory:
+            env = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
+            checked(["read-tree", "HEAD"], env)
+            if add_paths:
+                checked(["add", "--", *add_paths], env)
+            checked(["update-index", "--force-remove", "--", *sorted(removed)], env)
+            checked(["commit", "-m", message], env)
+    elif committed:
         checked(["commit", "--only", "-m", message, "--", *committed])
     return committed

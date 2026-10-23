@@ -225,6 +225,46 @@ with TemporaryDirectory() as directory:
     assert "config/.pixi-version" in tree
 print("worktree junk checks: green")
 PY
+uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import build, store
+from lokay.effects.git import git
+
+with TemporaryDirectory() as directory:
+    repo = Path(directory)
+    git(repo, "init", "-b", "main")
+    git(repo, "config", "user.name", "junk checks")
+    git(repo, "config", "user.email", "checks@example.invalid")
+    store.write_artifact(repo / ".gitignore", ".pixi/\n")
+    git(repo, "add", ".gitignore")
+    git(repo, "commit", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "checkout", "-b", "checks")
+    junk = {".check-local/old.txt": b"old\n",
+            ".local-checks/ember-source/README.md": b"source\n",
+            ".local-checks/env/CACHEDIR.TAG": b"cache\n",
+            ".local-checks/env/data.bin": b"\x00\xff\n",
+            "tagged/CACHEDIR.TAG": b"cache\n", "tagged/blob": b"blob\n",
+            ".pixi/envs/default/bin/python": b"python\n"}
+    for name, content in junk.items():
+        store.write_artifact(repo / name, content)
+    store.write_artifact(repo / "src/new.py", "new\n")
+    git(repo, "add", "-f", "--", *junk, "src/new.py")
+    git(repo, "commit", "-m", "branch leftovers")
+    previous = git(repo, "rev-parse", "HEAD")
+    build.tidy_and_commit(repo, "Fix #55")
+    assert git(repo, "rev-parse", "HEAD^") == previous
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+    index = set(git(repo, "ls-files").splitlines())
+    for name, content in junk.items():
+        assert (repo / name).read_bytes() == content, name
+        assert name not in tree, name
+        assert name not in index, name
+    assert "src/new.py" in tree
+print("junk keeps disk checks: green")
+PY
 .venv/bin/python - <<'PY'
 from lokay.review import verdict
 from lokay.types import CheckResult

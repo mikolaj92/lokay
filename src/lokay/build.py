@@ -118,7 +118,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None,
             raise RuntimeError((err or out).strip())
         cache_paths.update(filter(None, out.split("\0")))
     if cache_paths:
-        git(worktree, "--literal-pathspecs", "rm", "-r", "-f", "--ignore-unmatch", "--", *sorted(cache_paths))
+        git(worktree, "--literal-pathspecs", "rm", "-r", "--cached", "-f", "--ignore-unmatch", "--", *sorted(cache_paths))
     artifacts = {path for path in modified if is_artifact(path, worktree)
                  and (path not in tracked or is_cache(path) or path.startswith("tmp/"))}
     junk = sorted(set(junk) | artifacts)
@@ -135,7 +135,8 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None,
     directories = set()
     for name in sorted(untracked):
         path = Path(name)
-        if not is_artifact(name, worktree):
+        if (name in cache_paths or any(item.startswith(path.as_posix().rstrip("/") + "/") for item in cache_paths)
+                or not is_artifact(name, worktree)):
             continue
         file = worktree / path
         if file.is_symlink() or file.is_file():
@@ -169,7 +170,8 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None,
                      and not (worktree / path).is_symlink()))
              and (path in tracked or path in index_paths or (worktree / path).exists()
                   or (worktree / path).is_symlink())]
-    committed = commit_paths(worktree, stage, message)
+    committed = (commit_paths(worktree, stage, message, removed=cache_paths) if cache_paths
+                 else commit_paths(worktree, stage, message))
     return committed, junk
 
 
