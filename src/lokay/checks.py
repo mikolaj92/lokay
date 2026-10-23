@@ -364,6 +364,38 @@ def docs(x: CheckInput) -> CheckResult:
     return CheckResult("docs", "pass", "no documentation expansion", ())
 
 
+def wrong_scope(x: CheckInput) -> CheckResult:
+    changes = {}
+    for path, number, kind, text in diff_lines(x.diff):
+        if change_kind([path]) != "docs" or kind not in {"-", "+"} or not text.strip():
+            continue
+        change = changes.setdefault(path, {"-": [], "+": Counter()})
+        if kind == "-":
+            change["-"].append((number, text.strip()))
+        else:
+            change["+"][text.strip()] += 1
+    findings = []
+    for path, change in changes.items():
+        added = change["+"]
+        for number, text in change["-"]:
+            if added[text]:
+                added[text] -= 1
+                continue
+            findings.append(Finding(path, max(1, number), max(1, number),
+                                    "restore removed guidance or establish an explicit issue request, "
+                                    "necessary repair, or equivalent replacement; a path mention or "
+                                    "plan alone does not establish authorization",
+                                    "wrong_scope"))
+            break
+    limit = "documentation removals only; runtime authorization and semantic equivalence are not assessed"
+    if findings:
+        return CheckResult("wrong_scope", "unknown",
+                           "unresolved relevance of removed documentation: "
+                           + ", ".join(item.plik for item in findings) + "; " + limit, tuple(findings))
+    return CheckResult("wrong_scope", "pass",
+                       "no unmatched nonblank documentation removals; " + limit, ())
+
+
 def lockfile(x: CheckInput) -> CheckResult:
     from lokay.build import LOCKFILES
     from lokay.effects.tests import check_uv_lock
@@ -438,7 +470,7 @@ def junk(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
+          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs, wrong_scope]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
