@@ -596,8 +596,7 @@ for merged in (False, True):
     picked = graph.pick(snapshot)
     assert picked is not None, (merged, picked)
     if merged:
-        assert picked.kind != "red_main", picked
-        assert (picked.repo, picked.issue) == ("owner/B", 8), picked
+        assert picked == graph.Pick("owner/A", 7, "red_main"), picked
     else:
         assert (picked.repo, picked.issue, picked.kind) == ("owner/A", 12, "red_main"), picked
 print("red main children checks: green")
@@ -2832,6 +2831,94 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     assert tick.pick({})['result'] == 'idle'
     remote.assert_not_called()
 print('empty patch state checks: green')
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack, redirect_stdout
+from datetime import datetime, timedelta, timezone
+import io
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, graph, main_guard, measure, store, tick
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+name = "mikolaj92/Temida"
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    baseline = {"sha": "B", "argv": [], "guard_version": main_guard.GUARD_VERSION,
+                "ci": {"result": "red", "tested": True, "log": "red"},
+                "lockfile": {"status": "pass", "findings": [], "reason": "ok"}}
+    status = {"status": "red", "issue": 7423, "baseline": baseline, "since": 1}
+    stack.enter_context(patch.object(main_guard, "git", side_effect=lambda path, *args, **kw: "B" if args[0] == "rev-parse" else ""))
+    stack.enter_context(patch.object(main_guard, "guard_issue", return_value=7423))
+    updates = stack.enter_context(patch.object(store, "state_update", wraps=store.state_update))
+    for terminal in ("merged", "closed", "failed", "empty_patch"):
+        for sha, recovery, reset in (("A", None, True), ("B", None, False), ("A", "B", False)):
+            store.save_main_status(name, status)
+            store.write_json(store.run_dir(name, 7423) / "state.json", {"repo": name, "issue": 7423, "result": terminal, "node": "plan",
+                                    "sha": sha, "recovery_sha": recovery, "children": [1],
+                                    "split_tasks": ["old"], "recovery_exhausted": True,
+                                    "h2_context": "old", "difficulty": "hard"})
+            updates.reset_mock()
+            main_guard.check_main(name, root, base="main", config={})
+            saved = store.state_read(name, 7423)
+            assert (saved["result"] == "check") == reset, saved
+            if reset:
+                assert saved["node"] == "plan" and saved["children"] == [] and not saved["recovery_exhausted"]
+                assert all(saved[key] is None for key in ("split_tasks", "recovery_sha", "h2_context", "difficulty"))
+                assert saved["issue_body"].startswith("Main red.")
+                snapshot = Snapshot((RepoSnapshot(name, status=store.main_status()[name], states={7423: saved}),), 10000)
+                assert graph.pick(snapshot) == Pick(name, 7423, "red_main")
+            main_guard.check_main(name, root, base="main", config={})
+            events = [call.kwargs.get("_event", {}).get("action") for call in updates.call_args_list]
+            assert events == (["reopened"] if reset else []), events
+
+    name = "mikolaj92/Fala"
+    store.state_update(name, 307, awaiting="children", children=[309, 310], result="pending", split_generation=4,
+                       _event={"action": "enter_node", "outcome": {"node": "build"}})
+    store.state_update(name, 309, _event={"action": "closed"})
+    store.state_update(name, 310, result="failed")
+    status = {"status": "red", "issue": 307, "checked_at": tick.time.time(), "since": tick.time.time()}
+    store.save_main_status(name, status)
+    def snapshot():
+        return Snapshot((RepoSnapshot(name, status=status, states={issue: store.state_read(name, issue)
+                                                                 for issue in (307, 309, 310)}),), tick.time.time())
+    assert graph.pick(snapshot()) == Pick(name, 307, "red_main")
+    store.state_update(name, 310, result="running")
+    assert graph.pick(snapshot()) == Pick(name, 310, "red_main")
+    store.state_update(name, 310, result="failed")
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{"name": name, "clone_path": str(root / "absent"), "merge": "on"}]))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+    stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    picked = tick.pick({"LOKAY2_REPO": name})
+    assert picked["result"] == "picked" and picked["issue"] == 307 and picked["node"] == "plan", picked
+    tick.release_lock(picked["held"])
+    saved = store.state_read(name, 307)
+    assert saved["node"] == "plan" and saved["split_generation"] == 5 and saved["children"] == []
+    assert saved["awaiting"] is None and saved["waiting_on"] != "children"
+
+    stack.enter_context(patch.object(config, "HOME", root))
+    stack.enter_context(patch.object(measure, "escapes", return_value=[]))
+    since = datetime.now(timezone.utc) - timedelta(hours=3)
+    store.save_main_status("mikolaj92/Temida", {"status": "green"})
+    store.save_main_status(name, {"status": "red", "since": since.timestamp()})
+    stack.enter_context(patch.object(measure, "ledger", return_value=[]))
+    for rows, expected in (([], 1), ([{"kind": "pick", "reason": "issue", "repo": name, "ts": since.isoformat()}], 1),
+                           ([{"kind": "pick", "reason": "red_main", "repo": name,
+                              "ts": (since - timedelta(seconds=1)).isoformat()}], 1),
+                           ([{"kind": "pick", "reason": "red_main", "repo": name, "ts": since.isoformat()}], 0)):
+        with patch.object(measure, "ledger", return_value=rows), redirect_stdout(io.StringIO()) as output:
+            assert measure.main(["--json"]) == expected
+        data = json.loads(output.getvalue())
+        assert data["red_main_errors"] == ([name] if expected else [])
+        assert data["red_main"][name]["hours"] >= 3 and data["red_main"][name]["picks"] == (0 if expected else 1)
+print("red main exit checks: green")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
