@@ -140,8 +140,9 @@ def create_child_issue(repo: str, parent: int, index: int, task: dict, generatio
     for row in rows:
         if marker in (row.get("body") or "").splitlines():
             return int(row["number"])
+    after = "\nLokay after: " + ", ".join(f"#{number}" for number in task["blocked_by"]) if task.get("blocked_by") else ""
     out = gh_ok(["issue", "create", "--repo", repo, "--title", task["title"],
-                 "--body", marker + "\n\n" + task["body"]], error="child issue create failed")
+                 "--body", marker + "\n\n" + task["body"] + after], error="child issue create failed")
     match = re.search(r"https://github\.com/" + re.escape(repo) + r"/issues/(\d+)\s*$", out)
     if not match:
         raise RuntimeError("child issue URL missing")
@@ -178,8 +179,6 @@ def open_issues(repo: str) -> list[dict]:
         error="issue list failed", default="[]",
     )
     rows = [row for row in rows if not host_ops(row.get("body"))]
-    for row in rows:
-        row.pop("body", None)
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
 
 

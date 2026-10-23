@@ -235,7 +235,8 @@ def report(home):
     def mean(field, divisor=1):
         values = [row[field] / divisor for row in rows if isinstance(row.get(field), (int, float))]
         return sum(values) / len(values) if values else None
-    return {"red_main": red_main,
+    return {"blocked_pick_errors": sum(row.get("kind") == "pick" and any(result != "merged" for result in row.get("blocked_by", {}).values()) for row in entries),
+            "red_main": red_main,
             "red_main_errors": [repo for repo, row in red_main.items() if row["hours"] > 2 and not row["picks"]],
             "merges_per_day": days, "change_counts": counts, "mean_fix_rounds": mean("fix_rounds"),
             "pi_minutes_per_merge": mean("pi_ms", 60000),
@@ -258,7 +259,7 @@ def main(argv: list[str]) -> int:
         if not args.baseline:
             data = report(config.HOME)
             print(json.dumps(data) if args.json else "measure " + " | ".join(f"{key}={value}" for key, value in data.items()))
-            return 1 if data["red_main_errors"] else 0
+            return 1 if data["red_main_errors"] or data["blocked_pick_errors"] else 0
         start_a, start_b = boundary(args.baseline), boundary(args.since)
         end_a = boundary(args.baseline_until) if args.baseline_until else start_b
         end_b = boundary(args.until) if args.until else datetime.now(timezone.utc)

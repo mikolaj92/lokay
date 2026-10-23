@@ -321,7 +321,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if active:
             owner, repo_name = name.split("/", 1)
             fields = [f"issue_{int(issue)}: issueOrPullRequest(number: {int(issue)}) "
-                      "{ ... on Issue { state } ... on PullRequest { state } }" for issue in active]
+                      "{ ... on Issue { state body } ... on PullRequest { state body } }" for issue in active]
             fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state mergeCommit {{ oid }} }}"
                           for number in sorted({int(saved["pr"]) for saved in active.values() if saved.get("pr")}))
             query = ("query($owner: String!, $name: String!) { repository(owner:$owner,name:$name) { "
@@ -356,6 +356,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
+            for issue in active:
+                if "body" in (remote.get(f"issue_{issue}") or {}):
+                    states[issue] = {**states[issue], "remote_body": remote[f"issue_{issue}"]["body"]}
         closed = [issue for issue, saved in states.items()
                   if saved.get("result") == "closed" and "cleanup" not in saved]
         root = Path(repo["clone_path"]).expanduser()
@@ -430,6 +433,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 states[issue] = saved
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
+            states = {issue: {**saved, "remote_body": next((row.get("body") for row in list_issues(name)
+                      if row["number"] == issue), None)} for issue, saved in states.items()}
             repo = replace(repo, prs=prs, states={**repo.states, **states})
         elif selected.kind == "issues":
             issues = tuple(row for row in list_issues(name)
@@ -442,7 +447,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
                 if (saved.get("result") in ("merged", "closed")
-                        or saved.get("waiting_on") in ("children", "ci")):
+                        or saved.get("waiting_on") in ("children", "ci")
+                        or any(result != "merged" for result in graph.blockers(
+                            replace(repo, issues=issues, states={**repo.states, **states}), issue).values())):
                     continue
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
@@ -473,7 +480,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 try:
                     repo_attempt(name, time.time())
                     branch = f"lokay/{number}"
-                    if selected.kind == "red_main":
+                    if selected.kind in ("red_main", "replan"):
                         pr = open_pr_for(name, branch)
                         saved = state_read(name, number)
                         node = "plan" if saved.get("awaiting") == "children" else saved.get("node") or ("check" if pr else "plan")
@@ -521,7 +528,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                      result="running", reason=None, last_attempt=now,
                                      **{**store.pick_ladder_fields(saved, now), **resumed})
                     store.ledger_append({"kind": "pick", "repo": name, "issue": number,
-                                         "attempt": now, "reason": selected.kind or node})
+                                         "attempt": now, "reason": selected.kind or node,
+                                         "blocked_by": graph.blockers(repo, number)})
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -729,8 +737,11 @@ def _split_issue(picked: dict, root: Path) -> dict:
     for index, task in enumerate(tasks):
         if index < len(children):
             continue
+        if task.get("after"):
+            task = {**task, "blocked_by": [children[item] for item in task["after"]]}
         number = create_child_issue(picked["repo"], picked["issue"], index, task,
                                     saved.get("split_generation", 0))
+        state_update(picked["repo"], number, blocked_by=task.get("blocked_by", []))
         children.append(number)
         state_update(picked["repo"], picked["issue"], children=children)
     state_update(picked["repo"], picked["issue"], awaiting="children", _event={"action": "enter_node", "outcome": {"node": "plan"}},
