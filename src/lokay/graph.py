@@ -233,9 +233,6 @@ def pick(snapshot: Snapshot) -> Pick | None:
                         and child_state.get("result") not in ("failed", "merged", "closed", "empty_patch")
                         and (snapshot.only_issue is None or snapshot.only_issue == child)):
                     return Pick(repo.name, child, "red_main")
-    for repo in repos:
-        if repo.busy:
-            continue
         for parent, state in repo.states.items():
             if (state.get("waiting_on") == "children"
                     and (snapshot.only_issue is None or snapshot.only_issue == parent)
@@ -243,10 +240,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
                     and any(result in ("closed", "failed", "empty_patch") for child in state.get("children", [])
                             for result in blockers(repo, child).values())):
                 return Pick(repo.name, parent, "replan")
-    due = []
-    for repo in snapshot.repos:
-        if repo.busy:
-            continue
+        due = []
         for issue, state in repo.states.items():
             if ((repo.name, issue) in blocked or state.get("result") in ("merged", "closed", "empty_patch")
                     or state.get("waiting_on") == "children"
@@ -265,18 +259,15 @@ def pick(snapshot: Snapshot) -> Pick | None:
                         and state.get("node") in ("check", "fix", "merge") and state.get("pr")
                         and last_activity(state) + 300 <= snapshot.now)):
                 continue
-            due.append((retry_at, last_attempt, repo.name, issue, state))
-    if due:
-        _, _, repo, issue, state = min(due, key=lambda row: row[:4])
-        if state.get("pr"):
-            target = {"number": pr_number(state["pr"]), "headRefName": state.get("branch") or f"lokay/{issue}"}
-            if state.get("sha"):
-                target["headRefOid"] = state["sha"]
-            return Pick(repo, issue, "pr", target)
-        return Pick(repo, issue, "issue", {"number": issue})
-    for repo in repos:
-        if repo.busy:
-            continue
+            due.append((retry_at, last_attempt, issue, state))
+        if due:
+            _, _, issue, state = min(due, key=lambda row: row[:3])
+            if state.get("pr"):
+                target = {"number": pr_number(state["pr"]), "headRefName": state.get("branch") or f"lokay/{issue}"}
+                if state.get("sha"):
+                    target["headRefOid"] = state["sha"]
+                return Pick(repo.name, issue, "pr", target)
+            return Pick(repo.name, issue, "issue", {"number": issue})
         if repo.prs is None:
             return Pick(repo.name, 0, "prs")
         ready = []
