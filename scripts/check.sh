@@ -489,6 +489,58 @@ with TemporaryDirectory(prefix="lokay-samefile-") as directory:
     assert result["result"] == "removed", result
 print("samefile path checks: green")
 PY
+uv run python - <<'PY'
+import os
+from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import store
+from lokay.effects.git import ensure_worktree, git, worktree_record_matches
+
+os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
+                  GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid",
+                  GIT_AUTHOR_DATE="2025-01-01T00:00:00+00:00", GIT_COMMITTER_DATE="2025-01-01T00:00:00+00:00")
+with TemporaryDirectory(prefix="lokay-orphaned-") as directory:
+    temporary = Path(directory)
+    origin = temporary / "origin.git"
+    repo = temporary / "repo"
+    git(temporary, "init", "--bare", str(origin))
+    git(temporary, "clone", str(origin), str(repo))
+    repo = repo.resolve()
+    git(repo, "checkout", "-b", "main")
+    git(repo, "commit", "--allow-empty", "-m", "seed")
+    git(repo, "push", "-u", "origin", "HEAD")
+    git(origin, "symbolic-ref", "HEAD", "refs/heads/main")
+    for number in (7, 8):
+        path = repo.parent / f"repo-wt-{number}"
+        store.write_artifact(path / ".git", f"gitdir: {repo / '.git/worktrees' / path.name}\n")
+        store.write_artifact(path / "saved.txt", "preserved\n")
+        if number == 7:
+            result = ensure_worktree(repo, "lokay/7", path)
+        else:
+            target = repo.parent / "_orphaned/repo-wt-8-20261024-153000"
+            store.write_artifact(target / "marker.txt", "untouched\n")
+            with patch("lokay.effects.git.datetime") as clock:
+                clock.now.return_value = datetime(2026, 10, 24, 15, 30)
+                result = ensure_worktree(repo, "lokay/8", path)
+            assert (target / "marker.txt").read_text() == "untouched\n"
+            assert list(target.iterdir()) == [target / "marker.txt"]
+        assert result["result"] == "added", result
+        assert "orphaned" in result, result
+        orphaned = Path(result["orphaned"])
+        assert orphaned.is_dir() and orphaned.parent == repo.parent / "_orphaned", result
+        assert orphaned.name.startswith(f"repo-wt-{number}-"), result
+        assert (orphaned / "saved.txt").read_text() == "preserved\n"
+        assert (orphaned / ".git").read_text() == f"gitdir: {repo / '.git/worktrees' / path.name}\n"
+        if number == 8:
+            assert orphaned != target and orphaned.name.startswith(target.name + "-"), result
+        records = git(repo, "worktree", "list", "--porcelain", "-z").split("\0\0")
+        matches = [record for record in records if worktree_record_matches(record, path)]
+        assert len(matches) == 1 and f"branch refs/heads/lokay/{number}" in matches[0].split("\0"), records
+print("orphaned worktree checks: green")
+PY
 uv run python - "$sandbox" <<'PY'
 import inspect
 import os
