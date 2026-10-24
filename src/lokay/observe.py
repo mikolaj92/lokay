@@ -94,6 +94,8 @@ def latest_needs_help() -> dict:
                         unreadable += 1
         except (OSError, EOFError, UnicodeError):
             unreadable += 1
+        if latest is not None:
+            break
     return {"latest_needs_help": latest, "unreadable_records_or_files": unreadable}
 
 
