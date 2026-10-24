@@ -818,11 +818,8 @@ def _prepare(picked: dict) -> tuple | dict:
         saved = state_read(picked["repo"], picked["issue"])
     repo = repo_config(picked["repo"])
     root, worktree = _repo_paths(repo, picked["issue"])
-    if saved.get("pr") is None:
-        if saved["difficulty"] == "too_big" or saved.get("split_pending"):
-            return _split_issue(picked, root)
-    elif saved.get("split_pending"):
-        state_update(picked["repo"], picked["issue"], split_pending=False)
+    if saved.get("split_pending") or (saved.get("pr") is None and saved["difficulty"] == "too_big"):
+        return _split_issue(picked, root)
 
     _ensure_worktree(picked)
     name, issue = picked["repo"], picked["issue"]
@@ -1350,7 +1347,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if pending == "plan":
             from lokay.retro import publish
 
-            split = derived.get("fix_limit_hits", 0) >= 2 and derived.get("pr") is None
+            split = bool(derived.get("split_pending"))
             prompt = replan_prompt(
                 picked,
                 ("Split this issue into smaller tasks against every finding below. " if split else "")

@@ -1,6 +1,6 @@
 | Rule | Enforcement |
 | --- | --- |
-| Plan → Build → Check → Fix → Merge; only Merge ends a run | `graph.step`, `tick.act` |
+| Plan → Build → Check → Fix → Merge; only Merge ends a run; infeasible → split + Retro, never close | `graph.step`, `tick.act` |
 | Decisions return probabilities, not prose | `effects.decide._check` |
 | LLM and code steps return `result`; decisions return `next` | `tick`, `plan.verdict`, `review.verdict` |
 | Retry failed steps; Plan classifies difficulty; harness2 runs Build/Fix and persists a per-repo library; Fix returns to Check | `tick._retry`, `h2.run_issue`, `graph.step` |
