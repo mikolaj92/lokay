@@ -16,9 +16,10 @@ from lokay import graph, store
 from dataclasses import replace
 from lokay.types import Event, Run, Snapshot, RepoSnapshot, Dispatched, Checked, parse_event, pr_number
 from lokay.merge import merge_blocked
+from lokay.gates import gate_rows
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_base, push, worktree_remove
-from lokay.effects.git import git, git_try, head as git_head
+from lokay.effects.git import git, git_bytes, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
@@ -31,6 +32,7 @@ from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir,
 
 
 dumps = partial(json.dumps, default=store.json_default)
+RECOVERY_EVIDENCE = "\n\nMain recovery setup/lock evidence:\n"
 
 
 def tick(repo: str, issue: int, act: Callable[[Run], Event]) -> Run:
@@ -76,7 +78,7 @@ def act(run: Run) -> Event:
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed"):
+        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed", "main_red", "parked", "empty_patch"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
@@ -291,8 +293,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
             saved = state_read(name, issue)
             if (saved.get("awaiting") == "children"
                     and not (statuses.get(name, {}).get("issue") == issue
-                             and any(state_read(name, child).get("recovery_sha")
-                                     for child in saved.get("children", [])))):
+                             and (statuses.get(name, {}).get("status") == "red"
+                                  or any(state_read(name, child).get("recovery_sha")
+                                         for child in saved.get("children", []))))):
                 from lokay.effects.gh import children_done
 
                 held = acquire_lock(lock_path(name.split("/")[0], name))
@@ -311,6 +314,28 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         release_lock(held)
             if saved:
                 states[issue] = saved
+        if any(saved.get("split_generation", 0) > 0 for saved in states.values()):
+            rows = list_issues(name)
+            superseded = graph.superseded(RepoSnapshot(name, states=states, prs=cached_prs(name)), rows)
+            if superseded:
+                held = acquire_lock(lock_path(name.split("/")[0], name))
+                if held["result"] == "held":
+                    try:
+                        for issue, parent in superseded.items():
+                            saved = state_read(name, issue)
+                            if saved.get("result") == "merged" or saved.get("pr"):
+                                continue
+                            current = states[parent]
+                            tasks = ", ".join(f"#{child}" for child in current.get("children", [])) or "none"
+                            gh_ok(["issue", "close", str(issue), "--repo", name, "--reason", "not planned",
+                                   "--comment", fit_body(f"Duplicate: #{parent} was replanned (split {current['split_generation']}); "
+                                                         f"its tasks are now {tasks}.")], error="superseded issue close failed")
+                            state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
+                            store.log_event("superseded_closed", repo=name, issue=issue, parent=parent)
+                            states[issue] = state_read(name, issue)
+                            issue_lists[name] = tuple(row for row in issue_lists[name] if int(row["number"]) != issue)
+                    finally:
+                        release_lock(held)
         busy = False
         active = {issue: saved for issue, saved in states.items()
                   if saved.get("result") not in ("merged", "closed")
@@ -318,7 +343,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if active:
             owner, repo_name = name.split("/", 1)
             fields = [f"issue_{int(issue)}: issueOrPullRequest(number: {int(issue)}) "
-                      "{ ... on Issue { state } ... on PullRequest { state } }" for issue in active]
+                      "{ ... on Issue { state body } ... on PullRequest { state body } }" for issue in active]
             fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state mergeCommit {{ oid }} }}"
                           for number in sorted({int(saved["pr"]) for saved in active.values() if saved.get("pr")}))
             query = ("query($owner: String!, $name: String!) { repository(owner:$owner,name:$name) { "
@@ -353,6 +378,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
+            for issue in active:
+                if "body" in (remote.get(f"issue_{issue}") or {}):
+                    states[issue] = {**states[issue], "remote_body": remote[f"issue_{issue}"]["body"]}
         closed = [issue for issue, saved in states.items()
                   if saved.get("result") == "closed" and "cleanup" not in saved]
         root = Path(repo["clone_path"]).expanduser()
@@ -378,8 +406,13 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             store.log_event("closed_cleanup", repo=name, issue=issue, outcome=cleanup)
                     finally:
                         release_lock(held)
+        main_sha = None
+        if root.is_dir() and any(state.get("empty_main_sha") for state in states.values()):
+            code, sha, _ = git_try(root, "rev-parse", f"origin/{base_branch(root)}")
+            if code == 0 and sha.strip():
+                main_sha = sha.strip()
         snapshots.append(RepoSnapshot(name, repo_last_attempt(name), statuses.get(name, {}),
-                                      states=states, busy=busy))
+                                      states=states, busy=busy, main_sha=main_sha))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
     while True:
         check_deadline()
@@ -405,9 +438,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     remote_issue = gh_json(["issue", "view", str(issue), "--repo", name,
                                             "--json", "state,closedAt,url"], error="issue view failed")
                     if remote_issue.get("state") == "CLOSED":
-                        gh_ok(["pr", "close", str(row["number"]), "--repo", name, "--comment",
-                               fit_body(f"Issue closed at {remote_issue['closedAt']}: {remote_issue['url']}")])
-                        store.log_event("orphan_pr_closed", repo=name, issue=issue, pr=row["number"])
+                        store.log_event("orphan_pr_skipped", repo=name, issue=issue, pr=row["number"])
+                        prs = tuple(pr for pr in prs if pr["number"] != row["number"])
                         continue
                 if saved.get("result") == "closed" and (name, issue) not in reopened:
                     issue_open = any(int(item["number"]) == issue and item.get("state", "OPEN") == "OPEN"
@@ -423,6 +455,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 states[issue] = saved
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
+            states = {issue: {**saved, "remote_body": next((row.get("body") for row in list_issues(name)
+                      if row["number"] == issue), None)} for issue, saved in states.items()}
             repo = replace(repo, prs=prs, states={**repo.states, **states})
         elif selected.kind == "issues":
             issues = tuple(row for row in list_issues(name)
@@ -435,7 +469,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
                 if (saved.get("result") in ("merged", "closed")
-                        or saved.get("waiting_on") in ("children", "ci")):
+                        or saved.get("waiting_on") in ("children", "ci")
+                        or any(result != "merged" for result in graph.blockers(
+                            replace(repo, issues=issues, states={**repo.states, **states}), issue).values())):
                     continue
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
@@ -466,10 +502,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 try:
                     repo_attempt(name, time.time())
                     branch = f"lokay/{number}"
-                    if selected.kind == "red_main":
+                    if selected.kind in ("red_main", "replan"):
                         pr = open_pr_for(name, branch)
                         saved = state_read(name, number)
-                        node = saved.get("node") or ("check" if pr else "plan")
+                        node = "plan" if saved.get("awaiting") == "children" else saved.get("node") or ("check" if pr else "plan")
                         now = time.time()
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
@@ -513,6 +549,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         state_update(name, number, _event={"action": "enter_node", "outcome": {"node": node}}, branch=branch, pr=pr["number"] if pr else None,
                                      result="running", reason=None, last_attempt=now,
                                      **{**store.pick_ladder_fields(saved, now), **resumed})
+                    store.ledger_append({"kind": "pick", "repo": name, "issue": number,
+                                         "attempt": now, "reason": selected.kind or node,
+                                         "blocked_by": graph.blockers(repo, number)})
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -720,8 +759,11 @@ def _split_issue(picked: dict, root: Path) -> dict:
     for index, task in enumerate(tasks):
         if index < len(children):
             continue
+        if task.get("after"):
+            task = {**task, "blocked_by": [children[item] for item in task["after"]]}
         number = create_child_issue(picked["repo"], picked["issue"], index, task,
                                     saved.get("split_generation", 0))
+        state_update(picked["repo"], number, blocked_by=task.get("blocked_by", []))
         children.append(number)
         state_update(picked["repo"], picked["issue"], children=children)
     state_update(picked["repo"], picked["issue"], awaiting="children", _event={"action": "enter_node", "outcome": {"node": "plan"}},
@@ -736,15 +778,22 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay.effects.git import apply_patch, git_try
 
     saved = state_read(picked["repo"], picked["issue"])
+    loaded = gh_json(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"],
+                     error="issue view failed")
+    if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
+        raise RuntimeError("issue title is missing or invalid")
+    body = loaded.get("body")
+    if body is not None and not isinstance(body, str):
+        raise RuntimeError("issue body is invalid")
     if "issue_title" not in saved or "issue_body" not in saved:
-        loaded = gh_json(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"],
-                         error="issue view failed")
-        if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
-            raise RuntimeError("issue title is missing or invalid")
-        body = loaded.get("body")
-        if body is not None and not isinstance(body, str):
-            raise RuntimeError("issue body is invalid")
         state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body)
+        saved = state_read(picked["repo"], picked["issue"])
+    elif (loaded["title"] != saved["issue_title"]
+          or (saved["issue_body"] != body
+              and not (saved["issue_body"] or "").startswith((body or "") + RECOVERY_EVIDENCE))):
+        state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body, plan_prompt=None)
+        rounds_append(picked["repo"], picked["issue"],
+                      "Plan: issue changed on GitHub; refreshed issue text and reset plan prompt")
         saved = state_read(picked["repo"], picked["issue"])
     title, body = saved["issue_title"], saved["issue_body"]
     if host_ops(body):
@@ -790,9 +839,7 @@ def _prepare(picked: dict) -> tuple | dict:
         git(worktree, "fetch", "origin", base, timeout=300)
         if not saved.get("h2_start"):
             if git(worktree, "status", "--porcelain", "--untracked-files=no"):
-                code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
-                if code:
-                    raise RuntimeError(err or "patch export failed")
+                out = git_bytes(worktree, "diff", "--binary", "HEAD", timeout=300)
                 artifact = run_dir(name, issue) / f"build-leftover-{git_head(worktree)[:12]}-{time.time_ns()}.patch"
                 store.write_artifact(artifact, out)
                 rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
@@ -861,7 +908,7 @@ def _prepare(picked: dict) -> tuple | dict:
                         and not any(row.get("warstwa") == "setup" for row in failing["ci"].get("failed", []))):
                     parents = git(worktree, "rev-list", "--parents", "-n", "1", culprit["sha"]).split()
                     git(worktree, "revert", "--no-commit", *(["-m", "1"] if len(parents) > 2 else []), culprit["sha"])
-                    store.write_artifact(patch, git(worktree, "diff", "--binary", "HEAD"))
+                    store.write_artifact(patch, git_bytes(worktree, "diff", "--binary", "HEAD"))
                     tidy_and_commit(worktree, f"Revert culprit PR #{culprit['pr']}")
                     state_update(name, issue, h2_summary=f"Revert culprit PR #{culprit['pr']}",
                                  h2_committed=git_head(worktree))
@@ -871,17 +918,24 @@ def _prepare(picked: dict) -> tuple | dict:
                     state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "build"}},
                                  result="pending", recovery_sha=baseline["sha"], h2_patch=None,
                                  h2_start=None, h2_context=None, h2_committed=None,
-                                 issue_body=(body or "") + "\n\nMain recovery setup/lock evidence:\n" + evidence)
+                                 issue_body=(body or "") + RECOVERY_EVIDENCE + evidence)
                     return {"result": "pending", "next": "build"}
             else:
-                return needs_help(picked, f"harness2: empty patch, main {main['status']}")
+                return store.empty_patch(name, issue, baseline["sha"])
         if main["status"] == "green":
             return close_empty_patch(name, issue, saved, baseline)
     if not saved.get("h2_committed"):
+        leftovers = set(filter(None, git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
+        if leftovers:
+            rounds_append(name, issue, "Build: leaving untracked leftovers untouched: "
+                          + ", ".join(sorted({path.split("/")[0] for path in leftovers})))
         if git_head(worktree) == saved["h2_start"]:
             apply_patch(worktree, patch)
-        tidy_and_commit(worktree, "lokay build")
+        paths = set(filter(None, git(worktree, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+        tidy_and_commit(worktree, "lokay build", paths=paths)
         state_update(name, issue, h2_committed=git_head(worktree))
+    if not git(worktree, "rev-list", f"origin/{base}..HEAD"):
+        return store.empty_patch(name, issue, git(worktree, "rev-parse", f"origin/{base}"))
     state_update(name, issue, _event={"action": "build_complete", "outcome": {"result": "done"}})
     def publish():
         pr = open_pr_for(picked["repo"], branch)
@@ -905,13 +959,12 @@ def _prepare(picked: dict) -> tuple | dict:
 def close_empty_patch(name: str, issue: int, saved: dict, baseline: dict) -> dict:
     from lokay.effects.gh import fit_body
 
+    if saved.get("pr"):
+        return store.empty_patch(name, issue, baseline["sha"])
     evidence = (f"{saved['h2_summary']}\n\nMain zielony. Tested SHA: `{baseline['sha']}`\n"
                 f"argv: `{dumps(baseline['argv'])}`\n"
                 f"Executed tests: {baseline['ci'].get('executed', 0)}\n"
                 f"Lock checks: {baseline['lockfile']['status']}")
-    if saved.get("pr"):
-        gh_ok(["pr", "close", str(pr_number(saved["pr"])), "--repo", name, "--comment", fit_body(evidence)],
-              error="PR close failed", strip=False)
     gh_ok(["issue", "close", str(issue), "--repo", name, "--comment", fit_body(evidence)],
           error="issue close failed", strip=False)
     state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
@@ -945,6 +998,9 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
              reason: str | None = None) -> dict | None:
     repo, issue = picked["repo"], picked["issue"]
     saved = state_read(repo, issue)
+    uwagi = uwagi or (saved.get("verdict") or {}).get("uwagi", [])
+    if gate_rows(uwagi):
+        return None
     if saved.get("result") == "merged" or saved.get("awaiting") == "children":
         return None
     now = time.time()
@@ -964,8 +1020,7 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
         if saved.get("no_progress", 0) < 6 and len(saved.get("fix_history", [])) < 6:
             return None
     prompt = replan_prompt(picked, reason or "No progress; increase difficulty.",
-                           uwagi or (saved.get("verdict") or {}).get("uwagi", []),
-                           saved.get("sha") or "")
+                           uwagi, saved.get("sha") or "")
     fields = store.escalation_fields(saved)
     state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": fields.pop("node")}},
                  **{**fields, "plan_prompt": prompt})
@@ -1250,6 +1305,21 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             sha = remote["sha"]
             pending = "check"
             continue
+        if remote["result"] == "red":
+            from lokay.effects.gh import main_inherited
+
+            def compare_main_checks():
+                code, main_sha, err = git_try(clone_path, "rev-parse", f"origin/{base}")
+                if code != 0:
+                    raise RuntimeError(err or "main checks revision lookup failed")
+                code, paths, err = git_try(worktree, "diff", "--name-only", "--no-renames", f"origin/{base}...{sha}")
+                if code != 0:
+                    raise RuntimeError(err or "checks paths lookup failed")
+                return main_inherited(picked["repo"], main_sha.strip(), remote,
+                                      any(path.startswith(".github/") for path in paths.splitlines()))
+
+            remote = _retry(picked, "check", compare_main_checks)
+            state_update(picked["repo"], picked["issue"], ci=remote["result"])
         if remote["result"] == "pending":
             state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="pending", verdict=None)
             rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, GitHub CI pending")
@@ -1260,14 +1330,16 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             {"warstwa": "GitHub CI", "plik": "", "check": name,
              "log": name + "\n" + (remote.get("failed_logs") or {}).get(name, name)}
             for name in remote.get("failed") or []
-        ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
-            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+        ], "ci": remote["result"],
+            **({"inherited": remote["inherited"]} if remote.get("inherited") else {}),
+            "notes": [*ci["notes"], *(remote.get("notes") or [])],
+            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci", "inherited") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
-        decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
+        decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix, main_sha)
         if replan_deleted_files(picked, verdict, sha):
             return {"result": "pending", "next": "plan"}
         derived = graph.step(store.load(picked["repo"], picked["issue"]),
@@ -1287,7 +1359,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             prompt += "\n\nEvery Check finding:\n" + dumps(findings, ensure_ascii=False)
             state_update(picked["repo"], picked["issue"],
                          _event={"action": "verdict", "outcome": verdict}, plan_prompt=prompt)
-            _retry(picked, "check", publish)
+            _retry(picked, "plan", publish)
             rounds_append(picked["repo"], picked["issue"],
                           "Fix round limit → split" if split else f"Fix round limit → Plan (hit {derived['fix_limit_hits']})")
             store.log_event("fix_round_limit", hit=derived["fix_limit_hits"], repo=picked["repo"], issue=picked["issue"],

@@ -24,16 +24,21 @@ def difficulty_questions(title: str, body: str | None) -> dict:
 def validate_tasks(data: object) -> list[dict]:
     if not isinstance(data, list) or len(data) < 2:
         raise ValueError("split requires at least two tasks")
-    for task in data:
+    for index, task in enumerate(data):
         if not isinstance(task, dict) or any(
                 not isinstance(task.get(key), str) or not task[key].strip() for key in ("title", "body")):
             raise ValueError("split task requires nonempty title and body")
-    return [{"title": task["title"].strip(), "body": task["body"].strip()} for task in data]
+        after = task.get("after", [])
+        if not isinstance(after, list) or any(type(item) is not int or not 0 <= item < index for item in after):
+            raise ValueError("split task after requires earlier task indexes")
+    return [{"title": task["title"].strip(), "body": task["body"].strip(),
+             **({"after": task["after"]} if "after" in task else {})} for task in data]
 
 
 def split_tasks(prompt: str, artifact: Path, *, cwd: Path | None = None) -> dict:
     store.remove_file(artifact)
     payload = pi_step(prompt + "\nList at least two smaller, independently mergeable tasks. "
+                      "Give after as a list of task indexes when a task needs another task merged first. "
                       "Write only a JSON array of objects with nonempty title and body to "
                       + str(artifact) + ". Do not create issues or modify repository files.", artifact, cwd=cwd)
     if payload["result"] != "done":

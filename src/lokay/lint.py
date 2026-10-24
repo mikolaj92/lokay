@@ -46,14 +46,16 @@ def diff_lines(diff: str):
                 line_number += 1
 
 
-def unit_test_hints(diff: str) -> dict[str, str]:
+def unit_test_hints(diff: str, neutral=None) -> dict[str, str]:
     paths = []
     changes = {}
     added_lines = {}
     new_paths = set()
-    for path, _, kind, text in diff_lines(diff):
+    for path, number, kind, text in diff_lines(diff):
         if kind == "+":
             added_lines.setdefault(path, []).append(text)
+        if kind == "+" and number in (neutral or {}).get(path, ()):
+            continue
         if text.strip() and kind in {"+", "-"}:
             changes[path] = changes.get(path, 0) + (1 if kind == "+" else -1)
     paths.extend(path for path, net in changes.items() if net > 0)
@@ -69,8 +71,11 @@ def unit_test_hints(diff: str) -> dict[str, str]:
                     path = ast.literal_eval(path)
                 path = path.removeprefix("b/")
                 break
-        paths.append(path)
-        new_paths.add(path)
+        if neutral is None or any(p == path and kind == "+" and text.strip()
+                                  and number not in neutral.get(path, ())
+                                  for p, number, kind, text in diff_lines("diff --git " + block)):
+            paths.append(path)
+            new_paths.add(path)
     return {
         path: ("new test file -> remove it; new test files are not allowed" if path in new_paths else
                f"{changes[path]} more non-blank lines added than removed; blank lines do not count; "
@@ -82,7 +87,7 @@ def unit_test_hints(diff: str) -> dict[str, str]:
     }
 
 
-def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
+def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool, neutral=None) -> list[str]:
     errors = []
     if lokay_rules:
         for block in diff.split("diff --git ")[1:]:
@@ -129,13 +134,14 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
                     start = number
                     line = stripped[3:]
                 if delimiter in line:
-                    if numbers.intersection(range(start, number + 1)):
+                    if numbers.intersection(range(start, number + 1)) and not set(range(start, number + 1)) <= set((neutral or {}).get(path, ())):
                         errors.append(f"{path}:{start}: docstring -> delete it")
                     delimiter = ""
             continue
         try:
             for token in tokenize.generate_tokens(io.StringIO(source).readline):
-                if token.type != tokenize.COMMENT or token.start[0] not in numbers:
+                if (token.type != tokenize.COMMENT or token.start[0] not in numbers
+                        or set(range(token.start[0], token.end[0] + 1)) <= set((neutral or {}).get(path, ()))):
                     continue
                 if token.string.startswith(("#!", "# type:", "# noqa")) or re.match(
                     r"#.*?coding[:=]\s*[-\w.]+", token.string
@@ -150,7 +156,8 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
             if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
                 first = node.body[0]
                 if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
-                    if numbers.intersection(range(first.lineno, (first.end_lineno or first.lineno) + 1)):
+                    if (numbers.intersection(range(first.lineno, (first.end_lineno or first.lineno) + 1))
+                            and not set(range(first.lineno, (first.end_lineno or first.lineno) + 1)) <= set((neutral or {}).get(path, ()))):
                         errors.append(f"{path}:{first.lineno}: docstring -> delete it")
             if lokay_rules and isinstance(node, ast.List) and node.elts and path not in {"src/lokay/effects/git.py", "src/lokay/effects/gh.py", "src/lokay/replay.py", "src/lokay/effects/replay.py"}:
                 first = node.elts[0]
@@ -160,7 +167,7 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
     errors.extend(
         f"{path}: new unit test -> " +
         ("add a replay fixture under fixtures/replay and run uv run lokay replay" if lokay_rules else hint)
-        for path, hint in unit_test_hints(diff).items())
+        for path, hint in unit_test_hints(diff, neutral).items())
     return sorted(set(errors))
 
 

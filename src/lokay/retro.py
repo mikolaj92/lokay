@@ -13,7 +13,7 @@ CATEGORIES = frozenset(("logic bug", "missing handling/validation", "wrong scope
                         "security", "docs/plan only instead of code"))
 
 
-def proposals(directory):
+def proposals(directory, escapes=()):
     groups = {}
     for path in sorted((*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz"))):
         opener = gzip.open if path.suffix == ".gz" else open
@@ -47,13 +47,22 @@ def proposals(directory):
                         f"- https://github.com/{repo}/issues/{issue} · "
                         f"https://github.com/{repo}/pull/{pr} · SHA `{sha}`\n\n"
                         + "\n".join("> " + text for text in quote.splitlines()))
+    for row in escapes:
+        repo, issue, pr, sha = (row.get(key) for key in ("repo", "issue", "pr", "sha"))
+        quote = row["why"] if isinstance(row["why"], str) else ", ".join(row["why"])
+        groups.setdefault(("escape", "logic bug"), {}).setdefault((repo, issue),
+            f"- https://github.com/{repo}/issues/{issue} · "
+            f"https://github.com/{repo}/pull/{pr} · SHA `{sha}`\n\n"
+            + "\n".join("> " + text for text in quote.splitlines()))
     return {key: evidence for key, evidence in groups.items() if len(evidence) >= 3}
 
 
 def publish():
+    from lokay.measure import escapes
+
     directory = store.RUNS.parent / "ticks"
     with store.shared_file_lock(store.RUNS.parent / "retro.lock"):
-        for (lens, category), evidence in sorted(proposals(directory).items()):
+        for (lens, category), evidence in sorted(proposals(directory, escapes(store.RUNS.parent)).items()):
             marker = "Lokay retro: " + hashlib.sha256(json.dumps(
                 [lens, category], ensure_ascii=False).encode()).hexdigest()
             rows = gh_json(["issue", "list", "--repo", "mikolaj92/lokay", "--state", "all",

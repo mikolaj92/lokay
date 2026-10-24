@@ -119,10 +119,15 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
                 f"Lock checks ({lock['status']}):\n```\n{lock['reason']}\n{lock_log}\n```")
         if result["exhausted_sha"] != sha:
             result["issue"] = guard_issue(repo, body)
-            if previous.get("exhausted_sha"):
-                from lokay.store import state_update
+            from lokay.store import state_read, state_update
 
-                state_update(repo, result["issue"], _event={"action": "reopened", "outcome": {"issue": True}},
+            state = state_read(repo, result["issue"])
+            if previous.get("exhausted_sha") or (
+                state.get("result") in ("merged", "closed", "failed", "empty_patch")
+                and sha not in (state.get("recovery_sha"), state.get("sha"))
+            ):
+
+                state_update(repo, result["issue"], _event={"action": "reopened", "outcome": {"issue": True, "main_sha": sha}},
                              children=[], split_tasks=None, recovery_sha=None, recovery_exhausted=False,
                              h2_context=None, difficulty=None, issue_body=body)
                 result["exhausted_sha"] = None
@@ -145,7 +150,7 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
     from lokay.review import test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
-    if (main["lockfile"]["status"] != "pass" or ci.get("tested") is not True
+    if (ci.get("tested") is not True
             or main["ci"].get("tested") is not True or main["ci"]["result"] != "red") or any(
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):

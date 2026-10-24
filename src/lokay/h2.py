@@ -17,6 +17,7 @@ from lokay import store
 from lokay.config import HOME
 from lokay.effects import git
 from lokay.effects.pi import harness_session, start_harness_run, tick_deadline
+from lokay.gates import gate_contract
 from lokay.safety import untrusted_issue_block
 
 PI_SURFACE = SurfaceSpec(
@@ -84,6 +85,7 @@ class LokayAdapter:
         self.root = root
         self.start = git.git(root, "rev-parse", start)
         self.prompt = untrusted_issue_block(title, body)
+        self.prompt += "\n\n" + gate_contract(git.git(root, "ls-tree", "-r", "--name-only", self.start).splitlines(), body)
         if findings is not None:
             self.prompt += "\n\nCheck findings:\n" + json.dumps(findings, ensure_ascii=False)
         self.substrate = PiSubstrate(self._launch)
@@ -155,7 +157,7 @@ class LokayAdapter:
         return {"patch.diff": self.deliverable_text(run_dir)}
 
     def deliverable_text(self, run_dir):
-        return (run_dir / "patch.diff").read_text()
+        return (run_dir / "patch.diff").read_bytes().decode(errors="replace")
 
     def base_harness(self):
         entries = sorted(self.library.entries(),
@@ -188,6 +190,7 @@ def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round
     token = tick_deadline.set(None)
     try:
         adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
+        store.rounds_append(repo, issue, ("Fix" if findings is not None else "Build") + " prompt:\n" + adapter.prompt)
         adapter.substrate.preflight()
         tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
         result = run_task(adapter.task_id, k=1,
