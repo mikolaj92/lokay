@@ -8,7 +8,6 @@ import json
 import math
 import os
 import time
-import zlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from threading import Event, Thread
@@ -91,10 +90,12 @@ def latest_needs_help() -> dict:
                             latest = {"ts": ts, "time": datetime.fromtimestamp(ts, timezone.utc).isoformat(),
                                       "repo": row.get("repo"), "issue": row.get("issue"),
                                       "node": before.get("node", row.get("node")), "event": event}
-                    except (ValueError, KeyError, TypeError, AttributeError, OSError, OverflowError, EOFError, zlib.error):
+                    except (ValueError, KeyError, TypeError, AttributeError, OSError, OverflowError, EOFError):
                         unreadable += 1
-        except (OSError, EOFError, UnicodeError, zlib.error):
+        except (OSError, EOFError, UnicodeError):
             unreadable += 1
+        if latest is not None:
+            break
     return {"latest_needs_help": latest, "unreadable_records_or_files": unreadable}
 
 
