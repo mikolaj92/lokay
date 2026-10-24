@@ -56,6 +56,57 @@ for rollup, expected in (([success, cancelled], "green"), ([cancelled], "red"),
 print("superseded checks: green")
 PY
 uv run python - <<'PY'
+from contextlib import ExitStack
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import main_guard, store, tick
+
+name, number = "owner/repo", 307
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_STATE_DIR": directory}))
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(tick, "repo_config", return_value={}))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+    split = stack.enter_context(patch.object(tick, "_split_issue", return_value={"result": "split"}))
+    rounds = stack.enter_context(patch.object(tick, "rounds_append"))
+    for existing in (True, False):
+        for suffix in ("", tick.RECOVERY_EVIDENCE + "preserved setup evidence"):
+            store.state_update(name, number, issue_title=main_guard.TITLE, issue_body="old body" + suffix,
+                               plan_prompt="keep this plan", difficulty="too_big")
+            loaded = {"title": main_guard.TITLE + " ", "body": "<!-- lokay-main-red -->\nnew body\n"}
+            def github(args, **kwargs):
+                if args[:2] == ["issue", "list"]:
+                    return [{"number": number, "title": main_guard.TITLE, "state": "OPEN"}] if existing else []
+                assert args == ["issue", "view", str(number), "--repo", name, "--json", "title,body"], args
+                return loaded
+            with patch.object(main_guard, "gh_json", side_effect=github) as reads, \
+                    patch.object(main_guard, "gh_ok", return_value=f"https://github.com/{name}/issues/{number}"), \
+                    patch.object(tick, "gh_json", side_effect=github):
+                assert main_guard.guard_issue(name, "new body") == number
+                picked = {"repo": name, "issue": number}
+                rounds.reset_mock()
+                assert tick._prepare(picked) == {"result": "split"}
+                saved = store.state_read(name, number)
+                assert saved["plan_prompt"] == "keep this plan", saved
+                assert saved["issue_title"] == loaded["title"], saved
+                assert saved["issue_body"] == loaded["body"] + suffix, saved
+                reads.assert_any_call(["issue", "view", str(number), "--repo", name, "--json", "title,body"],
+                                      error="main issue view failed")
+                rounds.assert_not_called()
+                loaded = {**loaded, "body": "human edit"}
+                assert tick._prepare(picked) == {"result": "split"}
+                saved = store.state_read(name, number)
+                assert saved["plan_prompt"] is None and saved["issue_body"] == "human edit", saved
+                rounds.assert_called_once_with(name, number,
+                    "Plan: issue changed on GitHub; refreshed issue text and reset plan prompt")
+print("guard self-edit keeps plan checks: green")
+PY
+uv run python - <<'PY'
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
