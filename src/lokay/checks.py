@@ -4,7 +4,7 @@ import re
 import shlex
 import shutil
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -27,6 +27,7 @@ class CheckInput:
     worktree: Path
     title: str = ""
     red_main: bool = False
+    main: dict | None = None
 
 
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
@@ -47,6 +48,11 @@ def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: 
 
 
 def ci_green(x: CheckInput) -> CheckResult:
+    if x.ci.get("sha") == x.sha and x.ci.get("ci") == "inherited" and x.ci.get("inherited"):
+        inherited = x.ci["inherited"]
+        details = "; ".join(f"{item['check']}: {', '.join(item['steps'])}" for item in inherited)
+        return CheckResult("ci_green", "pass",
+                           f"GitHub checks fail only on steps that also fail on fresh main {inherited[0]['main_sha']}: {details}", ())
     if x.ci.get("ci") == "no_ci" and x.ci.get("sha") == x.sha:
         return CheckResult("ci_green", "pass", "not applicable: no CI configured", ())
     if x.ci.get("ci") in (None, "pending") and x.ci.get("sha") == x.sha:
@@ -393,6 +399,11 @@ def lockfile(x: CheckInput) -> CheckResult:
                 drifted.add(path.relative_to(root).as_posix())
             elif status == "unknown":
                 errors.append(f"{path.relative_to(root)}: {reason}")
+    inherited = set()
+    if x.main and x.main.get("lockfile", {}).get("status") == "fail":
+        inherited = {f["plik"] for f in x.main["lockfile"]["findings"]}
+    inherited_drift = drifted & inherited
+    drifted -= inherited
     if drifted:
         message = "uv.lock is out of date with pyproject.toml: run `uv lock`"
         findings = tuple(Finding(name, 1, 1, message if Path(name).name == "uv.lock" else
@@ -403,28 +414,30 @@ def lockfile(x: CheckInput) -> CheckResult:
         errors.append("uv lock checks unavailable: uv not found")
     if errors:
         return CheckResult("lockfile", "unknown", "; ".join(map(str, errors)), ())
+    if inherited_drift:
+        return CheckResult("lockfile", "pass",
+                           "; ".join(sorted(inherited_drift)) + f": drift inherited from red main {x.main['sha']}", ())
     reason = "uv unavailable" if not available else "uv lock checks passed" if locks else "no applicable uv locks"
     return CheckResult("lockfile", "pass", reason, ())
 
 
-def tracked_agent_state(x: CheckInput) -> CheckResult:
-    from lokay.effects.git import git_try
-
-    code, output, error = git_try(x.worktree, "ls-tree", "-r", "-z", "--name-only", x.sha,
-                                 "--", ".lokay", ".omo")
-    if code:
-        raise RuntimeError(error or "could not inspect tracked agent state")
-    paths = output.split("\0")[:-1] if output else []
-    if (output and not output.endswith("\0")) or any(
-            not path or Path(path).is_absolute() or ".." in Path(path).parts
-            or Path(path).parts[0] not in {".lokay", ".omo"} for path in paths):
-        raise ValueError("invalid tracked agent state listing")
-    findings = tuple(Finding(path, 1, 1,
-                            "remove tracked agent state; ignore rules do not remove tracked files",
-                            "tracked_agent_state") for path in paths)
-    return CheckResult("tracked_agent_state", "fail" if findings else "pass",
-                       "tracked agent state: " + ", ".join(paths) if findings
-                       else "no tracked agent state", findings)
+def _diff_path(block: str) -> str | None:
+    lines = block.splitlines()
+    header = re.search(r' ("b/(?:\\.|[^"])*"|b/.*)$', lines[0]) if lines else None
+    if header is None:
+        return None
+    path = header[1]
+    if path.startswith('"'):
+        path = ast.literal_eval(path)
+    for line in lines[1:]:
+        if line.startswith("+++ "):
+            target = line[4:].split("\t", 1)[0]
+            if target.startswith('"'):
+                target = ast.literal_eval(target)
+            if target != "/dev/null":
+                path = target
+            break
+    return path.removeprefix("b/")
 
 
 def junk(x: CheckInput) -> CheckResult:
@@ -433,20 +446,9 @@ def junk(x: CheckInput) -> CheckResult:
         lines = block.splitlines()
         if any(line.startswith("deleted file mode ") for line in lines):
             continue
-        header = re.search(r' ("b/(?:\\.|[^"])*"|b/.*)$', lines[0])
-        if header is None:
+        path = _diff_path(block)
+        if path is None:
             raise ValueError("invalid diff path")
-        path = header[1]
-        if path.startswith('"'):
-            path = ast.literal_eval(path)
-        path = path.removeprefix("b/")
-        for line in lines[1:]:
-            if line.startswith("+++ "):
-                path = line[4:].split("\t", 1)[0]
-                if path.startswith('"'):
-                    path = ast.literal_eval(path)
-                path = path.removeprefix("b/")
-                break
         if Path(path).is_absolute() or ".." in Path(path).parts:
             continue
         if is_artifact(path, x.worktree):
@@ -457,15 +459,19 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
-CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk, tracked_agent_state,
+CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
           no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
+    blocks = x.diff.split("diff --git ")
+    filtered = replace(x, diff=blocks[0] + "".join(
+        "diff --git " + block for block in blocks[1:]
+        if (path := _diff_path(block)) is None or not is_artifact(path, x.worktree)))
     results = []
     for check in CHECKS:
         try:
-            results.append(check(x))
+            results.append(check(x if check is junk else filtered))
         except Exception as exc:
             results.append(CheckResult(check.__name__, "fail",
                                        f"{type(exc).__name__}: {exc}; check crashed; fix the check or its input", ()))

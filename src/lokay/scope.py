@@ -13,7 +13,7 @@ ASSERTION = re.compile(
 
 CACHE_PATTERNS = [
     ".cache/", ".build/", "DerivedData/", "node_modules/", "__pycache__/",
-    ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".venv/", ".check-local/",
+    ".pytest_cache/", ".ruff_cache/", ".mypy_cache/", ".venv/", ".check-local/", ".local-checks/",
     "*.pyc", "*.db-shm", "*.db-wal", "manifest.db",
 ]
 
@@ -33,10 +33,29 @@ def is_cache(path: str) -> bool:
                for part in parts for pattern in CACHE_PATTERNS)
 
 
+def is_junk(path: str, worktree: Path | None = None) -> bool:
+    if worktree is None:
+        return False
+    relative = PurePosixPath(path)
+    if relative.is_absolute() or ".." in relative.parts:
+        return False
+    for parent in relative.parents:
+        if parent == PurePosixPath("."):
+            continue
+        directory = worktree / parent
+        if ((directory / "CACHEDIR.TAG").is_file()
+                or (directory / "conda-meta").is_dir()
+                or (directory / "pyvenv.cfg").is_file()
+                or (directory.name == "pkgs" and directory.is_dir()
+                    and any((entry / "info/index.json").is_file() for entry in directory.iterdir()))):
+            return True
+    return False
+
+
 def is_artifact(path: str, worktree: Path | None = None) -> bool:
     parts = PurePosixPath(path).parts
     name = PurePosixPath(path).name
-    return (is_cache(path) or path.endswith(("/", ".log", ".sqlite", ".sqlite-shm", ".sqlite-wal"))
+    return (is_cache(path) or is_junk(path, worktree) or path.endswith(("/", ".log", ".sqlite", ".sqlite-shm", ".sqlite-wal"))
             or any(part == "git-v0" or part.endswith("uv-cache") for part in parts)
             or (worktree is not None and ((worktree / path).is_dir()
                 or any((worktree / parent / ".git").exists()

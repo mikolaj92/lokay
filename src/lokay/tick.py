@@ -19,7 +19,7 @@ from lokay.merge import merge_blocked
 from lokay.gates import gate_rows
 from lokay.effects import maintenance
 from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_base, push, worktree_remove
-from lokay.effects.git import git, git_try, head as git_head
+from lokay.effects.git import git, git_bytes, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
 from lokay.config import load_repos, repo as repo_config, tick_budget
@@ -293,8 +293,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
             saved = state_read(name, issue)
             if (saved.get("awaiting") == "children"
                     and not (statuses.get(name, {}).get("issue") == issue
-                             and any(state_read(name, child).get("recovery_sha")
-                                     for child in saved.get("children", [])))):
+                             and (statuses.get(name, {}).get("status") == "red"
+                                  or any(state_read(name, child).get("recovery_sha")
+                                         for child in saved.get("children", []))))):
                 from lokay.effects.gh import children_done
 
                 held = acquire_lock(lock_path(name.split("/")[0], name))
@@ -313,6 +314,28 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         release_lock(held)
             if saved:
                 states[issue] = saved
+        if any(saved.get("split_generation", 0) > 0 for saved in states.values()):
+            rows = list_issues(name)
+            superseded = graph.superseded(RepoSnapshot(name, states=states, prs=cached_prs(name)), rows)
+            if superseded:
+                held = acquire_lock(lock_path(name.split("/")[0], name))
+                if held["result"] == "held":
+                    try:
+                        for issue, parent in superseded.items():
+                            saved = state_read(name, issue)
+                            if saved.get("result") == "merged" or saved.get("pr"):
+                                continue
+                            current = states[parent]
+                            tasks = ", ".join(f"#{child}" for child in current.get("children", [])) or "none"
+                            gh_ok(["issue", "close", str(issue), "--repo", name, "--reason", "not planned",
+                                   "--comment", fit_body(f"Duplicate: #{parent} was replanned (split {current['split_generation']}); "
+                                                         f"its tasks are now {tasks}.")], error="superseded issue close failed")
+                            state_update(name, issue, _event={"action": "closed"}, closed_on_github=True)
+                            store.log_event("superseded_closed", repo=name, issue=issue, parent=parent)
+                            states[issue] = state_read(name, issue)
+                            issue_lists[name] = tuple(row for row in issue_lists[name] if int(row["number"]) != issue)
+                    finally:
+                        release_lock(held)
         busy = False
         active = {issue: saved for issue, saved in states.items()
                   if saved.get("result") not in ("merged", "closed")
@@ -320,7 +343,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if active:
             owner, repo_name = name.split("/", 1)
             fields = [f"issue_{int(issue)}: issueOrPullRequest(number: {int(issue)}) "
-                      "{ ... on Issue { state } ... on PullRequest { state } }" for issue in active]
+                      "{ ... on Issue { state body } ... on PullRequest { state body } }" for issue in active]
             fields.extend(f"pr_{number}: pullRequest(number: {number}) {{ state mergeCommit {{ oid }} }}"
                           for number in sorted({int(saved["pr"]) for saved in active.values() if saved.get("pr")}))
             query = ("query($owner: String!, $name: String!) { repository(owner:$owner,name:$name) { "
@@ -355,6 +378,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                             states[issue] = state_read(name, issue)
                     finally:
                         release_lock(held)
+            for issue in active:
+                if "body" in (remote.get(f"issue_{issue}") or {}):
+                    states[issue] = {**states[issue], "remote_body": remote[f"issue_{issue}"]["body"]}
         closed = [issue for issue, saved in states.items()
                   if saved.get("result") == "closed" and "cleanup" not in saved]
         root = Path(repo["clone_path"]).expanduser()
@@ -429,6 +455,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 states[issue] = saved
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     blocked.append((name, issue, saved))
+            states = {issue: {**saved, "remote_body": next((row.get("body") for row in list_issues(name)
+                      if row["number"] == issue), None)} for issue, saved in states.items()}
             repo = replace(repo, prs=prs, states={**repo.states, **states})
         elif selected.kind == "issues":
             issues = tuple(row for row in list_issues(name)
@@ -441,7 +469,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 issue = row["number"]
                 saved = states[issue] = state_read(name, issue)
                 if (saved.get("result") in ("merged", "closed")
-                        or saved.get("waiting_on") in ("children", "ci")):
+                        or saved.get("waiting_on") in ("children", "ci")
+                        or any(result != "merged" for result in graph.blockers(
+                            replace(repo, issues=issues, states={**repo.states, **states}), issue).values())):
                     continue
                 if saved.get("waiting_on") == "retry_at" or saved.get("retry_at", 0) > time.time():
                     open_prs.add(issue)
@@ -472,10 +502,10 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 try:
                     repo_attempt(name, time.time())
                     branch = f"lokay/{number}"
-                    if selected.kind == "red_main":
+                    if selected.kind in ("red_main", "replan"):
                         pr = open_pr_for(name, branch)
                         saved = state_read(name, number)
-                        node = saved.get("node") or ("check" if pr else "plan")
+                        node = "plan" if saved.get("awaiting") == "children" else saved.get("node") or ("check" if pr else "plan")
                         now = time.time()
                         state_update(name, number,
                                      _event={"action": "red_main", "outcome": {"pr": pr, "status": repo.status}},
@@ -520,7 +550,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                      result="running", reason=None, last_attempt=now,
                                      **{**store.pick_ladder_fields(saved, now), **resumed})
                     store.ledger_append({"kind": "pick", "repo": name, "issue": number,
-                                         "attempt": now, "reason": selected.kind or node})
+                                         "attempt": now, "reason": selected.kind or node,
+                                         "blocked_by": graph.blockers(repo, number)})
                     return {"result": "picked", "repo": name, "issue": number, "node": node,
                             "pr": pr["number"] if pr else None, "held": held}
                 except BaseException:
@@ -728,8 +759,11 @@ def _split_issue(picked: dict, root: Path) -> dict:
     for index, task in enumerate(tasks):
         if index < len(children):
             continue
+        if task.get("after"):
+            task = {**task, "blocked_by": [children[item] for item in task["after"]]}
         number = create_child_issue(picked["repo"], picked["issue"], index, task,
                                     saved.get("split_generation", 0))
+        state_update(picked["repo"], number, blocked_by=task.get("blocked_by", []))
         children.append(number)
         state_update(picked["repo"], picked["issue"], children=children)
     state_update(picked["repo"], picked["issue"], awaiting="children", _event={"action": "enter_node", "outcome": {"node": "plan"}},
@@ -805,9 +839,7 @@ def _prepare(picked: dict) -> tuple | dict:
         git(worktree, "fetch", "origin", base, timeout=300)
         if not saved.get("h2_start"):
             if git(worktree, "status", "--porcelain", "--untracked-files=no"):
-                code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
-                if code:
-                    raise RuntimeError(err or "patch export failed")
+                out = git_bytes(worktree, "diff", "--binary", "HEAD", timeout=300)
                 artifact = run_dir(name, issue) / f"build-leftover-{git_head(worktree)[:12]}-{time.time_ns()}.patch"
                 store.write_artifact(artifact, out)
                 rounds_append(name, issue, f"Build: saved leftover changes to {artifact.name}")
@@ -876,7 +908,7 @@ def _prepare(picked: dict) -> tuple | dict:
                         and not any(row.get("warstwa") == "setup" for row in failing["ci"].get("failed", []))):
                     parents = git(worktree, "rev-list", "--parents", "-n", "1", culprit["sha"]).split()
                     git(worktree, "revert", "--no-commit", *(["-m", "1"] if len(parents) > 2 else []), culprit["sha"])
-                    store.write_artifact(patch, git(worktree, "diff", "--binary", "HEAD"))
+                    store.write_artifact(patch, git_bytes(worktree, "diff", "--binary", "HEAD"))
                     tidy_and_commit(worktree, f"Revert culprit PR #{culprit['pr']}")
                     state_update(name, issue, h2_summary=f"Revert culprit PR #{culprit['pr']}",
                                  h2_committed=git_head(worktree))
@@ -893,9 +925,14 @@ def _prepare(picked: dict) -> tuple | dict:
         if main["status"] == "green":
             return close_empty_patch(name, issue, saved, baseline)
     if not saved.get("h2_committed"):
+        leftovers = set(filter(None, git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")))
+        if leftovers:
+            rounds_append(name, issue, "Build: leaving untracked leftovers untouched: "
+                          + ", ".join(sorted({path.split("/")[0] for path in leftovers})))
         if git_head(worktree) == saved["h2_start"]:
             apply_patch(worktree, patch)
-        tidy_and_commit(worktree, "lokay build")
+        paths = set(filter(None, git(worktree, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+        tidy_and_commit(worktree, "lokay build", paths=paths)
         state_update(name, issue, h2_committed=git_head(worktree))
     if not git(worktree, "rev-list", f"origin/{base}..HEAD"):
         return store.empty_patch(name, issue, git(worktree, "rev-parse", f"origin/{base}"))
@@ -1268,6 +1305,21 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             sha = remote["sha"]
             pending = "check"
             continue
+        if remote["result"] == "red":
+            from lokay.effects.gh import main_inherited
+
+            def compare_main_checks():
+                code, main_sha, err = git_try(clone_path, "rev-parse", f"origin/{base}")
+                if code != 0:
+                    raise RuntimeError(err or "main checks revision lookup failed")
+                code, paths, err = git_try(worktree, "diff", "--name-only", "--no-renames", f"origin/{base}...{sha}")
+                if code != 0:
+                    raise RuntimeError(err or "checks paths lookup failed")
+                return main_inherited(picked["repo"], main_sha.strip(), remote,
+                                      any(path.startswith(".github/") for path in paths.splitlines()))
+
+            remote = _retry(picked, "check", compare_main_checks)
+            state_update(picked["repo"], picked["issue"], ci=remote["result"])
         if remote["result"] == "pending":
             state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, result="pending", verdict=None)
             rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, GitHub CI pending")
@@ -1278,14 +1330,16 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             {"warstwa": "GitHub CI", "plik": "", "check": name,
              "log": name + "\n" + (remote.get("failed_logs") or {}).get(name, name)}
             for name in remote.get("failed") or []
-        ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
-            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+        ], "ci": remote["result"],
+            **({"inherited": remote["inherited"]} if remote.get("inherited") else {}),
+            "notes": [*ci["notes"], *(remote.get("notes") or [])],
+            "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci", "inherited") else "red"}
         state_update(picked["repo"], picked["issue"], local_ci=ci)
-        decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
+        decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
             picked, worktree, base, sha, saved, diff, rows, ci, rounds)
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix)
+            check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix, main_sha)
         if replan_deleted_files(picked, verdict, sha):
             return {"result": "pending", "next": "plan"}
         derived = graph.step(store.load(picked["repo"], picked["issue"]),

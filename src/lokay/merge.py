@@ -5,7 +5,7 @@ from pathlib import Path
 
 from lokay.effects.gh import merge as gh_merge, pr_files
 from lokay.effects.git import base_branch, worktree_remove
-from lokay.graph import merge_allowed, red_main_allows
+from lokay.graph import merge_allowed
 from lokay.store import main_status, state_read, state_update
 from lokay.main_guard import check_main
 
@@ -25,10 +25,15 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
     status = main_status().get(repo_name, {})
-    children = state_read(repo_name, status["issue"]).get("children", []) if status.get("issue") else []
-    if not red_main_allows(status, issue, children):
-        state_update(repo_name, issue, result="pending", reason="main red: merge waits for green main")
-        return {"result": "main_red", "merge_sha": None}
+    if status.get("status") == "red":
+        main_sha = (status.get("baseline") or {}).get("sha")
+        if not main_sha:
+            state_update(repo_name, issue, result="pending", reason="main red: merge waits for green main")
+            return {"result": "main_red", "merge_sha": None}
+        if saved.get("check_inputs", {}).get("main_sha") != main_sha:
+            state_update(repo_name, issue, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                         sha=sha, verdict=None, result="check")
+            return {"result": "check", "sha": sha, "merge_sha": None}
     if worktree is not None and clone_path is None:
         raise ValueError("clone_path is required to remove a worktree")
     attempts = state_read(repo_name, issue).get("merge_attempts", {})
@@ -53,12 +58,15 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
                                       "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     from lokay.measure import record_merge
 
-    record_merge(repo_name, issue, number, sha, files)
     if clone_path is None:
         from lokay.config import repo
 
         clone_path = Path(repo(repo_name)["clone_path"]).expanduser()
-    check_main(repo_name, clone_path, sha, number, base=base)
+    main = None
+    try:
+        main = check_main(repo_name, clone_path, sha, number, base=base)
+    finally:
+        record_merge(repo_name, issue, number, sha, files, main)
     if worktree is not None:
         try:
             removed = worktree_remove(clone_path, worktree)
