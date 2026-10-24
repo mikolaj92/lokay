@@ -94,8 +94,6 @@ def latest_needs_help() -> dict:
                         unreadable += 1
         except (OSError, EOFError, UnicodeError):
             unreadable += 1
-        if latest is not None:
-            break
     return {"latest_needs_help": latest, "unreadable_records_or_files": unreadable}
 
 
@@ -126,7 +124,11 @@ def monitor() -> dict:
     repo = os.environ.get("LOKAY_ALARM_REPO", "mikolaj92/lokay")
     rows = gh_json(["issue", "list", "--repo", repo, "--state", "open",
                     "--search", "lokay-stalled in:title", "--limit", "1000000", "--json", "number,title"],
-                   error="alarm lookup failed", strip=False, default="[]")
+                   error="alarm lookup failed", strip=False)
+    if not isinstance(rows, list) or any(
+            not isinstance(row, dict) or not isinstance(row.get("title"), str)
+            or type(row.get("number")) is not int or row["number"] <= 0 for row in rows):
+        raise ValueError("invalid alarm lookup response")
     alarms = [row for row in rows if row["title"] == "lokay-stalled"]
     evidence = "\n\n```json\n" + dumps(beat, indent=2) + "\n```"
     if not reasons:
