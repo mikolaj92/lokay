@@ -4,7 +4,7 @@ import re
 import shlex
 import shutil
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -421,26 +421,34 @@ def lockfile(x: CheckInput) -> CheckResult:
     return CheckResult("lockfile", "pass", reason, ())
 
 
+def _diff_path(block: str) -> str | None:
+    lines = block.splitlines()
+    header = re.search(r' ("b/(?:\\.|[^"])*"|b/.*)$', lines[0]) if lines else None
+    if header is None:
+        return None
+    path = header[1]
+    if path.startswith('"'):
+        path = ast.literal_eval(path)
+    for line in lines[1:]:
+        if line.startswith("+++ "):
+            target = line[4:].split("\t", 1)[0]
+            if target.startswith('"'):
+                target = ast.literal_eval(target)
+            if target != "/dev/null":
+                path = target
+            break
+    return path.removeprefix("b/")
+
+
 def junk(x: CheckInput) -> CheckResult:
     paths = set()
     for block in x.diff.split("diff --git ")[1:]:
         lines = block.splitlines()
         if any(line.startswith("deleted file mode ") for line in lines):
             continue
-        header = re.search(r' ("b/(?:\\.|[^"])*"|b/.*)$', lines[0])
-        if header is None:
+        path = _diff_path(block)
+        if path is None:
             raise ValueError("invalid diff path")
-        path = header[1]
-        if path.startswith('"'):
-            path = ast.literal_eval(path)
-        path = path.removeprefix("b/")
-        for line in lines[1:]:
-            if line.startswith("+++ "):
-                path = line[4:].split("\t", 1)[0]
-                if path.startswith('"'):
-                    path = ast.literal_eval(path)
-                path = path.removeprefix("b/")
-                break
         if Path(path).is_absolute() or ".." in Path(path).parts:
             continue
         if is_artifact(path, x.worktree):
@@ -456,10 +464,14 @@ CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
+    blocks = x.diff.split("diff --git ")
+    filtered = replace(x, diff=blocks[0] + "".join(
+        "diff --git " + block for block in blocks[1:]
+        if (path := _diff_path(block)) is None or not is_artifact(path, x.worktree)))
     results = []
     for check in CHECKS:
         try:
-            results.append(check(x))
+            results.append(check(x if check is junk else filtered))
         except Exception as exc:
             results.append(CheckResult(check.__name__, "fail",
                                        f"{type(exc).__name__}: {exc}; check crashed; fix the check or its input", ()))
