@@ -157,7 +157,7 @@ class LokayAdapter:
         return {"patch.diff": self.deliverable_text(run_dir)}
 
     def deliverable_text(self, run_dir):
-        return (run_dir / "patch.diff").read_text()
+        return (run_dir / "patch.diff").read_bytes().decode(errors="replace")
 
     def base_harness(self):
         entries = sorted(self.library.entries(),

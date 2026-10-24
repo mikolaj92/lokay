@@ -1,12 +1,14 @@
 import ast
 import os
 import re
+import shlex
 import shutil
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
-from lokay.gates import dead_test_candidates, dead_tests, named_test
+from lokay.gates import dead_test_candidates, dead_tests, moved_test_candidates, moved_tests, named_test
 from lokay.lint import diff_lines, lint_diff, unit_test_hints
 from lokay.scope import ASSERTION, is_artifact, is_test, kind as change_kind
 from lokay.types import CheckResult, Finding, parse_finding
@@ -23,6 +25,9 @@ class CheckInput:
     hunks: list[dict]
     ci: dict
     worktree: Path
+    title: str = ""
+    red_main: bool = False
+    main: dict | None = None
 
 
 def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
@@ -43,6 +48,11 @@ def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: 
 
 
 def ci_green(x: CheckInput) -> CheckResult:
+    if x.ci.get("sha") == x.sha and x.ci.get("ci") == "inherited" and x.ci.get("inherited"):
+        inherited = x.ci["inherited"]
+        details = "; ".join(f"{item['check']}: {', '.join(item['steps'])}" for item in inherited)
+        return CheckResult("ci_green", "pass",
+                           f"GitHub checks fail only on steps that also fail on fresh main {inherited[0]['main_sha']}: {details}", ())
     if x.ci.get("ci") == "no_ci" and x.ci.get("sha") == x.sha:
         return CheckResult("ci_green", "pass", "not applicable: no CI configured", ())
     if x.ci.get("ci") in (None, "pending") and x.ci.get("sha") == x.sha:
@@ -100,6 +110,42 @@ def secrets(x: CheckInput) -> CheckResult:
                        "possible secret" if findings else "no secrets found", findings)
 
 
+def _revisions(x):
+    from lokay.effects.git import base_branch, git_try
+
+    try:
+        code, base, _ = git_try(x.worktree, "merge-base", x.sha, "origin/" + base_branch(x.worktree))
+        if code:
+            return None
+        base = base.strip()
+        code, base_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", base)
+        if code:
+            return None
+        code, head_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", x.sha)
+        if code:
+            return None
+
+        def source(revision, path):
+            try:
+                code, text, _ = git_try(x.worktree, "show", f"{revision}:{path}")
+                return None if code else text
+            except Exception:
+                return None
+
+        return (base_paths.splitlines(), head_paths.splitlines(),
+                lambda path: source(base, path), lambda path: source(x.sha, path))
+    except Exception:
+        return None
+
+
+def _moved(x):
+    if moved_test_candidates(x.diff):
+        revisions = _revisions(x)
+        if revisions is not None:
+            return moved_tests(x.diff, *revisions)
+    return {"names": {}, "added": {}, "removed": {}}
+
+
 def no_new_comments(x: CheckInput) -> CheckResult:
     ignored = {".md", ".rst", ".txt", ".json", ".lock"}
     markers = {
@@ -127,7 +173,8 @@ def no_new_comments(x: CheckInput) -> CheckResult:
                       for marker, extensions in markers.items())
         if comment:
             offenders.append((f"{path}:{number}", stripped))
-    errors = lint_diff(x.diff, x.sha, x.worktree, lokay_rules=x.repo.rsplit("/", 1)[-1] == "lokay")
+    errors = lint_diff(x.diff, x.sha, x.worktree, lokay_rules=x.repo.rsplit("/", 1)[-1] == "lokay",
+                       neutral=_moved(x)["added"])
     errors.extend(f"{location}: added comment -> remove it" for location, _ in offenders)
     if errors:
         findings = []
@@ -142,7 +189,7 @@ def no_new_comments(x: CheckInput) -> CheckResult:
 
 
 def no_unit_tests(x: CheckInput) -> CheckResult:
-    paths = unit_test_hints(x.diff)
+    paths = unit_test_hints(x.diff, neutral=_moved(x)["added"])
     if paths:
         first_added = {}
         for path, number, kind, _ in diff_lines(x.diff):
@@ -199,30 +246,21 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         lines = [text for _, _, kind, text in diff_lines("diff --git " + block) if kind in {"-", "+"}]
         if is_test(path, lines):
             changed.add(path)
+    moved = _moved(x)
+    for path in sorted(changed):
+        lines = [(number, kind, text) for p, number, kind, text in diff_lines(x.diff)
+                 if p == path and kind in {"+", "-"}]
+        if (lines and all(number in moved["added"].get(path, ()) for number, kind, _ in lines if kind == "+")
+                and Counter(text for _, kind, text in lines if kind == "-") <= moved["removed"].get(path, Counter())):
+            changed.remove(path)
     dead = frozenset()
-    if dead_test_candidates(x.diff):
-        from lokay.effects.git import base_branch, git_try
-
-        try:
-            code, base, _ = git_try(x.worktree, "merge-base", x.sha, "origin/" + base_branch(x.worktree))
-            if code:
-                raise ValueError("merge-base failed")
-            base = base.strip()
-            code, base_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", base)
-            if code:
-                raise ValueError("base tree failed")
-            code, head_paths, _ = git_try(x.worktree, "ls-tree", "-r", "--name-only", x.sha)
-            if code:
-                raise ValueError("head tree failed")
-
-            def source(revision, path):
-                code, text, _ = git_try(x.worktree, "show", f"{revision}:{path}")
-                return None if code else text
-
-            dead = dead_tests(x.diff, x.issue_body, base_paths.splitlines(), head_paths.splitlines(),
-                              lambda path: source(base, path), lambda path: source(x.sha, path))
-        except Exception:
-            dead = frozenset()
+    if dead_test_candidates(x.diff, moved["names"]):
+        revisions = _revisions(x)
+        if revisions is not None:
+            try:
+                dead = dead_tests(x.diff, x.issue_body, *revisions, moved=moved["names"])
+            except Exception:
+                dead = frozenset()
     changed -= dead
     unapproved = sorted(path for path in changed if not named_test(path, x.issue_body))
     if unapproved:
@@ -233,28 +271,31 @@ def weakened_tests(x: CheckInput) -> CheckResult:
         return CheckResult("weakened_tests", "pass", "no existing tests changed", ())
     config = repo_config(x.repo)
     if x.ci.get("result") != "green" or not config.get("test") or config.get("syntax_only"):
-        return _count_weakened_tests(x, dead)
+        return _count_weakened_tests(x, dead, moved)
     paths = sorted(changed)
     result = base_tests_on_head(x.worktree, x.sha, paths, config, x.issue)
     if result.get("result") == "green":
-        counted = _count_weakened_tests(x, dead)
+        counted = _count_weakened_tests(x, dead, moved)
         if counted.status == "fail":
             return counted
         return CheckResult("weakened_tests", "pass",
                            "base versions of changed tests pass on the new code: " + ", ".join(paths), ())
-    return _count_weakened_tests(x, dead)
+    return _count_weakened_tests(x, dead, moved)
 
 
-def _count_weakened_tests(x: CheckInput, dead=frozenset()) -> CheckResult:
+def _count_weakened_tests(x: CheckInput, dead=frozenset(), moved=None) -> CheckResult:
+    moved = moved or {"added": {}, "removed": {}}
     changes = {}
     for path, number, kind, text in diff_lines(x.diff):
-        if path not in dead and kind in {"-", "+"} and ASSERTION.match(text):
+        if (path not in dead and kind in {"-", "+"} and ASSERTION.match(text)
+                and not (kind == "+" and number in moved["added"].get(path, ()))):
             change = changes.setdefault(path, {"-": [], "+": []})
             change[kind].append((number, text))
     findings = []
     reasons = []
     for path, change in changes.items():
-        removed = len(change["-"]) - len(change["+"])
+        removed = len(change["-"]) - len(change["+"]) - sum(
+            count for text, count in moved["removed"].get(path, {}).items() if ASSERTION.match(text))
         if removed > 0 and is_test(path, [text for lines in change.values() for _, text in lines]):
             reason = f"Removes {removed} test assertions: {path}"
             line = max(1, change["-"][0][0])
@@ -284,6 +325,22 @@ def encoded_rewrite(x: CheckInput) -> CheckResult:
                                             "encoded_rewrite"))
     return CheckResult("encoded_rewrite", "fail" if findings else "pass",
                        "percent-encoded rewrites found" if findings else "no percent-encoded rewrites", tuple(findings))
+
+
+def intent(x: CheckInput) -> CheckResult:
+    from lokay.review import docs_only
+
+    signals = [tag for tag in ("[code-audit]", "[test-audit]") if tag in x.title.lower()]
+    if x.red_main:
+        signals.append("red main")
+    if signals and x.diff and docs_only(x.diff):
+        paths = sorted({token[2:] for line in x.diff.splitlines() if line.startswith("diff --git ")
+                        for token in shlex.split(line)[2:]})
+        findings = tuple(Finding(path, 1, 1,
+                                 "issue needs a code change; implement it instead of editing docs", "intent")
+                         for path in paths)
+        return CheckResult("intent", "fail", "docs/plan only instead of code: " + ", ".join(signals), findings)
+    return CheckResult("intent", "pass", "no code intent mismatch", ())
 
 
 def docs(x: CheckInput) -> CheckResult:
@@ -342,6 +399,11 @@ def lockfile(x: CheckInput) -> CheckResult:
                 drifted.add(path.relative_to(root).as_posix())
             elif status == "unknown":
                 errors.append(f"{path.relative_to(root)}: {reason}")
+    inherited = set()
+    if x.main and x.main.get("lockfile", {}).get("status") == "fail":
+        inherited = {f["plik"] for f in x.main["lockfile"]["findings"]}
+    inherited_drift = drifted & inherited
+    drifted -= inherited
     if drifted:
         message = "uv.lock is out of date with pyproject.toml: run `uv lock`"
         findings = tuple(Finding(name, 1, 1, message if Path(name).name == "uv.lock" else
@@ -352,6 +414,9 @@ def lockfile(x: CheckInput) -> CheckResult:
         errors.append("uv lock checks unavailable: uv not found")
     if errors:
         return CheckResult("lockfile", "unknown", "; ".join(map(str, errors)), ())
+    if inherited_drift:
+        return CheckResult("lockfile", "pass",
+                           "; ".join(sorted(inherited_drift)) + f": drift inherited from red main {x.main['sha']}", ())
     reason = "uv unavailable" if not available else "uv lock checks passed" if locks else "no applicable uv locks"
     return CheckResult("lockfile", "pass", reason, ())
 
@@ -387,7 +452,7 @@ def junk(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, docs]
+          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from json import dumps
 
 import json
@@ -11,6 +12,7 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
+from lokay import store
 from lokay.effects.pi import run_process
 from lokay.effects.retry import retry
 from lokay.redact import redact_text
@@ -139,8 +141,9 @@ def create_child_issue(repo: str, parent: int, index: int, task: dict, generatio
     for row in rows:
         if marker in (row.get("body") or "").splitlines():
             return int(row["number"])
+    after = "\nLokay after: " + ", ".join(f"#{number}" for number in task["blocked_by"]) if task.get("blocked_by") else ""
     out = gh_ok(["issue", "create", "--repo", repo, "--title", task["title"],
-                 "--body", marker + "\n\n" + task["body"]], error="child issue create failed")
+                 "--body", marker + "\n\n" + task["body"] + after], error="child issue create failed")
     match = re.search(r"https://github\.com/" + re.escape(repo) + r"/issues/(\d+)\s*$", out)
     if not match:
         raise RuntimeError("child issue URL missing")
@@ -177,8 +180,6 @@ def open_issues(repo: str) -> list[dict]:
         error="issue list failed", default="[]",
     )
     rows = [row for row in rows if not host_ops(row.get("body"))]
-    for row in rows:
-        row.pop("body", None)
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
 
 
@@ -244,6 +245,7 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
     ]
     failed = []
     failed_logs = {}
+    jobs = {}
     pending = []
     for item in rollup:
         name = item.get("name") or item.get("context") or "GitHub CI"
@@ -259,6 +261,9 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
             failed.append(name)
         if len(failed) > failure_count:
             failed_logs[name] = name
+            identity = re.search(r"/actions/runs/(\d+)/job/(\d+)(?:/|$)", item.get("detailsUrl") or "")
+            if item.get("__typename") == "CheckRun" and identity and item.get("startedAt"):
+                jobs[name] = {"run": identity[1], "job": identity[2], "started": item["startedAt"]}
             run = re.search(r"/actions/runs/(\d+)(?:/|$)", item.get("detailsUrl") or "")
             if run:
                 try:
@@ -271,8 +276,84 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
         return {"result": "pending", "sha": sha, "failed": failed,
                 "failed_logs": failed_logs, "pending": pending}
     if failed:
-        return {"result": "red", "sha": sha, "failed": failed, "failed_logs": failed_logs}
+        return {"result": "red", "sha": sha, "failed": failed, "failed_logs": failed_logs, "jobs": jobs}
     return {"result": "green", "sha": sha, "failed": []}
+
+
+def main_inherited(repo, main_sha, remote, touched_workflows):
+    jobs = remote.get("jobs") or {}
+    if remote["result"] != "red" or touched_workflows or any(name not in jobs for name in remote["failed"]):
+        return remote
+    runs = gh_json(["api", "--paginate", "--slurp", f"repos/{repo}/commits/{main_sha}/check-runs?per_page=100"],
+                   error="main checks lookup failed")
+    latest = {}
+    for page in runs:
+        for run in page["check_runs"]:
+            name = run["name"]
+            if name not in latest or run["id"] > latest[name]["id"]:
+                latest[name] = run
+    if any(name not in latest for name in remote["failed"]):
+        return remote
+    identities = {}
+    stale = False
+    refreshed = set()
+    for name in remote["failed"]:
+        run = latest[name]
+        identity = re.search(r"/actions/runs/(\d+)/job/(\d+)(?:/|$)", run.get("details_url") or "")
+        if not identity or (not run.get("started_at") and run["status"] == "completed"):
+            return remote
+        identities[name] = identity
+    for name in remote["failed"]:
+        run = latest[name]
+        if not run.get("started_at") or datetime.fromisoformat(run["started_at"]) < datetime.fromisoformat(jobs[name]["started"]):
+            stale = True
+            run_id = identities[name][1]
+            if run["status"] == "completed" and run_id not in refreshed:
+                gh_ok(["run", "rerun", run_id, "--repo", repo], error="main checks refresh failed")
+                refreshed.add(run_id)
+    if stale:
+        return {**remote, "result": "pending", "pending": ["main checks refresh"]}
+    inherited = []
+    steps_checks = {}
+    for name in remote["failed"]:
+        if latest[name]["conclusion"] != "failure":
+            return remote
+        pr_job = gh_json(["api", f"repos/{repo}/actions/jobs/{jobs[name]['job']}"], error="PR job lookup failed")
+        main_job = gh_json(["api", f"repos/{repo}/actions/jobs/{identities[name][2]}"], error="main job lookup failed")
+        failed = {step["name"] for step in pr_job["steps"]
+                  if step.get("conclusion") not in ("success", "skipped", "neutral")}
+        main_failed = {step["name"] for step in main_job["steps"]
+                       if step.get("conclusion") not in ("success", "skipped", "neutral")}
+        if not failed or not failed <= main_failed:
+            return remote
+        inherited.append({"check": name, "steps": sorted(failed), "main_sha": main_sha})
+        for step in sorted(failed):
+            steps_checks.setdefault(step, []).append(name)
+    issues = gh_json(["issue", "list", "--repo", repo, "--state", "all", "--limit", "1000000",
+                      "--json", "number,state,body"], error="main checks issue lookup failed")
+    logs = {}
+    for step, names in steps_checks.items():
+        marker = f"<!-- lokay main check: {step} -->"
+        matches = [row for row in issues if marker in (row.get("body") or "").splitlines()]
+        if any(row["state"] == "OPEN" for row in matches):
+            continue
+        if matches:
+            number = min(int(row["number"]) for row in matches)
+            gh_ok(["issue", "reopen", str(number), "--repo", repo], error="main checks issue reopen failed")
+            continue
+        tails = []
+        for name in names:
+            run_id = identities[name][1]
+            if run_id not in logs:
+                logs[run_id] = gh_ok(["run", "view", run_id, "--repo", repo, "--log-failed"],
+                                     error="main checks log lookup failed")[-3000:]
+            tails.append(f"{name}:\n{logs[run_id]}")
+        body = (f"{marker}\n\nMain: {main_sha}\nChecks: {', '.join(names)}\n\n"
+                + "\n\n".join(tails)
+                + "\n\nThe fix belongs on main (for example a dependency bump); PRs that do not touch this step are not blocked by it.")
+        gh_ok(["issue", "create", "--repo", repo, "--title", f'Main: GitHub checks fail on step "{step}"',
+               "--body", fit_body(body)], error="main checks issue create failed")
+    return {**remote, "result": "inherited", "inherited": inherited}
 
 
 def checks_table(checks) -> str:
@@ -313,7 +394,8 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
 
 def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     code, out, err = _gh(
-        ["pr", "merge", str(number), "--repo", repo, "--merge", "--match-head-commit", expected_head_sha]
+        ["pr", "merge", str(number), "--repo", repo, "--merge", "--match-head-commit", expected_head_sha,
+         "--body", f"Lokay-Merge: {store.TICK}"]
     )
     if code != 0:
         blob = (err or out).lower()

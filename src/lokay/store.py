@@ -205,6 +205,12 @@ def log_event(kind: str, *, _env=None, **fields) -> None:
         return
 
 
+def ledger_append(row: dict) -> None:
+    path = RUNS.parent / "ledger.jsonl"
+    with shared_file_lock(path.with_suffix(".lock")):
+        append_text(path, dumps({**row, "ts": datetime.now(timezone.utc).isoformat(), "tick": TICK}) + "\n")
+
+
 def run_dir(repo: str, issue: int) -> Path:
     return RUNS / repo.replace("/", "__") / str(issue)
 
@@ -268,9 +274,23 @@ def pick_ladder_fields(state: dict, now: float) -> dict:
     return {}
 
 
+def empty_patch(repo: str, issue: int, sha: str | None = None) -> dict:
+    from lokay.config import repo as repo_config
+    from lokay.effects.git import base_branch, git
+
+    if not sha:
+        root = Path(repo_config(repo)["clone_path"]).expanduser()
+        sha = git(root, "rev-parse", f"origin/{base_branch(root)}")
+    state_update(repo, issue, _event={"action": "build_complete", "outcome": {
+        "no_changes": True, "main_sha": sha}})
+    return {"result": state_read(repo, issue)["result"], "reason": "empty patch", "empty_main_sha": sha}
+
+
 def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
     if state.get("result") == "closed":
         return None
+    if state.get("result") == "empty_patch":
+        return "main"
     now = time.time() if now is None else now
     if state.get("awaiting") == "children":
         return "children"

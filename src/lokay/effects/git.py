@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 from uuid import uuid4
+from tempfile import TemporaryDirectory
 from subprocess import CompletedProcess, TimeoutExpired
 from typing import Any
 from pathlib import Path
@@ -12,6 +13,7 @@ from lokay import store
 from lokay.effects.pi import run_process
 from lokay.effects.retry import retry
 from lokay.safety import validate_argv
+from lokay.scope import is_junk
 
 REF_LOCK = ("cannot lock ref", "unable to resolve reference", ".lock")
 BASE_BRANCHES: dict[tuple[Path, str | None], str] = {}
@@ -62,10 +64,17 @@ def base_branch(path: Path, *, branch: str | None = None) -> str:
 
 
 def _command(repo: Path | None, args: list[str], *, timeout: float, env: dict[str, str] | None = None,
-             input: bytes | None = None, text: bool = True) -> CompletedProcess[Any]:
+             input: bytes | str | None = None, text: bool = True) -> CompletedProcess[Any]:
     argv = ["git", *args]
     validate_argv(argv)
     return run_process(argv, cwd=repo, timeout=timeout, env=env, input=input, text=text)
+
+
+def git_bytes(path: Path, *args: str, timeout: float = 30) -> bytes:
+    proc = _command(path, list(args), timeout=timeout, text=False)
+    if proc.returncode:
+        raise RuntimeError(proc.stderr.decode(errors="replace") or "patch export failed")
+    return proc.stdout
 
 
 def checkout_version() -> str | None:
@@ -100,10 +109,11 @@ def _remove_stale_lock(repo: Path, stderr: str) -> bool:
     return True
 
 
-def git_try(path: Path, *args: str, timeout: float = 60, env: dict[str, str] | None = None) -> tuple[int, str, str]:
-    proc = _command(path, list(args), timeout=timeout, env=env)
+def git_try(path: Path, *args: str, timeout: float = 60, env: dict[str, str] | None = None,
+            input: str | None = None) -> tuple[int, str, str]:
+    proc = _command(path, list(args), timeout=timeout, env=env, input=input)
     if proc.returncode != 0 and _remove_stale_lock(path, proc.stderr or ""):
-        proc = _command(path, list(args), timeout=timeout, env=env)
+        proc = _command(path, list(args), timeout=timeout, env=env, input=input)
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
@@ -335,14 +345,16 @@ def detached_worktree(root: Path, path: Path, start: str) -> None:
     git(root, "worktree", "add", "--detach", str(path), start, timeout=300)
 
 
-def worktree_patch(worktree: Path) -> str:
+def worktree_patch(worktree: Path) -> bytes:
     names = git(worktree, "ls-files", "--others", "--exclude-standard", "-z").split("\0")
     for name in filter(None, names):
-        git(worktree, "--literal-pathspecs", "add", "--intent-to-add", "--", name)
-    code, out, err = git_try(worktree, "diff", "--binary", "HEAD", timeout=300)
-    if code:
-        raise RuntimeError(err or "patch export failed")
-    return out
+        if not is_junk(name, worktree):
+            git(worktree, "--literal-pathspecs", "add", "--intent-to-add", "--", name)
+    paths = [name for name in git(worktree, "diff", "--no-renames", "--name-only", "-z", "HEAD").split("\0")
+             if name and not is_junk(name, worktree)]
+    if not paths:
+        return b""
+    return git_bytes(worktree, "--literal-pathspecs", "diff", "--no-renames", "--binary", "HEAD", "--", *paths, timeout=300)
 
 
 def apply_patch(worktree: Path, patch: Path) -> None:
@@ -564,9 +576,9 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
     return retry(push_once, attempts, transient, delay=lambda attempt: 0.2 * (attempt + 1))
 
 
-def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
-    def checked(args: list[str]) -> str:
-        code, out, err = git_try(repo, "--literal-pathspecs", *args)
+def commit_paths(repo: Path, paths: list[str], message: str, removed: set[str] | None = None) -> list[str]:
+    def checked(args: list[str], env: dict[str, str] | None = None) -> str:
+        code, out, err = git_try(repo, "--literal-pathspecs", *args, env=env)
         if code:
             raise RuntimeError((err or out).strip())
         return out
@@ -575,11 +587,21 @@ def commit_paths(repo: Path, paths: list[str], message: str) -> list[str]:
     if not paths:
         return []
     indexed = set(filter(None, checked(["ls-files", "-z", "--", *paths]).split("\0")))
-    add_paths = [path for path in paths if path in indexed or (repo / path).exists() or (repo / path).is_symlink()]
+    removed = set(paths) & (removed or set())
+    add_paths = [path for path in paths if path not in removed
+                 and (path in indexed or (repo / path).exists() or (repo / path).is_symlink())]
     if add_paths:
         checked(["add", "--", *add_paths])
     staged = set(filter(None, checked(["diff", "--cached", "--name-only", "-z"]).split("\0")))
     committed = sorted(set(paths) & staged)
-    if committed:
+    if committed and removed:
+        with TemporaryDirectory() as directory:
+            env = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
+            checked(["read-tree", "HEAD"], env)
+            if add_paths:
+                checked(["add", "--", *add_paths], env)
+            checked(["update-index", "--force-remove", "--", *sorted(removed)], env)
+            checked(["commit", "-m", message], env)
+    elif committed:
         checked(["commit", "--only", "-m", message, "--", *committed])
     return committed

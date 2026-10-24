@@ -77,6 +77,8 @@ def merge(picked, worktree, branch, sha, verdict, base, plan_rounds, rounds, clo
                 f"merge repo={picked['repo']} pr={pr['number']} sha={sha}: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
+        if merged["result"] in ("main_red", "parked", "empty_patch"):
+            return merged, base, sha, "merge", verdict
         state_update(picked["repo"], picked["issue"], _event={"action": "merge_complete", "outcome": merged})
         if merged["result"] == "closed":
             return merged, base, sha, "merge", verdict
@@ -155,6 +157,7 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     from lokay.effects.git import git_try
     from lokay.review import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
     from lokay.checks import CheckInput, run_checks
+    from lokay.graph import red_main_allows
     from lokay.effects.decide import decide
 
     def read_stat():
@@ -164,10 +167,16 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
         return out
 
     plan_text = saved.get("issue_body") or ""
+    status = store.main_status().get(picked["repo"], {})
+    red_issue = status.get("issue") if status.get("status") == "red" else None
+    children = state_read(picked["repo"], red_issue).get("children", []) if red_issue else []
     check_input = CheckInput(
         repo=picked["repo"], issue=int(picked["issue"]), sha=sha,
         issue_body=saved.get("issue_body") or "",
         plan=plan_text, diff=diff or "", hunks=rows, ci=ci, worktree=worktree,
+        title=saved.get("issue_title") or "",
+        red_main=bool(red_issue) and red_main_allows(status, int(picked["issue"]), children),
+        main=status.get("baseline") if status.get("status") == "red" else None,
     )
     check_results = run_checks(check_input)
     checks_failed = any(result.status == "fail" for result in check_results)
@@ -243,11 +252,12 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     for finding in amplified:
         if dismissed_key(finding) not in dismissed_keys:
             decisions.append({"sha": sha, "next": "issue", "uwagi": [finding]})
-    return decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed
+    return decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, (
+        check_input.main["sha"] if check_input.main else None)
 
 
 def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
-                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix):
+                   check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix, main_sha):
     from lokay.tick import _retry, dumps, refresh_body
     from lokay.review import validate_sha, verdict as check_verdict
     from lokay.effects.gh import pr_files, check_comment
@@ -269,7 +279,7 @@ def complete_check(picked, worktree, base, sha, ci, decisions, plan_text, checks
         picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "check"}}, sha=sha,
         check_rounds=rounds, result=verdict["result"], verdict=verdict, last_check=verdict,
         check_notes=check_notes, check_history=check_history,
-        check_inputs={"sha": sha, "ci": ci, "decisions": decisions, "results": check_results,
+        check_inputs={"sha": sha, "main_sha": main_sha, "ci": ci, "decisions": decisions, "results": check_results,
                       "scope": scope, "dismissed_keys": dismissed_keys},
         **store.round_fields(state_read(picked["repo"], picked["issue"]),
                              diff_fingerprint=diff_fingerprint, checks=verdict.get("checks"),
@@ -461,6 +471,10 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
     fixed = fix_step(picked, "harness2", fix_action, sha)
     if fixed["result"] == "failed":
         return "return", fixed
+    if fixed.get("no_changes") and not diff:
+        from lokay.store import empty_patch
+
+        return "return", empty_patch(picked["repo"], picked["issue"])
     if fixed.get("no_changes"):
         from lokay.effects.decide import decide
         from lokay.review import QUESTIONS
@@ -478,7 +492,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         if not (head == sha == verdict.get("sha")
                 and checks.get("sha") == sha and checks.get("result") == "green"
                 and not checks.get("failed")
-                and checks.get("ci", saved.get("ci")) in ("green", "no_ci")
+                and checks.get("ci", saved.get("ci")) in ("green", "no_ci", "inherited")
                 and sha not in current.get("dispute_rechecks", [])):
             return replan()
         justification = current.get("pi_response") or ""

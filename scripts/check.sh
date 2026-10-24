@@ -56,6 +56,57 @@ for rollup, expected in (([success, cancelled], "green"), ([cancelled], "red"),
 print("superseded checks: green")
 PY
 uv run python - <<'PY'
+from contextlib import ExitStack
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import main_guard, store, tick
+
+name, number = "owner/repo", 307
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_STATE_DIR": directory}))
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(tick, "repo_config", return_value={}))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+    split = stack.enter_context(patch.object(tick, "_split_issue", return_value={"result": "split"}))
+    rounds = stack.enter_context(patch.object(tick, "rounds_append"))
+    for existing in (True, False):
+        for suffix in ("", tick.RECOVERY_EVIDENCE + "preserved setup evidence"):
+            store.state_update(name, number, issue_title=main_guard.TITLE, issue_body="old body" + suffix,
+                               plan_prompt="keep this plan", difficulty="too_big")
+            loaded = {"title": main_guard.TITLE + " ", "body": "<!-- lokay-main-red -->\nnew body\n"}
+            def github(args, **kwargs):
+                if args[:2] == ["issue", "list"]:
+                    return [{"number": number, "title": main_guard.TITLE, "state": "OPEN"}] if existing else []
+                assert args == ["issue", "view", str(number), "--repo", name, "--json", "title,body"], args
+                return loaded
+            with patch.object(main_guard, "gh_json", side_effect=github) as reads, \
+                    patch.object(main_guard, "gh_ok", return_value=f"https://github.com/{name}/issues/{number}"), \
+                    patch.object(tick, "gh_json", side_effect=github):
+                assert main_guard.guard_issue(name, "new body") == number
+                picked = {"repo": name, "issue": number}
+                rounds.reset_mock()
+                assert tick._prepare(picked) == {"result": "split"}
+                saved = store.state_read(name, number)
+                assert saved["plan_prompt"] == "keep this plan", saved
+                assert saved["issue_title"] == loaded["title"], saved
+                assert saved["issue_body"] == loaded["body"] + suffix, saved
+                reads.assert_any_call(["issue", "view", str(number), "--repo", name, "--json", "title,body"],
+                                      error="main issue view failed")
+                rounds.assert_not_called()
+                loaded = {**loaded, "body": "human edit"}
+                assert tick._prepare(picked) == {"result": "split"}
+                saved = store.state_read(name, number)
+                assert saved["plan_prompt"] is None and saved["issue_body"] == "human edit", saved
+                rounds.assert_called_once_with(name, number,
+                    "Plan: issue changed on GitHub; refreshed issue text and reset plan prompt")
+print("guard self-edit keeps plan checks: green")
+PY
+uv run python - <<'PY'
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -78,6 +129,192 @@ for outcome, kept in ((subprocess.TimeoutExpired("probe", 10), True),
             repair_venvs(worktree)
         assert venv.is_dir() == kept, outcome
 print("venv repair checks: ok")
+PY
+uv run python - <<'PY'
+import os
+import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import build, h2, store
+from lokay.effects.git import worktree_patch
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    home = root / "home"
+    repo = root / "repo"
+    store.ensure_directory(home)
+    store.ensure_directory(repo)
+    with patch.dict(os.environ, {"HOME": str(home), "GIT_CONFIG_NOSYSTEM": "1"}):
+        def git(*args):
+            return subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+        git("init")
+        git("config", "user.name", "patch checks")
+        git("config", "user.email", "patch-checks@example.invalid")
+        store.write_artifact(repo / "data.bin", b"a\n")
+        store.write_artifact(repo / "text.txt", "text\n")
+        git("add", ".")
+        git("commit", "-m", "patch checks")
+        data = b"\xe2\x28\xa1 byte\n" * 3
+        new = b"\xff\xfe\xe2\n"
+        store.write_artifact(repo / "data.bin", data)
+        store.write_artifact(repo / "new.bin", new)
+        exported = worktree_patch(repo)
+        assert isinstance(exported, bytes)
+        assert b"\xe2\x28\xa1 byte\n" in exported or b"GIT binary patch" in exported
+        run_dir = root / "run"
+        artifact = run_dir / "patch.diff"
+        store.write_artifact(artifact, exported)
+        displayed = h2.LokayAdapter.deliverable_text(None, run_dir)
+        assert isinstance(displayed, str) and "diff --git" in displayed
+        git("reset", "--hard")
+        git("clean", "-fd")
+        git("apply", str(artifact))
+        assert (repo / "data.bin").read_bytes() == data
+        assert (repo / "new.bin").read_bytes() == new
+        git("add", "data.bin", "new.bin")
+        status = build.worktree_status(repo)
+        assert set(status) == {"data.bin", "new.bin"}, status
+        assert all(isinstance(value[1], bytes) and value[1] for value in status.values()), status
+print("patch bytes checks: green")
+PY
+uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import build, store
+from lokay.effects.git import apply_patch, git, worktree_patch
+from lokay.scope import is_artifact
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    repo = root / "repo"
+    sibling = root / "worktree"
+    store.ensure_directory(repo)
+    git(repo, "init", "-b", "main")
+    git(repo, "config", "user.name", "worktree checks")
+    git(repo, "config", "user.email", "checks@example.invalid")
+    for name, content in {"tracked.py": "before\n", "src/old.py": "original\n",
+                          "notes/run.log": "before\n", "deps.lock": "before\n",
+                          ".gitignore": ".pixi/\n", "config/.pixi-version": "version\n"}.items():
+        store.write_artifact(repo / name, content)
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "worktree", "add", "-b", "checks", str(sibling))
+    leftovers = {".local-checks/pixi-cache/pkgs/zstd-1/info/index.json": "{}",
+                 ".local-checks/env/conda-meta/history": "history",
+                 ".local-checks/env/CACHEDIR.TAG": "cache",
+                 "notes/old.txt": "keep"}
+    for name, content in leftovers.items():
+        store.write_artifact(repo / name, content)
+    store.write_artifact(sibling / "src/new.py", "new\n")
+    store.write_artifact(sibling / "tracked.py", "after\n")
+    patch = root / "build.patch"
+    store.write_artifact(patch, worktree_patch(sibling))
+    apply_patch(repo, patch)
+    paths = set(filter(None, git(repo, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+    committed, _ = build.tidy_and_commit(repo, "lokay build", paths=paths)
+    assert set(committed) == {"src/new.py", "tracked.py"}, committed
+    assert set(git(repo, "diff", "--name-only", "origin/main..HEAD").splitlines()) == {"src/new.py", "tracked.py"}
+    for name, content in leftovers.items():
+        assert (repo / name).read_text() == content, name
+    store.write_artifact(repo / "env/pyvenv.cfg", "venv")
+    store.write_artifact(repo / "env/bin/python", "python")
+    store.write_artifact(repo / "tagged/CACHEDIR.TAG", "cache")
+    store.write_artifact(repo / "tagged/file", "cache")
+    store.write_artifact(repo / "conda/conda-meta/history", "history")
+    assert all(is_artifact(name, repo) for name in (
+        ".local-checks/pixi-cache/pkgs/zstd-1/info/index.json",
+        ".local-checks/env/conda-meta/history", "env/bin/python", "tagged/file",
+        "conda/conda-meta/history"))
+    assert not is_artifact("src/new.py", repo)
+    store.write_artifact(sibling / "fresh-env/pyvenv.cfg", "venv")
+    store.write_artifact(sibling / "fresh-env/bin/python", "junk")
+    exported = worktree_patch(sibling)
+    assert b"fresh-env" not in exported and b"src/new.py" in exported
+    git(sibling, "mv", "src/old.py", "src/moved.py")
+    exported = worktree_patch(sibling)
+    assert b"deleted file mode" in exported and b"a/src/old.py" in exported
+    assert b"new file mode" in exported and b"b/src/moved.py" in exported
+    git(sibling, "reset", "--hard", "HEAD")
+    git(sibling, "mv", "src/old.py", "src/moved.py")
+    store.write_artifact(patch, worktree_patch(sibling))
+    apply_patch(repo, patch)
+    paths = set(filter(None, git(repo, "diff", "--cached", "--no-renames", "--name-only", "-z").split("\0")))
+    build.tidy_and_commit(repo, "lokay build", paths=paths)
+    assert not (repo / "src/old.py").exists()
+    assert git(repo, "show", "HEAD:src/moved.py") == "original"
+    git(repo, "add", "-f", ".local-checks/pixi-cache/pkgs/zstd-1/info/index.json")
+    store.write_artifact(repo / "notes/run.log", "after\n")
+    store.write_artifact(repo / "deps.lock", "after\n")
+    git(repo, "add", "notes/run.log", "deps.lock")
+    git(repo, "commit", "-m", "branch changes")
+    build.tidy_and_commit(repo, "tidy")
+    assert ".local-checks/pixi-cache/pkgs/zstd-1/info/index.json" not in git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
+    assert git(repo, "show", "HEAD:notes/run.log") == "after"
+    assert git(repo, "show", "HEAD:deps.lock") == "after"
+    for name in (".local-checks/ember-source/README.md", ".local-checks/mojo.conda"):
+        store.write_artifact(repo / name, "junk\n")
+        git(repo, "add", "-f", "--", name)
+    git(repo, "commit", "-m", "branch leftovers")
+    previous = git(repo, "rev-parse", "HEAD")
+    build.tidy_and_commit(repo, "Fix #55")
+    assert git(repo, "rev-parse", "HEAD") != previous
+    assert git(repo, "rev-parse", "HEAD^") == previous
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+    assert ".local-checks/ember-source/README.md" not in tree
+    assert ".local-checks/mojo.conda" not in tree
+    assert "src/new.py" in tree
+    store.write_artifact(repo / ".pixi/envs/default/bin/python", "junk\n")
+    git(repo, "add", "-f", ".pixi/envs/default/bin/python")
+    git(repo, "commit", "-m", "ignored branch leftovers")
+    build.tidy_and_commit(repo, "tidy")
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+    assert ".pixi/envs/default/bin/python" not in tree
+    assert "config/.pixi-version" in tree
+print("worktree junk checks: green")
+PY
+uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import build, store
+from lokay.effects.git import git
+
+with TemporaryDirectory() as directory:
+    repo = Path(directory)
+    git(repo, "init", "-b", "main")
+    git(repo, "config", "user.name", "junk checks")
+    git(repo, "config", "user.email", "checks@example.invalid")
+    store.write_artifact(repo / ".gitignore", ".pixi/\n")
+    git(repo, "add", ".gitignore")
+    git(repo, "commit", "-m", "base")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    git(repo, "checkout", "-b", "checks")
+    junk = {".check-local/old.txt": b"old\n",
+            ".local-checks/ember-source/README.md": b"source\n",
+            ".local-checks/env/CACHEDIR.TAG": b"cache\n",
+            ".local-checks/env/data.bin": b"\x00\xff\n",
+            "tagged/CACHEDIR.TAG": b"cache\n", "tagged/blob": b"blob\n",
+            ".pixi/envs/default/bin/python": b"python\n"}
+    for name, content in junk.items():
+        store.write_artifact(repo / name, content)
+    store.write_artifact(repo / "src/new.py", "new\n")
+    git(repo, "add", "-f", "--", *junk, "src/new.py")
+    git(repo, "commit", "-m", "branch leftovers")
+    previous = git(repo, "rev-parse", "HEAD")
+    build.tidy_and_commit(repo, "Fix #55")
+    assert git(repo, "rev-parse", "HEAD^") == previous
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines())
+    index = set(git(repo, "ls-files").splitlines())
+    for name, content in junk.items():
+        assert (repo / name).read_bytes() == content, name
+        assert name not in tree, name
+        assert name not in index, name
+    assert "src/new.py" in tree
+print("junk keeps disk checks: green")
 PY
 .venv/bin/python - <<'PY'
 from lokay.review import verdict
@@ -138,6 +375,15 @@ try:
         raise SystemExit("pi sandbox check failed: UV_CACHE_DIR")
 finally:
     shutil.rmtree(env["LOKAY_STATE_DIR"])
+PY
+.venv/bin/python - <<'PY'
+import tempfile
+from pathlib import Path
+from lokay.effects.tests import UV_CACHE_DIR
+temp = Path(tempfile.gettempdir()).resolve()
+if UV_CACHE_DIR == temp or temp in UV_CACHE_DIR.parents:
+    raise SystemExit(f"uv cache outside os temp check failed: {UV_CACHE_DIR}")
+print("uv cache outside os temp checks: green")
 PY
 .venv/bin/python - "$sandbox" <<'PY'
 import os
@@ -498,25 +744,301 @@ assert run.state["sha"] == "merge-sha", run.state
 print("merged state checks: green")
 PY
 uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import graph, merge, store
+from lokay.types import RepoSnapshot, Snapshot
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory}))
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    gh_merge = stack.enter_context(patch.object(merge, "gh_merge", return_value={
+        "result": "merged", "merge_sha": "merged-S"}))
+    files = stack.enter_context(patch.object(merge, "pr_files", return_value=["file.py"]))
+    stack.enter_context(patch.object(merge, "check_main", return_value={
+        "status": "green", "baseline": {"ci": {"executed": 3}, "lockfile": {"status": "pass"}}}))
+    stack.enter_context(patch.object(merge, "worktree_remove", return_value={"result": "removed"}))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch("lokay.review.recompute_verdict", side_effect=lambda sha, state: state["verdict"]))
+    name = "owner/red"
+    verdict = {"result": "merge", "sha": "S"}
+    red = {"status": "red", "issue": 9, "baseline": {"sha": "MAIN"}}
+    store.save_main_status(name, red)
+    store.state_update(name, 9, children=[11])
+    for issue in (3, 9, 11):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                           sha="S", verdict=verdict, last_check=verdict, result="running", pr=issue + 100,
+                           check_inputs={"main_sha": "MAIN"})
+    def merge_issue(issue):
+        return merge.merge_sha(name, issue + 100, "S", verdict, None, "owner", issue, {}, clone_path=home)
+
+    store.save_main_status(name, {"status": "red", "issue": 9})
+    blocked = merge_issue(3)
+    assert blocked == {"result": "main_red", "merge_sha": None}, blocked
+    gh_merge.assert_not_called()
+    files.assert_not_called()
+    saved = store.state_read(name, 3)
+    assert saved["node"] == "merge" and saved["result"] == "pending", saved
+    assert saved["reason"] == "main red: merge waits for green main", saved
+    assert saved["verdict"] == verdict, saved
+    snapshot = Snapshot(repos=(RepoSnapshot(name=name, prs=(), issues=(), states={3: saved}),),
+                        now=store.last_activity(saved) + 301)
+    assert graph.pick(snapshot) is None
+    store.save_main_status(name, red)
+    for issue, inputs in ((4, {"main_sha": "OLD"}), (5, {})):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                           sha="S", verdict=verdict, last_check=verdict, result="running", check_inputs=inputs)
+        assert merge_issue(issue) == {"result": "check", "sha": "S", "merge_sha": None}
+        gh_merge.assert_not_called()
+        files.assert_not_called()
+        saved = store.state_read(name, issue)
+        assert saved["node"] == "check" and saved["result"] == "check", saved
+        assert saved["verdict"] is None, saved
+    for issue in (3, 9, 11):
+        gh_merge.reset_mock()
+        assert merge_issue(issue)["result"] == "merged"
+        gh_merge.assert_called_once_with(name, issue + 100, "S")
+    store.save_main_status(name, {"status": "green"})
+    store.state_update(name, 3, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                       sha="S", verdict=verdict, result="running", merge_attempts={})
+    gh_merge.reset_mock()
+    assert merge_issue(3)["result"] == "merged"
+    gh_merge.assert_called_once_with(name, 103, "S")
+    assert graph.red_main_allows({"status": "green"}, 3, [])
+    for issue, expected in ((9, True), (11, True), (3, False)):
+        assert graph.red_main_allows(red, issue, [11]) is expected
+print("red main merge invariant: green")
+PY
+uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import checks, main_guard, merge, store
+from lokay.build import LOCKFILES
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory}))
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    worktree = home / "worktree"
+    worktree.mkdir()
+    assert "pixi.lock" in LOCKFILES
+    for name in ("pixi.lock", "other/pixi.lock"):
+        path = worktree / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    baseline = {"sha": "9794f581", "lockfile": {
+        "status": "fail", "findings": [{"plik": "pixi.lock"}]},
+        "ci": {"tested": True, "result": "green", "log": "", "failed": []}}
+    x = checks.CheckInput(repo="owner/fala", issue=315, sha="S", issue_body="", plan="",
+                          diff="", hunks=[], ci={"log": "lockfile drift: pixi.lock"},
+                          worktree=worktree, main=baseline)
+    result = checks.lockfile(x)
+    assert result.status == "pass" and "inherited" in result.reason, result
+    assert "pixi.lock" in result.reason and baseline["sha"] in result.reason, result
+    x.ci["log"] += "\nlockfile drift: other/pixi.lock"
+    result = checks.lockfile(x)
+    assert result.status == "fail" and [f.plik for f in result.findings] == ["other/pixi.lock"], result
+    x.main = None
+    x.ci["log"] = "lockfile drift: pixi.lock"
+    result = checks.lockfile(x)
+    assert result.status == "fail" and [f.plik for f in result.findings] == ["pixi.lock"], result
+    baseline["ci"] = {"tested": True, "result": "red", "log": "FAILED tests/a.py::x", "failed": []}
+    with patch.object(main_guard, "check_main", return_value={"status": "red", "baseline": baseline}):
+        ci = {"tested": True, "result": "red", "log": "FAILED tests/a.py::x", "failed": []}
+        result = main_guard.local_baseline("owner/fala", worktree, ci)
+        assert result["result"] == "green" and result["baseline"]["sha"] == baseline["sha"], result
+        ci["log"] += "\nFAILED tests/b.py::y"
+        result = main_guard.local_baseline("owner/fala", worktree, ci)
+        assert result["result"] == "red", result
+        assert [f["plik"] for f in result["failed"]] == ["tests/b.py::y"], result
+    name = "owner/red"
+    store.save_main_status(name, {"status": "red", "baseline": {"sha": "MAIN"}})
+    verdict = {"result": "merge", "sha": "S"}
+    gh_merge = stack.enter_context(patch.object(merge, "gh_merge", return_value={
+        "result": "merged", "merge_sha": "merged-S"}))
+    stack.enter_context(patch.object(merge, "pr_files", return_value=["file.py"]))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(merge, "check_main", return_value={
+        "status": "green", "baseline": {"ci": {"executed": 3}, "lockfile": {"status": "pass"}}}))
+    stack.enter_context(patch("lokay.review.recompute_verdict", side_effect=lambda sha, state: state["verdict"]))
+    for issue, main_sha, expected in ((1, "MAIN", "merged"), (2, "OLD", "check")):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "merge"}},
+                           sha="S", verdict=verdict, last_check=verdict, result="running", check_inputs={"main_sha": main_sha})
+        gh_merge.reset_mock()
+        result = merge.merge_sha(name, issue + 100, "S", verdict, None, "owner", issue, {}, clone_path=home)
+        assert result["result"] == expected, result
+        if expected == "merged":
+            gh_merge.assert_called_once_with(name, issue + 100, "S")
+        else:
+            gh_merge.assert_not_called()
+            assert result == {"result": "check", "sha": "S", "merge_sha": None}, result
+print("red main subset checks: green")
+PY
+uv run python - <<'PY'
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import checks
+from lokay.effects import gh
+
+step = "Check stable HTTP releases"
+marker = f"<!-- lokay main check: {step} -->"
+names = ["pytest (3.12)", "pytest (3.14)"]
+
+with TemporaryDirectory() as directory, patch.dict(os.environ, {"HOME": directory}):
+    def scenario(conclusion="failure", stale=False, status="completed", extra=False, touched=False,
+                 issues=(), missing=False, identity=True):
+        calls = []
+        def fake(argv, **kwargs):
+            calls.append(argv)
+            if argv[:2] == ["pr", "view"]:
+                return 0, json.dumps({"headRefOid": "head", "statusCheckRollup": [
+                    {"__typename": "CheckRun", "name": name, "status": "COMPLETED", "conclusion": "FAILURE",
+                     "detailsUrl": f"https://github.com/owner/repo/actions/runs/1/job/{i}" if identity else "",
+                     "startedAt": "2026-10-23T19:21:10Z"} for i, name in enumerate(names, 10)]}), ""
+            if argv[:2] == ["run", "view"]:
+                return 0, "failed log tail", ""
+            if argv[0] == "api" and "/check-runs?" in argv[-1]:
+                return 0, json.dumps([{"check_runs": [] if missing else [
+                    {"id": i, "name": name, "status": status, "conclusion": conclusion,
+                     "details_url": f"https://github.com/owner/repo/actions/runs/2/job/{i}",
+                     "started_at": "2026-10-23T08:08:43Z" if stale else "2026-10-23T19:22:10Z"}
+                    for i, name in enumerate(names, 20)]}]), ""
+            if argv[0] == "api" and "/actions/jobs/" in argv[-1]:
+                job = int(argv[-1].rsplit("/", 1)[1])
+                steps = [{"name": step, "conclusion": "failure"}, {"name": "Install", "conclusion": "success"}]
+                if extra and job < 20:
+                    steps.append({"name": "Check all projects", "conclusion": "failure"})
+                return 0, json.dumps({"steps": steps}), ""
+            if argv[:2] == ["issue", "list"]:
+                return 0, json.dumps(list(issues)), ""
+            if argv[:2] in (["issue", "create"], ["issue", "reopen"], ["run", "rerun"]):
+                return 0, "", ""
+            raise AssertionError(argv)
+        with patch.object(gh, "_gh", side_effect=fake):
+            remote = gh.pr_checks("owner/repo", 158, "head")
+            result = gh.main_inherited("owner/repo", "main", remote, touched)
+        ci = {**result, "ci": result["result"], "failed": [
+            {"warstwa": "GitHub CI", "log": name} for name in result["failed"]]}
+        x = checks.CheckInput(repo="owner/repo", issue=158, sha="head", issue_body="", plan="",
+                              diff="", hunks=[], ci=ci, worktree=Path(directory))
+        gate = checks.ci_green(x)
+        assert gate.status == {"inherited": "pass", "red": "fail", "pending": "unknown"}[result["result"]], gate
+        assert not any(argv[:2] in (["pr", "close"], ["issue", "close"]) for argv in calls), calls
+        return result, calls, x
+
+    result, calls, x = scenario()
+    assert result["result"] == "inherited" and len(result["inherited"]) == 2, result
+    assert all(item["steps"] == [step] and item["main_sha"] == "main" for item in result["inherited"])
+    assert result["failed"] == names and result["failed_logs"], result
+    creates = [argv for argv in calls if argv[:2] == ["issue", "create"]]
+    assert len(creates) == 1 and marker in creates[0][creates[0].index("--body") + 1].splitlines(), calls
+    x.ci.update(result="red", tested=True, executed=1)
+    assert checks.local_tests(x).status == "pass"
+    for rows, expected in (([{"number": 7, "state": "OPEN", "body": marker}], []),
+                           ([{"number": 9, "state": "CLOSED", "body": marker},
+                             {"number": 3, "state": "CLOSED", "body": marker}],
+                            [["issue", "reopen", "3", "--repo", "owner/repo"]])):
+        result, calls, _ = scenario(issues=rows)
+        assert result["result"] == "inherited", result
+        assert [argv for argv in calls if argv[0] == "issue" and argv[1] != "list"] == expected, calls
+    for options in ({"conclusion": "success"}, {"extra": True}, {"missing": True}, {"identity": False}):
+        result, calls, _ = scenario(**options)
+        assert result["result"] == "red", result
+        assert not any(argv[0] == "issue" for argv in calls), calls
+    for status, count in (("completed", 1), ("in_progress", 0)):
+        result, calls, _ = scenario(stale=True, status=status)
+        assert result["result"] == "pending" and result["pending"] == ["main checks refresh"], result
+        assert len([argv for argv in calls if argv[:2] == ["run", "rerun"]]) == count, calls
+        assert not any(argv[0] == "issue" for argv in calls), calls
+    result, calls, _ = scenario(touched=True)
+    assert result["result"] == "red", result
+    assert not any(argv[0] == "api" for argv in calls), calls
+print("main inherited checks: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import RepoSnapshot, Snapshot
 
 now = 1_792_512_000
 for result in ("failed", "running", "pending", "merged", "closed"):
     snapshot = Snapshot(repos=(
-        RepoSnapshot(name="owner/A", status={"status": "red", "issue": 7}, prs=(), issues=(),
+        RepoSnapshot(name="owner/A", last_attempt=100, status={"status": "red", "issue": 7}, prs=(), issues=(),
                      states={7: {"result": result, "node": "check", "retry_at": now - 10}}),
-        RepoSnapshot(name="owner/B", prs=(), issues=(),
+        RepoSnapshot(name="owner/B", last_attempt=50 if result in ("merged", "closed") else 200, prs=(), issues=(),
                      states={8: {"result": "pending", "node": "check", "retry_at": now - 20}}),
     ), now=now)
     picked = graph.pick(snapshot)
     assert picked is not None, (result, picked)
     if result in ("running", "pending"):
         assert (picked.repo, picked.issue, picked.kind) == ("owner/A", 7, "red_main"), (result, picked)
+    elif result == "failed":
+        assert (picked.repo, picked.issue) == ("owner/A", 7) and picked.kind != "red_main", (result, picked)
     else:
         assert picked.kind != "red_main", (result, picked)
         assert (picked.repo, picked.issue) == ("owner/B", 8), (result, picked)
 print("red main fairness checks: green")
+PY
+uv run python - <<'PY'
+from dataclasses import replace
+
+from lokay import graph
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+now = 1_792_512_000
+red = RepoSnapshot("o/red", last_attempt=200, status={"status": "red", "issue": 1},
+                   states={1: {"result": "pending", "node": "plan"}}, prs=(), issues=())
+fresh_issue = {"number": 5, "state": "OPEN"}
+fresh = RepoSnapshot("o/fresh", last_attempt=100, status={"status": "green"},
+                     states={5: {}}, prs=(), issues=(fresh_issue,))
+assert graph.pick(Snapshot((red, fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+red = replace(red, last_attempt=50)
+assert graph.pick(Snapshot((red, fresh), now)) == Pick("o/red", 1, "red_main")
+retry = {"result": "failed", "node": "check", "retry_at": now - 10, "pr": 20}
+assert graph.pick(Snapshot((replace(red, states={**red.states, 2: retry}),), now)) == Pick("o/red", 1, "red_main")
+due = RepoSnapshot("o/due", last_attempt=100, states={2: retry}, prs=(), issues=())
+other = RepoSnapshot("o/other", last_attempt=300,
+                     states={3: {**retry, "retry_at": now - 20, "pr": 30}}, prs=(), issues=())
+assert graph.pick(Snapshot((other, due), now)) == Pick("o/due", 2, "pr", {
+    "number": 20, "headRefName": "lokay/2"})
+assert graph.pick(Snapshot((replace(red, busy=True), fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+failed = replace(red, states={1: {"result": "failed", "node": "plan", "retry_at": now - 10}})
+assert graph.pick(Snapshot((failed, fresh), now)) == Pick("o/red", 1, "issue", {"number": 1})
+assert graph.pick(Snapshot((replace(failed, last_attempt=200), fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+repos = (red, replace(red, name="o/red2", last_attempt=60),
+         fresh, replace(fresh, name="o/fresh2", last_attempt=110))
+picked_repos = []
+for clock in range(1000, 1004):
+    picked = graph.pick(Snapshot(repos, now))
+    assert picked is not None
+    picked_repos.append(picked.repo)
+    repos = tuple(replace(repo, last_attempt=clock) if repo.name == picked.repo else repo for repo in repos)
+assert len(set(picked_repos)) == 4, picked_repos
+for empty in (RepoSnapshot("o/empty", last_attempt=1),
+              RepoSnapshot("o/empty", last_attempt=1, prs=())):
+    repos = (empty, fresh)
+    picked = graph.pick(Snapshot(repos, now))
+    assert picked == Pick("o/empty", 0, "prs" if empty.prs is None else "issues"), picked
+    if picked.kind == "prs":
+        empty = replace(empty, prs=())
+        assert graph.pick(Snapshot((empty, fresh), now)) == Pick("o/empty", 0, "issues")
+    empty = replace(empty, issues=())
+    assert graph.pick(Snapshot((empty, fresh), now)) == Pick("o/fresh", 5, "issue", fresh_issue)
+print("fair pick checks: green")
 PY
 uv run python - <<'PY'
 from lokay import graph
@@ -539,8 +1061,7 @@ for merged in (False, True):
     picked = graph.pick(snapshot)
     assert picked is not None, (merged, picked)
     if merged:
-        assert picked.kind != "red_main", picked
-        assert (picked.repo, picked.issue) == ("owner/B", 8), picked
+        assert picked == graph.Pick("owner/A", 7, "red_main"), picked
     else:
         assert (picked.repo, picked.issue, picked.kind) == ("owner/A", 12, "red_main"), picked
 print("red main children checks: green")
@@ -1028,6 +1549,102 @@ with patch.object(git, "git_try", side_effect=AssertionError("unexpected git")),
 print("dead test checks: green")
 PY
 uv run python - <<'PY'
+from collections import Counter
+from dataclasses import replace
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, weakened_tests
+from lokay.gates import dead_tests, moved_test_candidates, moved_tests
+from lokay.lint import lint_diff, unit_test_hints
+
+path = "tests/test_fala_store.py"
+target = "tests/test_import.py"
+imports = "import builtins\nimport pytest\n"
+helper = ("def _block(monkeypatch):\n"
+          "    original = builtins.__import__\n"
+          "    monkeypatch.setattr(builtins, \"__import__\", original)\n")
+import_test = ("def test_import_ok(monkeypatch):\n"
+               "    # Given\n"
+               "    _block(monkeypatch)\n"
+               "    import pkg\n"
+               "    assert pkg.__name__ == 'pkg'\n")
+remaining = ("def test_requires(monkeypatch):\n"
+             "    from pkg.fala import FalaStore\n"
+             "    _block(monkeypatch)\n"
+             "    assert FalaStore()\n"
+             "def test_round_trip():\n"
+             "    from pkg import Store\n"
+             "    from pkg.fala import FalaStore\n"
+             "    assert isinstance(FalaStore(), Store)\n")
+base = {"src/pkg/__init__.py": "from pkg.protocols import Store\n",
+        "src/pkg/protocols.py": "from typing import Protocol\nclass Store(Protocol):\n    def save(self): ...\n",
+        "src/pkg/fala.py": "from pkg.protocols import Store\nclass FalaStore(Store): pass\nclass Backend: pass\n",
+        path: imports + helper + import_test + remaining}
+head = {name: source for name, source in base.items() if name != path}
+head["src/pkg/fala.py"] = "from pkg.protocols import Store\nclass Backend: pass\n"
+head[target] = imports + helper + import_test
+body = ("Remove FalaStore from pkg.fala and delete tests/test_fala_store.py; "
+        "move test_import_ok with _block to tests/test_import.py")
+
+def change(before, after):
+    old, new = before[path], after[target]
+    return (f"diff --git a/{path} b/{path}\ndeleted file mode 100644\n"
+            f"--- a/{path}\n+++ /dev/null\n@@ -1,{len(old.splitlines())} +0,0 @@\n"
+            + "".join("-" + line + "\n" for line in old.splitlines())
+            + f"diff --git a/{target} b/{target}\nnew file mode 100644\n"
+            f"--- /dev/null\n+++ b/{target}\n@@ -0,0 +1,{len(new.splitlines())} @@\n"
+            + "".join("+" + line + "\n" for line in new.splitlines())
+            + "diff --git a/src/pkg/fala.py b/src/pkg/fala.py\n"
+            "--- a/src/pkg/fala.py\n+++ b/src/pkg/fala.py\n@@ -1,3 +1,2 @@\n"
+            " from pkg.protocols import Store\n"
+            + "-" + before["src/pkg/fala.py"].splitlines()[1] + "\n"
+            " class Backend: pass\n")
+
+diff = change(base, head)
+moved = moved_tests(diff, base, head, base.get, head.get)
+assert moved_test_candidates(diff)
+assert moved["names"] == {path: frozenset({"_block", "test_import_ok"})}
+assert moved["added"] == {target: frozenset(range(1, len(head[target].splitlines()) + 1))}
+assert moved["removed"] == {path: Counter((helper + import_test).splitlines())}
+assert dead_tests(diff, body, base, head, base.get, head.get, moved=moved["names"]) == {path}
+assert unit_test_hints(diff, moved["added"]) == {}
+assert target in unit_test_hints(diff)
+with patch("lokay.lint.git_output", side_effect=lambda cwd, args: head[args[-1].split(":", 1)[1]]):
+    assert not any(target in error for error in lint_diff(diff, "head", Path.cwd(), False, neutral=moved["added"]))
+    errors = lint_diff(diff, "head", Path.cwd(), False)
+    assert any(target in error and "comment" in error for error in errors)
+    assert any(target in error and "unit test" in error for error in errors)
+x = CheckInput("owner/repo", 2245, "head", body, "", diff, [], {}, Path.cwd())
+with patch("lokay.checks._revisions", return_value=(base, head, base.get, head.get)):
+    assert weakened_tests(x).status == "pass"
+changed_head = {**head, target: head[target].replace("== 'pkg'", "!= 'other'")}
+changed_diff = change(base, changed_head)
+rejected = moved_tests(changed_diff, base, changed_head, base.get, changed_head.get)
+assert rejected == {"names": {}, "added": {}, "removed": {}}
+assert target in unit_test_hints(changed_diff, rejected["added"])
+assert not dead_tests(changed_diff, body, base, changed_head, base.get, changed_head.get, moved=rejected["names"])
+with patch("lokay.checks._revisions", return_value=(base, changed_head, base.get, changed_head.get)), patch(
+        "lokay.config.repo", return_value={}):
+    assert weakened_tests(replace(x, diff=changed_diff)).status == "fail"
+for before in (
+        {**base, path: base[path] + "    from pkg.fala import Backend\n"},
+        {**base, "src/pkg/fala.py": base["src/pkg/fala.py"].replace("FalaStore(Store)", "FalaStore")},
+        {**base, path: base[path] + "    x = _block\n"}):
+    negative = change(before, head)
+    moves = moved_tests(negative, before, head, before.get, head.get)
+    assert moves["names"] == moved["names"]
+    assert not dead_tests(negative, body, before, head, before.get, head.get, moved=moves["names"])
+docs = "docs/test_import.py"
+docs_head = {name: source for name, source in head.items() if name != target}
+docs_head[docs] = head[target]
+docs_diff = diff.replace(target, docs)
+docs_moves = moved_tests(docs_diff, base, docs_head, base.get, docs_head.get)
+assert docs_moves["names"] == {}
+assert docs in unit_test_hints(docs_diff, docs_moves["added"])
+print("moved test checks: green")
+PY
+uv run python - <<'PY'
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -1139,6 +1756,40 @@ with patch("lokay.tick.state_update", side_effect=update), \
                                          {"result": "fix", "uwagi": [{"pytanie": "weakened_tests"}]}, x.sha)
     prompt.assert_not_called()
 print("deleted files scope checks: green")
+PY
+uv run python - <<'PY'
+from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, intent, run_checks
+from lokay.retro import CATEGORIES
+from lokay.types import Finding
+
+diff = ("diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n"
+        "@@ -1 +1 @@\n-old\n+new\n")
+with TemporaryDirectory() as directory:
+    x = CheckInput("owner/repo", 1, "head", "", "", diff, [], {}, Path(directory),
+                   title="[code-audit] X")
+    result = intent(x)
+    assert result.status == "fail", result
+    assert "docs/plan only instead of code" in result.reason, result
+    assert result.findings == (Finding("README.md", 1, 1,
+        "issue needs a code change; implement it instead of editing docs", "intent"),)
+    with patch("lokay.effects.git.merge_conflicts", return_value=[]), \
+            patch("lokay.lint.git_output", return_value=""):
+        assert any(row.name == "intent" and row.status == "fail" for row in run_checks(x))
+    assert intent(replace(x, diff=diff.replace("README.md", "src/x.py"))).status == "pass"
+    assert intent(replace(x, title="", red_main=True,
+                          diff=diff.replace("README.md", "docs/plan.md"))).status == "fail"
+    docs = replace(x, title="[docs-audit] X")
+    assert intent(docs).status == "pass"
+    assert intent(replace(docs, issue_body="Change src/x.py and Tests/A.swift",
+                          plan="Change src/x.py and Tests/A.swift")).status == "pass"
+    assert intent(replace(x, diff="")).status == "pass"
+assert "docs/plan only instead of code" in CATEGORIES
+print("intent check: green")
 PY
 uv run python - <<'PY'
 from lokay import graph
@@ -2054,11 +2705,10 @@ for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhaust
         def git(path, *args, **kwargs):
             if args[0] == "rev-list":
                 return "merge parent other"
-            if args[0] == "diff":
-                return "revert patch"
             assert args == ("revert", "--no-commit", "-m", "1", "merge"), args
             return ""
         commands = stack.enter_context(patch.object(tick, "git", side_effect=git))
+        patch_bytes = stack.enter_context(patch.object(tick, "git_bytes", return_value=b"revert patch\xe2\x28\xa1\n"))
         stack.enter_context(patch.object(tick, "git_head", return_value="revert-sha"))
         commit = stack.enter_context(patch.object(build, "tidy_and_commit"))
         stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
@@ -2073,7 +2723,8 @@ for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhaust
             assert saved["h2_committed"] == "revert-sha" and saved["node"] == "check", saved
             assert saved["h2_summary"] == "Revert culprit PR #42", saved
             commit.assert_called_once_with(root, "Revert culprit PR #42")
-            assert artifact.read_text() == "revert patch"
+            assert artifact.read_bytes() == b"revert patch\xe2\x28\xa1\n"
+            patch_bytes.assert_called_once_with(root, "diff", "--binary", "HEAD")
             assert [call.kwargs.get("revision") for call in guard.call_args_list] == [None, "merge", "merge^1"]
         elif scenario == "exhausted":
             assert result["result"] == "closed" and saved["recovery_exhausted"], (result, saved)
@@ -2154,6 +2805,7 @@ from lokay import finish, graph, lint, plan, retro, store, tick
 from lokay.effects import gh, git as git_effects
 from lokay.types import Checked, RepoSnapshot, Run, Snapshot
 
+real_retry = tick._retry
 name = "owner/split"
 sha = "a" * 40
 finding = {"plik": "src/a.py", "linia_od": 1, "linia_do": 1,
@@ -2193,7 +2845,7 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(git_effects, "plan_checkout", return_value=root))
     stack.enter_context(patch.object(finish, "local_checks", return_value={"result": "green", "failed": [], "notes": []}))
     stack.enter_context(patch.object(finish, "remote_checks", return_value=(7, {"result": "green"})))
-    stack.enter_context(patch.object(finish, "lenses", return_value=([], [], [], [], "", [], False)))
+    stack.enter_context(patch.object(finish, "lenses", return_value=([], [], [], [], "", [], False, None)))
     stack.enter_context(patch.object(finish, "complete_check", return_value=(verdict, 8)))
     splitter = stack.enter_context(patch.object(plan, "split_tasks", return_value={"result": "done", "tasks": tasks}))
     publisher = stack.enter_context(patch.object(retro, "publish"))
@@ -2258,6 +2910,19 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
         assert not store.state_read(name, 3).get("split_pending")
         assert calls == [], calls
         print("existing PR fix round limit checks: ok")
+        with patch.object(tick, "_retry", real_retry), patch.object(tick, "_ensure_worktree"):
+            store.state_update(name, 3, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                               result="pending", difficulty="hard", issue_title="existing PR", issue_body="spec",
+                               pr=7, sha=sha, fix_rounds=graph.FIX_ROUND_LIMIT - 1, fix_limit_hits=1,
+                               check_history=[{"sha": sha, "findings": findings}])
+            result = tick._finish(picked_pr, root, "lokay/3", sha, [])
+            saved = store.state_read(name, 3)
+            assert result == {"result": "pending", "next": "plan"}, result
+            assert saved["node"] == "plan" and saved["pr"] == 7, saved
+            snapshot = Snapshot(repos=(RepoSnapshot(name=name, prs=(), issues=(), states={3: saved}),),
+                                now=store.last_activity(saved) + 301)
+            assert graph.pick(snapshot) is None
+            print("round limit keeps plan node: green")
     for hits in (0, 1, 2, 99):
         normalized = {"pr": 7, "difficulty": "too_big", "fix_limit_hits": hits}
         store.normalize_state(normalized)
@@ -2435,21 +3100,494 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
         looked.append(args[2])
         return {"state": "CLOSED" if args[2] == "5" else "OPEN", "closedAt": "2026-06-01T12:00:00Z", "url": "https://github.com/owner/hygiene/issues/5"}
     stack.enter_context(patch.object(tick, "gh_json", side_effect=remote))
-    def close(args, **kwargs):
-        assert args[:3] == ["pr", "close", "15"], args
-        assert "2026-06-01T12:00:00Z" in args[-1] and "/issues/5" in args[-1]
-        prs[:] = [row for row in prs if row["number"] != 15]
-    closed = stack.enter_context(patch.object(tick, "gh_ok", side_effect=close))
+    closed = stack.enter_context(patch.object(tick, "gh_ok", side_effect=AssertionError("unexpected gh_ok")))
     events = stack.enter_context(patch.object(store, "log_event"))
     stack.enter_context(patch.object(tick, "graph", wraps=tick.graph))
     stack.enter_context(patch.object(tick.graph, "pick", side_effect=[type("Selection", (), {"repo": name, "issue": None, "kind": "prs"})(), None] * 2))
     tick.pick({})
     tick.pick({})
-    assert closed.call_count == 1 and "6" not in looked
+    closed.assert_not_called()
+    assert "6" not in looked
+    assert any(row["number"] == 15 for row in prs)
     assert "9" not in looked
     assert any(row["number"] == 19 for row in prs)
-    assert sum(call.args == ("orphan_pr_closed",) for call in events.call_args_list) == 1
+    assert sum(call.args == ("orphan_pr_skipped",) for call in events.call_args_list) == 2
 print("hygiene checks: green")
+PY
+uv run python - <<'PY'
+import io
+import json
+from contextlib import ExitStack, redirect_stdout
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, measure, merge, retro, store, tick
+from lokay.effects import gh
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(config, "HOME", home))
+    argv = []
+    def remote(args, **kwargs):
+        argv.append(args)
+        return (0, json.dumps({"mergeCommit": {"oid": "M"}}) if args[:2] == ["pr", "view"] else "", "")
+    stack.enter_context(patch.object(gh, "_gh", side_effect=remote))
+    assert gh.merge("o/r", 5, "S")["merge_sha"] == "M"
+    assert argv[0][argv[0].index("--body") + 1] == "Lokay-Merge: " + store.TICK
+    pr = {"number": 5, "headRefName": "lokay/1", "headRefOid": "S", "labels": []}
+    store.state_update("o/r", 1, _event={"action": "enter_node", "outcome": {"node": "check"}}, pr=5)
+    for target, name, value in ((tick.maintenance, "sweep", None), (tick, "probes", {"host": "ok"}),
+                               (tick, "load_repos", [{"name": "o/r", "clone_path": str(home / "absent"), "merge": "off"}]),
+                               (tick, "list_prs", [pr]), (tick, "open_issues", []),
+                               (tick, "gh_json", {"data": {"repository": {}}})):
+        stack.enter_context(patch.object(target, name, return_value=value))
+    picked = tick.pick({"LOKAY2_REPO": "o/r"})
+    assert picked["result"] == "picked", picked
+    tick.release_lock(picked["held"])
+    pick = measure.ledger(home)[0]
+    assert pick["kind"] == "pick" and pick["issue"] == 1 and pick["reason"] == "pr", pick
+    for day, values in ((pick["ts"][:10], (1000, 2000)), ("2000-01-01", (99999,))):
+        store.write_text_atomic(home / "ticks" / (day + ".jsonl"), "".join(json.dumps(
+            {"kind": "call", "call": "pi", "repo": "o/r", "issue": 1, "ts": pick["ts"], "ms": ms}) + "\n"
+            for ms in values))
+    stack.enter_context(patch.object(merge, "merge_allowed", return_value=True))
+    stack.enter_context(patch("lokay.review.recompute_verdict", return_value={"result": "merge", "sha": "S"}))
+    stack.enter_context(patch.object(merge, "pr_files", return_value=["src/app.py"]))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(merge, "check_main", return_value={
+        "status": "green", "baseline": {"ci": {"executed": 3}, "lockfile": {"status": "pass"}}}))
+    outcome = merge.merge_sha("o/r", 5, "S", None, None, "o", 1,
+                              {"plan_rounds": 1, "check_rounds": 2}, clone_path=home)
+    assert outcome["result"] == "merged", outcome
+    merged = measure.ledger(home)[-1]
+    assert merged["main"] == {"status": "green", "executed": 3, "lock": "pass"}, merged
+    assert (merged["kind"], merged["sha"], merged["pr"], merged["fix_rounds"], merged["pi_ms"],
+            merged["picked_at"], merged["change_kind"]) == ("merged", "M", 5, 2, 3000, pick["ts"], "code"), merged
+    old = datetime.now(timezone.utc) - timedelta(hours=49)
+    store.write_text_atomic(home / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in (
+        {**merged, "ts": old.isoformat(), "picked_at": (old - timedelta(minutes=20)).isoformat()},
+        {**merged, "issue": 2, "sha": "N", "change_kind": "docs"})))
+    def lookup(args, **kwargs):
+        if args[0] == "issue":
+            return {"state": "OPEN", "stateReason": "REOPENED"}
+        assert args == ["api", f"repos/o/r/commits?sha=main&since={old.isoformat()}", "--paginate", "--slurp"], args
+        return [[]]
+    lookups = stack.enter_context(patch.object(measure, "gh_json", side_effect=lookup))
+    output = io.StringIO()
+    with redirect_stdout(output):
+        assert measure.main([]) == 0
+    assert all(text in output.getvalue() for text in ("escape_rate_48h=1/1", "p50", "merges_per_day")), output.getvalue()
+    calls = lookups.call_count
+    with redirect_stdout(io.StringIO()):
+        assert measure.main([]) == 0
+    assert lookups.call_count == calls
+    assert len([row for row in measure.ledger(home) if row["kind"] == "escape_check"]) == 1
+    store.ledger_append({**merged, "sha": "FAIL"})
+    rows = measure.ledger(home)
+    rows[-1]["ts"] = old.isoformat()
+    store.write_text_atomic(home / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in rows))
+    with patch.object(measure, "gh_json", side_effect=RuntimeError("offline")):
+        assert len(measure.escapes(home)) == 1
+    assert not any(row["kind"] == "escape_check" and row["sha"] == "FAIL" for row in measure.ledger(home))
+    with redirect_stdout(io.StringIO()), patch.object(measure, "merges", side_effect=lambda home, ticks: (
+            ticks.extend([old - timedelta(hours=2), old]) or [])):
+        assert measure.main(["--baseline", (old - timedelta(hours=3)).isoformat(),
+                             "--since", (old - timedelta(hours=1)).isoformat()]) == 0
+    evidence = [{"repo": "o/r", "issue": issue, "pr": 5, "sha": "M", "why": ["issue reopened"]}
+                for issue in (1, 2, 3)]
+    assert ("escape", "logic bug") in retro.proposals(home / "ticks", escapes=evidence)
+print("ledger and measure checks: green")
+PY
+uv run python - <<'PY'
+import io
+import os
+from contextlib import ExitStack, redirect_stdout
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, measure, merge, store
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_STATE_DIR": directory}))
+    for key, value in (("HOME", home), ("RUNS", home / "runs"), ("LOCKS", home / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(config, "HOME", home))
+    stack.enter_context(patch.object(merge, "merge_allowed", return_value=True))
+    stack.enter_context(patch("lokay.review.recompute_verdict", return_value={"result": "merge", "sha": "S"}))
+    stack.enter_context(patch.object(merge, "pr_files", return_value=["src/app.py"]))
+    stack.enter_context(patch.object(merge, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(merge, "gh_merge", return_value={"result": "merged", "merge_sha": "M"}))
+    stack.enter_context(patch.object(measure, "escapes", return_value=[]))
+    stack.enter_context(patch.object(measure, "gh_json", side_effect=AssertionError("unexpected network")))
+    with patch.object(merge, "check_main", return_value={
+            "status": "red", "baseline": {"ci": {"executed": 80}, "lockfile": {"status": "fail"}}}):
+        assert merge.merge_sha("o/r", 5, "S", None, None, "o", 1, {}, clone_path=home)["result"] == "merged"
+    merged = measure.ledger(home)[-1]
+    assert merged["main"] == {"status": "red", "executed": 80, "lock": "fail"}, merged
+    failure = RuntimeError("readiness unavailable")
+    with patch.object(merge, "check_main", side_effect=failure):
+        try:
+            merge.merge_sha("o/r", 6, "S", None, None, "o", 2, {}, clone_path=home)
+        except RuntimeError as exc:
+            assert exc is failure
+        else:
+            raise AssertionError("readiness exception did not propagate")
+    failed = measure.ledger(home)[-1]
+    assert failed["kind"] == "merged" and failed["issue"] == 2 and failed["main"] is None, failed
+    store.write_text_atomic(home / "ledger.jsonl", "")
+    for repo, issue, main in (
+            ("o/r", 1, {"status": "green", "executed": 120, "lock": "pass"}),
+            ("o/s", 3, {"status": "green", "executed": 10, "lock": "pass"}),
+            ("o/r", 2, None),
+            ("o/r", 4, merged["main"]),
+            ("o/s", 5, {"status": "green", "executed": 12, "lock": "pass"})):
+        store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": issue + 10,
+                             "sha": str(issue), "main": main})
+    report = measure.report(home)
+    assert report["readiness_regressions"] == [{"repo": "o/r", "issue": 4, "pr": 14, "sha": "4",
+        "why": ["status green->red", "executed 120->80", "lock pass->fail"]}], report
+    assert report["readiness"]["o/r"]["status"] == "red", report
+    assert report["readiness"]["o/s"] == {"status": "green", "executed": 12, "lock": "pass"}, report
+    assert report["readiness_recorded"] == "4/5", report
+    output = io.StringIO()
+    with redirect_stdout(output):
+        assert measure.main([]) == 0
+    assert "readiness_regressions" in output.getvalue(), output.getvalue()
+print("readiness checks: green")
+PY
+uv run python - <<'PY'
+import ast
+from contextlib import ExitStack
+from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, graph, merge, store, tick
+from lokay.types import RepoSnapshot, Snapshot
+
+for path in Path('src/lokay').rglob('*.py'):
+    for node in ast.walk(ast.parse(path.read_text())):
+        bad = isinstance(node, ast.Constant) and isinstance(node.value, str) and 'pr close' in node.value
+        if isinstance(node, (ast.List, ast.Tuple)):
+            values = [item.value if isinstance(item, ast.Constant) else None for item in node.elts]
+            bad |= any(values[index:index + 2] == ['pr', 'close'] for index in range(len(values)))
+        assert not bad, f'{path}:{node.lineno}'
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (('HOME', root), ('RUNS', root / 'runs'), ('LOCKS', root / 'locks')):
+        stack.enter_context(patch.object(store, key, value))
+    name, issue, sha = 'owner/empty', 310, 'main-sha'
+    stack.enter_context(patch('lokay.config.repo', return_value={'clone_path': str(root)}))
+    stack.enter_context(patch('lokay.effects.git.base_branch', return_value='main'))
+    stack.enter_context(patch('lokay.effects.git.git', return_value=sha))
+    store.state_update(name, issue, _event={'action': 'enter_node', 'outcome': {'node': 'build'}}, pr=38, last_check={'result': 'merge', 'sha': 'head'})
+    assert store.empty_patch(name, issue, sha)['result'] == 'parked'
+    remote = stack.enter_context(patch.object(tick, 'gh_ok', side_effect=AssertionError('unexpected gh')))
+    assert tick.close_empty_patch(name, issue, store.state_read(name, issue), {'sha': sha})['result'] == 'empty_patch'
+    stack.enter_context(patch.object(merge, 'pr_files', return_value=[]))
+    stack.enter_context(patch('lokay.review.recompute_verdict', return_value={'result': 'merge', 'sha': 'head'}))
+    stack.enter_context(patch.object(merge, 'main_status', return_value={}))
+    stack.enter_context(patch.object(tick, 'open_pr_for', return_value={'number': 38, 'headRefOid': 'head'}))
+    stack.enter_context(patch.object(tick, '_ensure_worktree'))
+    stack.enter_context(patch.object(tick, 'check_deadline'))
+    events = stack.enter_context(patch.object(store, 'log_event'))
+    stack.enter_context(patch.object(finish, 'rounds_append', side_effect=AssertionError('unexpected merge round')))
+    store.state_update(name, issue, empty_main_sha=None)
+    for expected in ('parked', 'empty_patch'):
+        merged, *_ = finish.merge({'repo': name, 'issue': issue}, root, 'lokay/310', 'head', None,
+                                  'main', [], [], root, None)
+        assert merged['result'] == expected
+        assert store.state_read(name, issue)['node'] == 'build'
+    assert not any(call.kwargs.get('event', {}).get('action') == 'merge_complete'
+                   for call in events.call_args_list)
+    state = store.state_read(name, issue)
+    assert state['empty_main_sha'] == sha and state['result'] == 'empty_patch'
+    assert state['node'] == 'build'
+    for prs in ((), ({'number': 38, 'headRefName': 'lokay/310'},)):
+        repo = RepoSnapshot(name, 0, {'baseline': {'sha': 'guard-sha'}}, states={issue: state},
+                            prs=prs, issues=({'number': issue},), main_sha=sha)
+        assert graph.pick(Snapshot((repo,), 1000)) is None
+        assert graph.pick(Snapshot((replace(repo, main_sha=None),), 1000)) is None
+        moved = replace(repo, main_sha='new-main')
+        assert graph.pick(Snapshot((moved,), 1000)).issue == issue
+    patch_file = root / 'build.patch'
+    store.write_artifact(patch_file, 'patch')
+    store.state_update(name, issue, issue_title='Title', issue_body='Body', difficulty='easy',
+                       h2_patch=str(patch_file), h2_start='head', h2_committed='head')
+    stack.enter_context(patch.object(tick, 'gh_json', return_value={'title': 'Title', 'body': 'Body'}))
+    stack.enter_context(patch.object(tick, 'repo_config', return_value={'test': []}))
+    stack.enter_context(patch.object(tick, '_repo_paths', return_value=(root, root)))
+    stack.enter_context(patch.object(tick, '_ensure_worktree'))
+    stack.enter_context(patch.object(tick, 'check_deadline'))
+    stack.enter_context(patch.object(tick, 'base_branch', return_value='main'))
+    stack.enter_context(patch.object(tick, 'git', side_effect=lambda path, *args, **kwargs: '' if args[0] == 'rev-list' else sha))
+    stack.enter_context(patch.object(tick, 'git_head', return_value='head'))
+    stack.enter_context(patch('lokay.build.tidy_and_commit'))
+    create = stack.enter_context(patch('lokay.effects.gh.pr_create', side_effect=AssertionError('unexpected publish')))
+    import hashlib
+    from json import dumps
+    store.state_update(name, issue, h2_context=hashlib.sha256(dumps(['Title', 'Body', 'easy', []]).encode()).hexdigest())
+    assert tick._prepare({'repo': name, 'issue': issue})['result'] == 'empty_patch'
+    assert store.state_read(name, issue)['empty_main_sha'] == sha
+    from lokay.types import Run
+    stack.enter_context(patch.object(tick, '_prepare', side_effect=lambda picked: store.empty_patch(name, issue, sha)))
+    stack.enter_context(patch.object(tick, 'published_cleanup'))
+    assert tick.act(Run.from_state({'repo': name, 'issue': issue, 'node': 'build'})).outcome['result'] == 'empty_patch'
+    assert store.state_read(name, issue)['result'] == 'empty_patch'
+    create.assert_not_called()
+    remote.assert_not_called()
+    orphan = {'number': 99, 'headRefName': 'lokay/9', 'headRefOid': 'head'}
+    stack.enter_context(patch.object(tick.maintenance, 'sweep'))
+    stack.enter_context(patch.object(tick, 'probes', return_value={'host': 'ok'}))
+    stack.enter_context(patch.object(tick, 'load_repos', return_value=[{
+        'name': name, 'clone_path': str(root / 'absent'), 'merge': 'off'}]))
+    stack.enter_context(patch.object(tick, 'list_prs', return_value=[orphan]))
+    stack.enter_context(patch.object(tick, 'open_issues', return_value=[]))
+    stack.enter_context(patch.object(tick, 'gh_json', side_effect=lambda args, **kwargs: {'data': {'repository': {}}} if args[0] == 'api' else {'state': 'CLOSED'}))
+    from lokay.types import Pick
+    stack.enter_context(patch.object(tick.graph, 'pick', side_effect=[Pick(name, 0, 'prs'), None]))
+    assert tick.pick({})['result'] == 'idle'
+    remote.assert_not_called()
+print('empty patch state checks: green')
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack, redirect_stdout
+from datetime import datetime, timedelta, timezone
+import io
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, graph, main_guard, measure, store, tick
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+name = "mikolaj92/Temida"
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    baseline = {"sha": "B", "argv": [], "guard_version": main_guard.GUARD_VERSION,
+                "ci": {"result": "red", "tested": True, "log": "red"},
+                "lockfile": {"status": "pass", "findings": [], "reason": "ok"}}
+    status = {"status": "red", "issue": 7423, "baseline": baseline, "since": 1}
+    stack.enter_context(patch.object(main_guard, "git", side_effect=lambda path, *args, **kw: "B" if args[0] == "rev-parse" else ""))
+    stack.enter_context(patch.object(main_guard, "guard_issue", return_value=7423))
+    updates = stack.enter_context(patch.object(store, "state_update", wraps=store.state_update))
+    for terminal in ("merged", "closed", "failed", "empty_patch"):
+        for sha, recovery, reset in (("A", None, True), ("B", None, False), ("A", "B", False)):
+            store.save_main_status(name, status)
+            store.write_json(store.run_dir(name, 7423) / "state.json", {"repo": name, "issue": 7423, "result": terminal, "node": "plan",
+                                    "sha": sha, "recovery_sha": recovery, "children": [1],
+                                    "split_tasks": ["old"], "recovery_exhausted": True,
+                                    "h2_context": "old", "difficulty": "hard"})
+            updates.reset_mock()
+            main_guard.check_main(name, root, base="main", config={})
+            saved = store.state_read(name, 7423)
+            assert (saved["result"] == "check") == reset, saved
+            if reset:
+                assert saved["node"] == "plan" and saved["children"] == [] and not saved["recovery_exhausted"]
+                assert all(saved[key] is None for key in ("split_tasks", "recovery_sha", "h2_context", "difficulty"))
+                assert saved["issue_body"].startswith("Main red.")
+                snapshot = Snapshot((RepoSnapshot(name, status=store.main_status()[name], states={7423: saved}),), 10000)
+                assert graph.pick(snapshot) == Pick(name, 7423, "red_main")
+            main_guard.check_main(name, root, base="main", config={})
+            events = [call.kwargs.get("_event", {}).get("action") for call in updates.call_args_list]
+            assert events == (["reopened"] if reset else []), events
+
+    name = "mikolaj92/Fala"
+    store.state_update(name, 307, awaiting="children", children=[309, 310], result="pending", split_generation=4,
+                       _event={"action": "enter_node", "outcome": {"node": "build"}})
+    store.state_update(name, 309, _event={"action": "closed"})
+    store.state_update(name, 310, result="failed")
+    status = {"status": "red", "issue": 307, "checked_at": tick.time.time(), "since": tick.time.time()}
+    store.save_main_status(name, status)
+    def snapshot():
+        return Snapshot((RepoSnapshot(name, status=status, states={issue: store.state_read(name, issue)
+                                                                 for issue in (307, 309, 310)}),), tick.time.time())
+    assert graph.pick(snapshot()) == Pick(name, 307, "red_main")
+    store.state_update(name, 310, result="running")
+    assert graph.pick(snapshot()) == Pick(name, 310, "red_main")
+    store.state_update(name, 310, result="failed")
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{"name": name, "clone_path": str(root / "absent"), "merge": "on"}]))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+    stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
+    picked = tick.pick({"LOKAY2_REPO": name})
+    assert picked["result"] == "picked" and picked["issue"] == 307 and picked["node"] == "plan", picked
+    tick.release_lock(picked["held"])
+    saved = store.state_read(name, 307)
+    assert saved["node"] == "plan" and saved["split_generation"] == 5 and saved["children"] == []
+    assert saved["awaiting"] is None and saved["waiting_on"] != "children"
+
+    stack.enter_context(patch.object(config, "HOME", root))
+    stack.enter_context(patch.object(measure, "escapes", return_value=[]))
+    since = datetime.now(timezone.utc) - timedelta(hours=3)
+    store.save_main_status("mikolaj92/Temida", {"status": "green"})
+    store.save_main_status(name, {"status": "red", "since": since.timestamp()})
+    stack.enter_context(patch.object(measure, "ledger", return_value=[]))
+    for rows, expected in (([], 1), ([{"kind": "pick", "reason": "issue", "repo": name, "ts": since.isoformat()}], 1),
+                           ([{"kind": "pick", "reason": "red_main", "repo": name,
+                              "ts": (since - timedelta(seconds=1)).isoformat()}], 1),
+                           ([{"kind": "pick", "reason": "red_main", "repo": name, "ts": since.isoformat()}], 0)):
+        with patch.object(measure, "ledger", return_value=rows), redirect_stdout(io.StringIO()) as output:
+            assert measure.main(["--json"]) == expected
+        data = json.loads(output.getvalue())
+        assert data["red_main_errors"] == ([name] if expected else [])
+        assert data["red_main"][name]["hours"] >= 3 and data["red_main"][name]["picks"] == (0 if expected else 1)
+print("red main exit checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack, redirect_stdout
+import io
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import config, graph, measure, plan, store, tick
+from lokay.effects import gh
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+tasks = [{"title": "A", "body": "First"}, {"title": "B", "body": "Second", "after": [0]}]
+assert plan.validate_tasks(tasks)[1]["after"] == [0]
+for after in ([1], [2], [99], [-1], ["0"], [True], None, 0):
+    try:
+        plan.validate_tasks([tasks[0], {**tasks[1], "after": after}])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(after)
+name = "owner/dependencies"
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(config, "HOME", root))
+    stack.enter_context(patch.object(gh, "gh_json", return_value=[]))
+    create = stack.enter_context(patch.object(gh, "gh_ok", side_effect=[
+        f"https://github.com/{name}/issues/11", f"https://github.com/{name}/issues/12"]))
+    store.state_update(name, 10, split_tasks=tasks, split_generation=3)
+    assert tick._split_issue({"repo": name, "issue": 10}, root)["children"] == [11, 12]
+    assert "Lokay after: #11" in create.call_args.args[0][-1]
+    assert store.state_read(name, 12)["blocked_by"] == [11]
+    for source in ("state", "body", "issue_body", "remote_body"):
+        for lane in ("issue", "pr", "due", "red_main"):
+            child = {"blocked_by": [11] if source == "state" else []}
+            if source in ("issue_body", "remote_body"):
+                child[source] = "Lokay after: #11"
+            if lane == "due":
+                child.update(node="check", retry_at=1, pr=22)
+            states = {11: {"result": "pending"}, 12: child}
+            repo = RepoSnapshot(name, prs=({"number": 22, "headRefName": "lokay/12"},) if lane == "pr" else (),
+                                issues=({"number": 12, "body": "Lokay after: #11" if source == "body" else ""},), states=states,
+                                status={"status": "red", "issue": 12} if lane == "red_main" else {})
+            snapshot = Snapshot((repo,), 10000, 12)
+            assert graph.pick(snapshot) is None, (source, lane)
+            states[11] = {"result": "merged"}
+            selected = graph.pick(snapshot)
+            assert selected is not None and selected.issue == 12, (source, lane, selected)
+    for result in ("closed", "failed", "empty_patch"):
+        states = {issue: store.state_read(name, issue) for issue in (10, 11, 12)}
+        states[11]["result"] = result
+        repo = RepoSnapshot(name, prs=(), issues=(), states=states)
+        assert graph.pick(Snapshot((repo,), 10000)) == Pick(name, 10, "replan")
+        assert graph.pick(Snapshot((RepoSnapshot(name, states={**states, 13: {}},
+                         status={"status": "red", "issue": 13}),), 10000)) == Pick(name, 13, "red_main")
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{
+        "name": name, "clone_path": str(root / "absent"), "merge": "off"}]))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=[]))
+    stack.enter_context(patch.object(tick, "open_pr_for", return_value=None))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=[]))
+    stack.enter_context(patch.object(gh, "children_done", return_value=False))
+    store.state_update(name, 11, _event={"action": "closed"})
+    selected = tick.pick({})
+    assert selected["issue"] == 10 and selected["node"] == "plan", selected
+    tick.release_lock(selected["held"])
+    parent = store.state_read(name, 10)
+    assert parent["split_generation"] == 4 and parent["awaiting"] is None
+    assert parent["children"] == [] and parent["split_tasks"] is None
+    assert measure.ledger(root)[-1]["reason"] == "replan"
+    stack.enter_context(patch.object(measure, "escapes", return_value=[]))
+    for blockers, expected in (({11: "pending"}, 1), ({11: "merged"}, 0), ({}, 0)):
+        with patch.object(measure, "ledger", return_value=[{"kind": "pick", "blocked_by": blockers}]), redirect_stdout(io.StringIO()) as output:
+            assert measure.main(["--json"]) == expected
+        assert json.loads(output.getvalue())["blocked_pick_errors"] == expected
+print("dependency checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import graph, store, tick
+from lokay.types import Pick, RepoSnapshot, Snapshot
+
+name = "owner/replan"
+rows = [{"number": child, "body": f"Lokay parent: #307; split: {generation}; task: 0" +
+         ("\nLokay after: #311" if child == 312 else "")}
+        for child, generation in ((310, 0), (311, 1), (312, 1), (313, 2), (314, 2),
+                                  (315, 1), (316, 1), (317, 2), (318, 1))]
+states = {307: {"split_generation": 2, "children": [313, 314]},
+          310: {"result": "failed"}, 311: {"result": "empty_patch"},
+          312: {"blocked_by": [311]}, 313: {"result": "running"},
+          314: {"result": "merged"}, 316: {"pr": 900}, 318: {"result": "merged"}}
+prs = ({"number": 901, "headRefName": "lokay/315"},)
+assert graph.superseded(RepoSnapshot(name, states=states, prs=prs), rows) == {310: 307, 311: 307, 312: 307}
+for result in ("closed", "failed", "empty_patch"):
+    current = {307: {"awaiting": "children", "children": [313, 314]},
+               313: {"result": result}, 314: {"blocked_by": [313]}}
+    for status in ({}, {"status": "red", "issue": 307}):
+        assert graph.pick(Snapshot((RepoSnapshot(name, states=current, status=status),), 10000)) == Pick(name, 307, "replan")
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    for issue, saved in states.items():
+        store.state_update(name, issue, **saved)
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "probes", return_value={"host": "ok"}))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[{
+        "name": name, "clone_path": str(root / "absent"), "merge": "off"}]))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"data": {"repository": {}}}))
+    stack.enter_context(patch.object(tick, "open_issues", return_value=rows))
+    stack.enter_context(patch.object(tick, "list_prs", return_value=prs))
+    remote = stack.enter_context(patch.object(tick, "gh_ok"))
+    with patch.object(tick, "acquire_lock", return_value={"result": "busy"}), patch.object(graph, "pick", return_value=None) as select:
+        tick.pick({})
+        repo = select.call_args.args[0].repos[0]
+        assert not repo.busy and 315 not in repo.states and 317 not in repo.states
+        remote.assert_not_called()
+    with patch.object(graph, "pick", return_value=None) as select:
+        tick.pick({})
+        repo = select.call_args.args[0].repos[0]
+        assert 315 not in repo.states and 317 not in repo.states
+    calls = [call.args[0] for call in remote.call_args_list]
+    assert {int(argv[2]) for argv in calls} == {310, 311, 312}, calls
+    assert len(calls) == 3 and all(argv[:2] == ["issue", "close"] for argv in calls), calls
+    assert all(argv[argv.index("--reason") + 1] == "not planned" for argv in calls)
+    assert not any("pr" in argv and "close" in argv for argv in calls)
+    for issue in (310, 311, 312):
+        saved = store.state_read(name, issue)
+        assert saved["result"] == "closed" and saved["closed_on_github"]
+    selected = graph.pick(Snapshot((repo,), 10000))
+    assert selected is None or selected.issue != 312, selected
+print("replan orphan checks: green")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
