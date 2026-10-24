@@ -220,6 +220,23 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
             if command is not None:
                 raise Mismatch("pi call contains nested guard effects; choose a segment without pi")
             kind = Path(argv[0]).name
+            if (entry == "check" and kind == "git"
+                    and argv[1:] == ["ls-tree", "-r", "-z", "--name-only", manifest["before"]["sha"],
+                                     "--", ".lokay", ".omo"]
+                    and not any(row.get("effect", {}).get("argv") == argv for row in effects)):
+                inventories = [row["effect"]["attempts"] for row in effects
+                               if row.get("call") == "git"
+                               and row.get("effect", {}).get("argv") == ["git", "ls-files", "-z"]]
+                if len(inventories) == 1 and len(inventories[0]) == 1:
+                    inventory = inventories[0][0]
+                    if inventory.get("returncode") == 0 and "error" not in inventory:
+                        listing = inventory["stdout"]
+                        if listing and not listing.endswith("\0"):
+                            raise Mismatch("invalid recorded tracked-file inventory")
+                        output = "".join(name + "\0" for name in listing.split("\0") if name
+                                         and name.split("/", 1)[0] in {".lokay", ".omo"})
+                        return CompletedProcess(argv, 0, output if text else output.encode(),
+                                                "" if text else b"")
             effect = consume(kind, argv)
             if effect["stdin"] != input:
                 raise Mismatch(f"seq={effects[position - 1]['seq']} stdin mismatch")
