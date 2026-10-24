@@ -8,6 +8,9 @@ from lokay.effects.git import git_try
 from lokay.scope import is_test
 
 
+FORBIDDEN_LABEL_OPTION = "--add-label"
+
+
 def git_output(cwd: Path, args: list[str]) -> str:
     code, out, err = git_try(cwd, *args)
     if code:
@@ -94,8 +97,9 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool) -> list[str]:
     added = {}
     for path, number, kind, text in diff_lines(diff):
         if kind == "+" and lokay_rules and path.startswith("src/") and (
-                "--add-label" in text
-                or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)):
+                FORBIDDEN_LABEL_OPTION in text
+                or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)) and not (
+                    path == "src/lokay/lint.py" and text == f'FORBIDDEN_LABEL_OPTION = "{FORBIDDEN_LABEL_OPTION}"'):
             errors.append(f"{path}:{number}: label state -> use persisted state or a body marker")
         if kind != "+" or not path.endswith((".py", ".mojo", ".🔥")):
             continue
