@@ -1844,6 +1844,37 @@ assert "docs/plan only instead of code" in CATEGORIES
 print("intent check: green")
 PY
 uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay.checks import CheckInput, run_checks
+
+artifacts = {".local-checks/baseline/takt/x.mojo", ".local-checks/vendor/README.md"}
+diff = "".join(
+    f"diff --git a/{path} b/{path}\nnew file mode 100644\n"
+    f"--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,3 @@\n{lines}"
+    for path, lines in (
+        (".local-checks/baseline/takt/x.mojo", "+# first\n+# second\n+# third\n"),
+        (".local-checks/vendor/README.md", "+First\n+Second\n+Third\n"),
+        ("src/app.py", "+value = 1\n+other = 2\n+total = value + other\n"),
+    )
+)
+with TemporaryDirectory() as directory:
+    x = CheckInput("owner/repo", 1, "head", "", "", diff, [], {}, Path(directory))
+    with patch("lokay.effects.git.merge_conflicts", return_value=[]), \
+            patch("lokay.lint.git_output", return_value=""):
+        results = run_checks(x)
+    junk = next(row for row in results if row.name == "junk")
+    assert junk.status == "fail" and len(junk.findings) == 2, junk
+    assert {finding.plik for finding in junk.findings} == artifacts, junk
+    assert all(not finding.plik.startswith(".local-checks/")
+               for row in results if row.name != "junk" for finding in row.findings), results
+    assert all(row.status == "pass" for row in results
+               if row.name in {"no_new_comments", "docs"}), results
+print("junk lens scope checks: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import PLAN_RESET, Run, event_record, parse_event
 
