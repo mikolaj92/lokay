@@ -459,7 +459,26 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
-CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
+def tracked_agent_state(x: CheckInput) -> CheckResult:
+    from lokay.effects.git import git_try
+
+    code, output, error = git_try(x.worktree, "ls-tree", "-r", "--name-only", "-z", x.sha)
+    if code:
+        return CheckResult("tracked_agent_state", "unknown",
+                           "cannot inspect tracked agent state: " + error[-800:], ())
+    if output and not output.endswith("\0"):
+        return CheckResult("tracked_agent_state", "unknown", "invalid tracked-file inventory", ())
+    paths = sorted(path for path in output.split("\0") if path.split("/", 1)[0] in {".lokay", ".omo"})
+    findings = tuple(Finding(path, 1, 1,
+                             "remove tracked agent state; ignore rules do not untrack existing files",
+                             "tracked_agent_state") for path in paths)
+    return CheckResult("tracked_agent_state", "fail" if findings else "pass",
+                       "tracked agent state: " + ", ".join(paths) if findings else
+                       "no tracked root .lokay/.omo state; scope integration and resolution are not assessed",
+                       findings)
+
+
+CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk, tracked_agent_state,
           no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
 
 
