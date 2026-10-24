@@ -98,9 +98,8 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool, neutral=None) 
                     errors.append(f"{path}: recorded tick fixture changed -> never edit recordings; adjust replay matching in src/lokay/effects/replay.py")
     added = {}
     for path, number, kind, text in diff_lines(diff):
-        if kind == "+" and lokay_rules and path.startswith("src/") and (
-                "--add" + "-label" in text
-                or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)):
+        if kind == "+" and lokay_rules and path.startswith("src/") and not path.endswith(".py") and (
+                re.search(r"--add-label\b", text) or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)):
             errors.append(f"{path}:{number}: label state -> use persisted state or a body marker")
         if kind != "+" or not path.endswith((".py", ".mojo", ".🔥")):
             continue
@@ -149,6 +148,16 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool, neutral=None) 
             errors.append(f"{path}: invalid Python -> fix syntax: {exc}")
             continue
         for node in ast.walk(tree):
+            if lokay_rules and path.startswith("src/"):
+                mutation = (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                            and re.match(r"^--add-label(?:=|$)", node.value))
+                if isinstance(node, (ast.List, ast.Tuple)):
+                    mutation = mutation or any(
+                        isinstance(left, ast.Constant) and left.value == "label"
+                        and isinstance(right, ast.Constant) and right.value == "create"
+                        for left, right in zip(node.elts, node.elts[1:]))
+                if mutation and numbers.intersection(range(node.lineno, (node.end_lineno or node.lineno) + 1)):
+                    errors.append(f"{path}:{node.lineno}: label state -> use persisted state or a body marker")
             if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
                 first = node.body[0]
                 if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
