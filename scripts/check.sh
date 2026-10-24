@@ -325,6 +325,15 @@ try:
 finally:
     shutil.rmtree(env["LOKAY_STATE_DIR"])
 PY
+.venv/bin/python - <<'PY'
+import tempfile
+from pathlib import Path
+from lokay.effects.tests import UV_CACHE_DIR
+temp = Path(tempfile.gettempdir()).resolve()
+if UV_CACHE_DIR == temp or temp in UV_CACHE_DIR.parents:
+    raise SystemExit(f"uv cache outside os temp check failed: {UV_CACHE_DIR}")
+print("uv cache outside os temp checks: green")
+PY
 .venv/bin/python - "$sandbox" <<'PY'
 import os
 import sys
