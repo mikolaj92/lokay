@@ -404,6 +404,15 @@ def write_artifact(path: Path, text: str | bytes) -> None:
         path.write_text(text)
 
 
+def freeze_dataset(path: Path, payload: dict) -> None:
+    ensure_directory(path.parent)
+    with path.open("x", encoding="utf-8") as stream:
+        json.dump(payload, stream, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 def ensure_directory(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 

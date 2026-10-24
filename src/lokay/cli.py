@@ -85,6 +85,12 @@ def lint(args, rest) -> int:
     return int(bool(errors))
 
 
+def dataset(args, rest) -> int:
+    from lokay.dataset import main as dataset_main
+
+    return dataset_main(rest)
+
+
 def measure(args, rest) -> int:
     from lokay.measure import main as measure_main
 
@@ -101,6 +107,7 @@ NODES = {
     "replay": replay,
     "lint": lint,
     "measure": measure,
+    "dataset": dataset,
 }
 
 
