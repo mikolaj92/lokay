@@ -98,9 +98,8 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool, neutral=None) 
                     errors.append(f"{path}: recorded tick fixture changed -> never edit recordings; adjust replay matching in src/lokay/effects/replay.py")
     added = {}
     for path, number, kind, text in diff_lines(diff):
-        if kind == "+" and lokay_rules and path.startswith("src/") and (
-                "--add" + "-label" in text
-                or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)):
+        if (kind == "+" and lokay_rules and path.startswith("src/")
+                and re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)):
             errors.append(f"{path}:{number}: label state -> use persisted state or a body marker")
         if kind != "+" or not path.endswith((".py", ".mojo", ".🔥")):
             continue
@@ -148,7 +147,18 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool, neutral=None) 
         except (SyntaxError, tokenize.TokenError, IndentationError) as exc:
             errors.append(f"{path}: invalid Python -> fix syntax: {exc}")
             continue
+        comparisons = {node.left for node in ast.walk(tree)
+                       if path == "src/lokay/lint.py" and isinstance(node, ast.Compare)
+                       and len(node.ops) == 1 and isinstance(node.ops[0], ast.In)
+                       and len(node.comparators) == 1 and isinstance(node.comparators[0], ast.Attribute)
+                       and isinstance(node.comparators[0].value, ast.Name)
+                       and node.comparators[0].value.id == "node" and node.comparators[0].attr == "value"}
         for node in ast.walk(tree):
+            if (lokay_rules and path.startswith("src/") and isinstance(node, ast.Constant)
+                    and isinstance(node.value, str) and "--add-label" in node.value
+                    and node not in comparisons
+                    and numbers.intersection(range(node.lineno, (node.end_lineno or node.lineno) + 1))):
+                errors.append(f"{path}:{node.lineno}: label state -> use persisted state or a body marker")
             if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.body:
                 first = node.body[0]
                 if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
