@@ -2707,6 +2707,74 @@ with TemporaryDirectory() as directory:
 print("monitor loop checks: green")
 PY
 uv run python - <<'PY'
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+import lokay.observe as observe
+import lokay.effects.gh as gh
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    now = 1_800_000_000
+    beat = {"time": datetime.fromtimestamp(now - 660, timezone.utc).isoformat()}
+    (root / "heartbeat.json").write_text(json.dumps(beat))
+    with patch.object(observe, "HOME", root), patch.object(observe, "RUNS", root / "runs"), \
+            patch.object(observe.time, "time", return_value=now), \
+            patch.dict(os.environ, {"LOKAY_ALARM_REPO": "mikolaj92/lokay", "LOKAY_HEARTBEAT_MINUTES": "5"}), \
+            patch.object(observe, "gh_json", return_value=[]) as lookup, \
+            patch.object(observe, "gh_ok") as action:
+        assert observe.monitor()["result"] == "stalled"
+        action.assert_called_once()
+        args = action.call_args.args[0]
+        assert args[:2] == ["issue", "create"], args
+        created_title = args[args.index("--title") + 1]
+        created_body = args[args.index("--body") + 1]
+        rows = [
+            {"number": 2300, "title": created_title, "body": created_body,
+             "createdAt": "2026-10-25T00:00:00Z", "labels": [], "state": "OPEN"},
+            {"number": 2298, "title": "lokay-stalled", "body": "Issue 67 age: 61.0 minutes",
+             "createdAt": "2026-10-25T00:00:00Z", "labels": [], "state": "OPEN"},
+            {"number": 2291, "title": "fix replay", "body": "spec",
+             "createdAt": "2026-10-25T00:00:00Z", "labels": [], "state": "OPEN"},
+        ]
+        with patch.object(gh, "gh_json", return_value=rows):
+            assert [row["number"] for row in gh.open_issues("mikolaj92/lokay")] == [2291]
+        lookup.return_value = [{"number": 2300, "title": "renamed", "body": created_body}]
+        action.reset_mock()
+        assert observe.monitor()["result"] == "stalled"
+        action.assert_not_called()
+print("stall alarm pick checks: green")
+PY
+uv run python - <<'PY'
+from dataclasses import replace
+
+from lokay import graph, store
+from lokay.types import Built, Checked, Planned, RepoSnapshot, Run, Snapshot
+
+state = {"pr": 42, "node": "check", "progress_diff_fingerprint": "d1"}
+replanned = graph.step(Run.from_state(state), Planned(1)).state
+assert replanned["replan_diff_fingerprint"] == "d1", replanned
+limited = graph.step(Run.from_state({**state, "fix_rounds": graph.FIX_ROUND_LIMIT - 1}),
+                     Checked(1, outcome={"result": "fix"})).state
+assert limited["replan_diff_fingerprint"] == "d1", limited
+assert graph.same_patch(replanned, "d1")
+assert not graph.same_patch(replanned, "d2")
+parked = graph.step(Run.from_state(replanned), Built(2, outcome={"same_patch": True, "main_sha": "m1"})).state
+assert parked["result"] == "same_patch" and parked["same_main_sha"] == "m1" and parked["node"] == "plan", parked
+assert parked["replan_diff_fingerprint"] is None
+assert store.derive_waiting_on(parked) == "main"
+repo = RepoSnapshot(name="owner/repo", main_sha="m1", states={7: parked},
+                    prs=({"number": 42, "headRefName": "lokay/7"},), issues=(), open_prs=frozenset({7}))
+assert graph.pick(Snapshot(repos=(repo,), now=3)) is None
+picked = graph.pick(Snapshot(repos=(replace(repo, main_sha="m2"),), now=3))
+assert picked is not None and picked.kind == "pr" and picked.issue == 7, picked
+print("same patch park checks: green")
+PY
+uv run python - <<'PY'
 from contextlib import ExitStack
 from copy import deepcopy
 import hashlib

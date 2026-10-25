@@ -289,7 +289,7 @@ def empty_patch(repo: str, issue: int, sha: str | None = None) -> dict:
 def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
     if state.get("result") == "closed":
         return None
-    if state.get("result") == "empty_patch":
+    if state.get("result") in ("empty_patch", "same_patch"):
         return "main"
     now = time.time() if now is None else now
     if state.get("awaiting") == "children":
