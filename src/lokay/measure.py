@@ -6,6 +6,7 @@ import json
 import math
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -265,6 +266,59 @@ def report(home):
             "escape_rate_48h": f"{len(escapes(home))}/{len(matured(home))}"}
 
 
+def daily(home: Path, days: int) -> list[dict]:
+    today = datetime.now(timezone.utc).date()
+    dates = [(today - timedelta(days=offset)).isoformat() for offset in reversed(range(days))]
+    counts = {day: {"date": day, "has_ticks": False, "merges": None, "failed_reasons": None,
+                    "idle": None, "pick_to_merge_p50_minutes": None, "pick_to_merge_p90_minutes": None}
+              for day in dates}
+    failures = {day: Counter() for day in dates}
+    for path in sorted((home / "ticks").glob("*.jsonl*")):
+        if not re.fullmatch(r"\d{4}-\d\d-\d\d\.jsonl(?:\.gz)?", path.name) or path.name[:10] not in counts:
+            continue
+        opener = gzip.open if path.suffix == ".gz" else open
+        with opener(path, "rt") as stream:
+            for line in stream:
+                row = json.loads(line)
+                day = utc(row["ts"]).date().isoformat()
+                if day not in counts:
+                    continue
+                data = counts[day]
+                if not data["has_ticks"]:
+                    data.update(has_ticks=True, merges=0, idle=dict.fromkeys(("host_down", "pi_capacity", "disk"), 0))
+                if row.get("kind") == "idle" and row.get("reason") in data["idle"]:
+                    data["idle"][row["reason"]] += 1
+                if row.get("kind") != "transition":
+                    continue
+                before, after, event = (unpack(row.get(key, {}), home) for key in ("before", "after", "event"))
+                if not isinstance(before, dict) or not isinstance(after, dict) or not isinstance(event, dict):
+                    raise ValueError("missing transition data")
+                outcome = event.get("outcome") or {}
+                fields = event.get("fields") or {}
+                result = fields.get("result") or outcome.get("result") or after.get("result")
+                if result == "merged" and before.get("result") != "merged":
+                    data["merges"] += 1
+                if result == "failed" and (fields.get("result") == "failed" or outcome.get("result") == "failed"
+                                           or (before.get("result"), before.get("reason")) != (after.get("result"), after.get("reason"))):
+                    reason = fields.get("reason") or outcome.get("reason") or after.get("reason") or "unknown"
+                    failures[day][reason] += 1
+    durations = {day: [] for day in dates}
+    for row in ledger(home):
+        merged, picked = timestamp(row.get("ts")), timestamp(row.get("picked_at"))
+        if row.get("kind") == "merged" and merged and picked and merged >= picked:
+            day = merged.date().isoformat()
+            if day in durations:
+                durations[day].append((merged - picked).total_seconds() / 60)
+    for day, data in counts.items():
+        if data["has_ticks"]:
+            data["failed_reasons"] = [{"reason": reason, "count": count}
+                                      for reason, count in sorted(failures[day].items(), key=lambda item: (-item[1], item[0]))[:5]]
+        values = sorted(durations[day])
+        for percentile in (50, 90):
+            data[f"pick_to_merge_p{percentile}_minutes"] = values[math.ceil(len(values) * percentile / 100) - 1] if values else None
+    return list(counts.values())
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="lokay measure")
     parser.add_argument("--baseline")
@@ -272,10 +326,27 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--until")
     parser.add_argument("--baseline-until")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--daily", action="store_true", help="daily UTC report from local ticks and ledger")
+    parser.add_argument("--days", type=int, help="number of UTC days including today (default: 7)")
     args = parser.parse_args(argv)
+    if args.days is not None and (not args.daily or args.days <= 0):
+        parser.error("--days requires --daily and a positive number")
+    if args.daily and any((args.baseline, args.since, args.until, args.baseline_until)):
+        parser.error("--daily cannot be combined with window options")
     if args.baseline and not args.since:
         parser.error("--since is required with --baseline")
     try:
+        if args.daily:
+            data = daily(config.HOME, args.days if args.days is not None else 7)
+            if args.json:
+                print(json.dumps(data))
+            else:
+                for row in data:
+                    ticks = (f"merges={row['merges']} failed_reasons={row['failed_reasons']} idle={row['idle']}"
+                             if row["has_ticks"] else "brak danych")
+                    p50, p90 = (row[f"pick_to_merge_p{percentile}_minutes"] for percentile in (50, 90))
+                    print(f"{row['date']} UTC | {ticks} | pick→merge p50={p50} p90={p90} min")
+            return 0
         if not args.baseline:
             data = report(config.HOME)
             print(json.dumps(data) if args.json else "measure " + " | ".join(f"{key}={value}" for key, value in data.items()))
