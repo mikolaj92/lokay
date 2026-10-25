@@ -14,7 +14,7 @@ from threading import Event, Thread
 import sys
 
 from lokay.config import HOME
-from lokay.effects.gh import gh_json, gh_ok
+from lokay.effects.gh import STALL_TITLE, STALL_MARKER, stall_alarm, gh_json, gh_ok
 from lokay.store import RUNS, main_status
 
 CURRENT: dict = {}
@@ -125,9 +125,9 @@ def monitor() -> dict:
         reasons.append(f"Heartbeat unavailable: {exc}")
     repo = os.environ.get("LOKAY_ALARM_REPO", "mikolaj92/lokay")
     rows = gh_json(["issue", "list", "--repo", repo, "--state", "open",
-                    "--search", "lokay-stalled in:title", "--limit", "1000000", "--json", "number,title"],
+                    "--search", "lokay-stalled in:title", "--limit", "1000000", "--json", "number,title,body"],
                    error="alarm lookup failed", strip=False, default="[]")
-    alarms = [row for row in rows if row["title"] == "lokay-stalled"]
+    alarms = [row for row in rows if stall_alarm(row)]
     evidence = "\n\n```json\n" + dumps(beat, indent=2) + "\n```"
     if not reasons:
         for alarm in alarms:
@@ -136,7 +136,7 @@ def monitor() -> dict:
                   error="alarm closure failed", strip=False)
         return {"result": "ok", "closed": [alarm["number"] for alarm in alarms]}
     if not alarms:
-        body = "\n".join(reasons) + evidence + "\n\n```json\n" + dumps(latest_needs_help(), indent=2) + "\n```"
-        gh_ok(["issue", "create", "--repo", repo, "--title", "lokay-stalled", "--body", body],
+        body = STALL_MARKER + "\n" + "\n".join(reasons) + evidence + "\n\n```json\n" + dumps(latest_needs_help(), indent=2) + "\n```"
+        gh_ok(["issue", "create", "--repo", repo, "--title", STALL_TITLE, "--body", body],
               error="alarm creation failed", strip=False)
     return {"result": "stalled", "reasons": reasons}
