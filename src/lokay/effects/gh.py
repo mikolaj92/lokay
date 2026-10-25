@@ -174,12 +174,20 @@ def host_ops(body: str | None) -> bool:
     return "<!-- lokay-host-ops:" in (body or "")
 
 
+STALL_TITLE = "lokay-stalled"
+STALL_MARKER = "<!-- lokay-stalled -->"
+
+
+def stall_alarm(row: dict) -> bool:
+    return row.get("title") == STALL_TITLE or STALL_MARKER in (row.get("body") or "")
+
+
 def open_issues(repo: str) -> list[dict]:
     rows = gh_json(
         ["issue", "list", "--repo", repo, "--state", "open", "--limit", "1000000", "--json", "number,createdAt,title,labels,state,body"],
         error="issue list failed", default="[]",
     )
-    rows = [row for row in rows if not host_ops(row.get("body"))]
+    rows = [row for row in rows if not host_ops(row.get("body")) and not stall_alarm(row)]
     return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
 
 
