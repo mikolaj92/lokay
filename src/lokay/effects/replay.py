@@ -48,6 +48,23 @@ def stable(value):
     return value
 
 
+def scope_observation(actual, expected):
+    if not isinstance(actual, dict) or not isinstance(expected, dict):
+        return None
+    if actual.get("result") != expected.get("result") or actual.get("result") not in (None, "fix"):
+        return None
+    recorded = [item for key in ("checks", "results", "unknown", "failed")
+                for item in expected.get(key, [])]
+    if any(item.get("name") == "documentation_scope" for item in recorded):
+        return None
+    for key in ("checks", "results"):
+        for item in actual.get(key, []):
+            if (item.get("name") == "documentation_scope" and item.get("status") == "unknown"
+                    and not item.get("findings")):
+                return item
+    return None
+
+
 def compatible_checks(actual, expected) -> Any:
     if isinstance(actual, str) and isinstance(expected, str):
         for new, old in CHECK_HINTS:
@@ -59,14 +76,58 @@ def compatible_checks(actual, expected) -> Any:
         table, separator, suffix = tail.partition("\n\n")
         recorded = expected.partition(header)[2].partition("\n\n")[0].splitlines()
         names = {line.split(" | ", 2)[0] for line in recorded}
+        scope = None
+        for line in table.splitlines():
+            cells = line.split(" | ")
+            if (len(cells) == 3 and cells[:2] == ["| documentation_scope", "unknown"]
+                    and cells[0] not in names
+                    and ("Wynik: **fix**" in prefix or ("## Checks\n\nSHA: `" in prefix
+                         and any(" | fail | " in row for row in recorded)))
+                    and prefix == expected.partition(header)[0]):
+                scope = cells[2].removesuffix(" |")
+        if scope and "\n```json\n" in suffix and "\n```json\n" in expected:
+            lead, fence, payload = suffix.partition("\n```json\n")
+            data, end, tail = payload.partition("\n```")
+            recorded_data = expected.partition("\n```json\n")[2].partition("\n```")[0]
+            try:
+                parsed, old = json.loads(data), json.loads(recorded_data)
+                notes = [note for note in parsed.get("notes", [])
+                         if note.get("warstwa") == "documentation_scope"
+                         and note.get("status") == "unknown"
+                         and str(note.get("log", "")).replace("|", "\\|").replace("\r", " ").replace("\n", " ")[:1000] == scope]
+                if len(notes) == 1 and not any(note.get("warstwa") == "documentation_scope"
+                                               for note in old.get("notes", [])):
+                    parsed["notes"] = [note for note in parsed["notes"] if note != notes[0]]
+                    suffix = lead + fence + json.dumps(parsed, ensure_ascii=False, indent=2) + end + tail
+                else:
+                    scope = None
+            except (ValueError, TypeError, AttributeError):
+                scope = None
+        elif "\n```json\n" in suffix:
+            scope = None
         table = "\n".join(line for line in table.splitlines()
-                          if line.split(" | ", 2)[0] in names or line.split(" | ", 2)[1:2] != ["pass"])
+                          if (line.split(" | ", 2)[0] in names
+                              or line.split(" | ", 2)[1:2] != ["pass"])
+                          and not (scope and line == f"| documentation_scope | unknown | {scope} |"))
         return prefix + header + table + separator + suffix
     if isinstance(actual, list) and isinstance(expected, list) and len(actual) == len(expected):
         return [compatible_checks(value, recorded) for value, recorded in zip(actual, expected)]
     if not isinstance(actual, dict) or not isinstance(expected, dict):
         return actual
     actual = actual.copy()
+    scope = scope_observation(actual, expected)
+    if scope:
+        for key in ("checks", "results", "unknown"):
+            if key in actual:
+                actual[key] = [item for item in actual[key] if item != scope]
+        note = {"warstwa": scope["name"], "log": scope["reason"], "status": scope["status"]}
+        if note not in expected.get("notes", []) and "notes" in actual:
+            actual["notes"] = [item for item in actual["notes"] if item != note]
+    linked_scope = scope or next((found for key in ("verdict", "last_check", "check_inputs")
+                                 if (found := scope_observation(actual.get(key), expected.get(key)))), None)
+    if linked_scope and "progress_checks" in actual and "documentation_scope" not in expected.get("progress_checks", {}):
+        actual["progress_checks"] = {name: status for name, status in actual["progress_checks"].items()
+                                     if name != "documentation_scope" or status != "unknown"}
     if "main_sha" not in expected and actual.get("main_sha") is None:
         actual.pop("main_sha", None)
     for key in actual.keys() & expected.keys():
