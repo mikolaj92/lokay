@@ -2707,6 +2707,49 @@ with TemporaryDirectory() as directory:
 print("monitor loop checks: green")
 PY
 uv run python - <<'PY'
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+import lokay.observe as observe
+import lokay.effects.gh as gh
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    now = 1_800_000_000
+    beat = {"time": datetime.fromtimestamp(now - 660, timezone.utc).isoformat()}
+    (root / "heartbeat.json").write_text(json.dumps(beat))
+    with patch.object(observe, "HOME", root), patch.object(observe, "RUNS", root / "runs"), \
+            patch.object(observe.time, "time", return_value=now), \
+            patch.dict(os.environ, {"LOKAY_ALARM_REPO": "mikolaj92/lokay", "LOKAY_HEARTBEAT_MINUTES": "5"}), \
+            patch.object(observe, "gh_json", return_value=[]) as lookup, \
+            patch.object(observe, "gh_ok") as action:
+        assert observe.monitor()["result"] == "stalled"
+        action.assert_called_once()
+        args = action.call_args.args[0]
+        assert args[:2] == ["issue", "create"], args
+        created_title = args[args.index("--title") + 1]
+        created_body = args[args.index("--body") + 1]
+        rows = [
+            {"number": 2300, "title": created_title, "body": created_body,
+             "createdAt": "2026-10-25T00:00:00Z", "labels": [], "state": "OPEN"},
+            {"number": 2298, "title": "lokay-stalled", "body": "Issue 67 age: 61.0 minutes",
+             "createdAt": "2026-10-25T00:00:00Z", "labels": [], "state": "OPEN"},
+            {"number": 2291, "title": "fix replay", "body": "spec",
+             "createdAt": "2026-10-25T00:00:00Z", "labels": [], "state": "OPEN"},
+        ]
+        with patch.object(gh, "gh_json", return_value=rows):
+            assert [row["number"] for row in gh.open_issues("mikolaj92/lokay")] == [2291]
+        lookup.return_value = [{"number": 2300, "title": "renamed", "body": created_body}]
+        action.reset_mock()
+        assert observe.monitor()["result"] == "stalled"
+        action.assert_not_called()
+print("stall alarm pick checks: green")
+PY
+uv run python - <<'PY'
 from contextlib import ExitStack
 from copy import deepcopy
 import hashlib
