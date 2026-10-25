@@ -370,6 +370,22 @@ def docs(x: CheckInput) -> CheckResult:
     return CheckResult("docs", "pass", "no documentation expansion", ())
 
 
+def documentation_scope(x: CheckInput) -> CheckResult:
+    removed = {}
+    for path, number, kind, text in diff_lines(x.diff):
+        if kind == "-" and text.strip() and change_kind([path]) == "docs":
+            removed.setdefault(path, []).append(number)
+    if removed:
+        locations = "; ".join(f"{path}:{', '.join(map(str, lines))}"
+                              for path, lines in sorted(removed.items()))
+        return CheckResult("documentation_scope", "unknown",
+                           "documentation removed; verify explicit issue authorization or necessary repair, "
+                           "and equivalent guidance in its original context; path mentions, plans and added "
+                           "lines alone do not establish authorization or equivalence: " + locations, ())
+    return CheckResult("documentation_scope", "pass",
+                       "no nonblank documentation lines removed; runtime scope authorization not assessed", ())
+
+
 def lockfile(x: CheckInput) -> CheckResult:
     from lokay.build import LOCKFILES
     from lokay.effects.tests import check_uv_lock
@@ -460,7 +476,8 @@ def junk(x: CheckInput) -> CheckResult:
 
 
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
-          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
+          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs,
+          documentation_scope]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
