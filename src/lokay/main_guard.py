@@ -36,6 +36,9 @@ def guard_issues(repo: str, state: str = "all") -> list[dict]:
 
 
 def guard_issue(repo: str, body: str) -> int:
+    from lokay.store import state_read, state_update
+    from lokay.tick import RECOVERY_EVIDENCE
+
     matches = guard_issues(repo)
     text = fit_body(f"<!-- {MARKER} -->\n{body}")
     if matches:
@@ -46,10 +49,17 @@ def guard_issue(repo: str, body: str) -> int:
         if issue.get("state") == "CLOSED":
             gh_ok(["issue", "reopen", str(number), "--repo", repo],
                   error="main issue reopen failed", strip=False)
-        return number
-    out = gh_ok(["issue", "create", "--repo", repo, "--title", TITLE, "--body", text],
-                error="main issue create failed", strip=False)
-    return int(out.strip().rstrip("/").rsplit("/", 1)[1])
+    else:
+        out = gh_ok(["issue", "create", "--repo", repo, "--title", TITLE, "--body", text],
+                    error="main issue create failed", strip=False)
+        number = int(out.strip().rstrip("/").rsplit("/", 1)[1])
+    loaded = gh_json(["issue", "view", str(number), "--repo", repo, "--json", "title,body"],
+                     error="main issue view failed")
+    saved_body = state_read(repo, number).get("issue_body") or ""
+    _, marker, suffix = saved_body.partition(RECOVERY_EVIDENCE)
+    body = (loaded["body"] or "") + marker + suffix if marker else loaded["body"]
+    state_update(repo, number, issue_title=loaded["title"], issue_body=body)
+    return number
 
 
 def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: int | None = None, *, base: str | None = None, config: dict | None = None, force: bool = False, revision: str | None = None) -> dict:
@@ -150,7 +160,7 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
     from lokay.review import test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
-    if (main["lockfile"]["status"] != "pass" or ci.get("tested") is not True
+    if (ci.get("tested") is not True
             or main["ci"].get("tested") is not True or main["ci"]["result"] != "red") or any(
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):

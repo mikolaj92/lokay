@@ -48,26 +48,6 @@ def stable(value):
     return value
 
 
-def additive_scope(actual, expected):
-    if not isinstance(actual, dict) or not isinstance(expected, dict):
-        return []
-    if actual.get("result") != expected.get("result"):
-        return []
-    observations = []
-    for key in ("checks", "results", "unknown"):
-        rows, recorded = actual.get(key), expected.get(key)
-        if not isinstance(rows, list) or not isinstance(recorded, list):
-            continue
-        if (any(row.get("name") == "wrong_scope" for row in recorded)
-                or any(row.get("name") == "wrong_scope" and row.get("status") == "fail" for row in rows)):
-            return []
-        observations.extend(row for row in rows
-                            if row.get("name") == "wrong_scope" and row.get("status") == "unknown")
-    for key in ("verdict", "last_check", "check_inputs"):
-        observations.extend(additive_scope(actual.get(key), expected.get(key)))
-    return observations
-
-
 def compatible_checks(actual, expected) -> Any:
     if isinstance(actual, str) and isinstance(expected, str):
         for new, old in CHECK_HINTS:
@@ -79,48 +59,16 @@ def compatible_checks(actual, expected) -> Any:
         table, separator, suffix = tail.partition("\n\n")
         recorded = expected.partition(header)[2].partition("\n\n")[0].splitlines()
         names = {line.split(" | ", 2)[0] for line in recorded}
-        rows = table.splitlines()
-        scope = [line for line in rows if line.startswith("| wrong_scope | unknown | ")
-                 and "| wrong_scope" not in names]
-        if scope and prefix == expected.partition(header)[0]:
-            reason = scope[0].split(" | ", 2)[2].removesuffix(" |")
-            marker = "```json\n"
-            start, found, rest = suffix.partition(marker)
-            payload, end, tail = rest.partition("\n```")
-            old_rest = expected.partition(header)[2].partition("\n\n")[2].partition(marker)[2]
-            old_payload = old_rest.partition("\n```")[0]
-            if found and end:
-                try:
-                    value, recorded_value = json.loads(payload), json.loads(old_payload)
-                except ValueError:
-                    pass
-                else:
-                    note = {"warstwa": "wrong_scope", "log": reason, "status": "unknown"}
-                    if isinstance(value, dict) and isinstance(recorded_value, dict):
-                        value["notes"] = [item for item in value.get("notes", []) if item != note]
-                        if value == recorded_value:
-                            suffix = start + marker + old_payload + end + tail
-            rows = [line for line in rows if line not in scope]
-        table = "\n".join(line for line in rows
+        table = "\n".join(line for line in table.splitlines()
                           if line.split(" | ", 2)[0] in names or line.split(" | ", 2)[1:2] != ["pass"])
         return prefix + header + table + separator + suffix
     if isinstance(actual, list) and isinstance(expected, list) and len(actual) == len(expected):
         return [compatible_checks(value, recorded) for value, recorded in zip(actual, expected)]
     if not isinstance(actual, dict) or not isinstance(expected, dict):
         return actual
-    observations = additive_scope(actual, expected)
     actual = actual.copy()
-    if observations:
-        for key in ("checks", "results", "unknown"):
-            if isinstance(actual.get(key), list):
-                actual[key] = [row for row in actual[key] if row not in observations]
-        if isinstance(actual.get("progress_checks"), dict) and "wrong_scope" not in expected.get("progress_checks", {}):
-            actual["progress_checks"] = {name: status for name, status in actual["progress_checks"].items()
-                                        if name != "wrong_scope" or status != "unknown"}
-        notes = [{"warstwa": row["name"], "log": row["reason"], "status": row["status"]}
-                 for row in observations]
-        if isinstance(actual.get("notes"), list):
-            actual["notes"] = [note for note in actual["notes"] if note not in notes]
+    if "main_sha" not in expected and actual.get("main_sha") is None:
+        actual.pop("main_sha", None)
     for key in actual.keys() & expected.keys():
         value, recorded = actual[key], expected[key]
         if key in {"checks", "results"} and isinstance(value, list) and isinstance(recorded, list):
@@ -407,20 +355,26 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
             try:
                 ci = finish.local_checks(picked, worktree, configured, sha, root, base, tests, check_rows)
                 pr_number, remote = finish.remote_checks(picked, branch, sha)
-                if remote["result"] not in ("green", "no_ci"):
+                if remote["result"] not in ("green", "no_ci", "inherited"):
                     raise Mismatch(f"unsupported check remote result: {remote['result']}")
-                if remote.get("failed"):
+                if remote.get("failed") and remote["result"] != "inherited":
                     raise Mismatch(f"unsupported check remote failures: {remote['failed']}")
-                ci = {**ci, "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
-                    "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+                ci = {**ci, "ci": remote["result"],
+                    **({"inherited": remote["inherited"]} if remote.get("inherited") else {}),
+                    "failed": ci["failed"] + [
+                        {"warstwa": "GitHub CI", "plik": "", "check": name,
+                         "log": name + "\n" + (remote.get("failed_logs") or {}).get(name, name)}
+                        for name in remote.get("failed") or []],
+                    "notes": [*ci["notes"], *(remote.get("notes") or [])],
+                    "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci", "inherited") else "red"}
                 store.state_update(repo, issue, local_ci=ci)
                 rounds = before.get("check_rounds", 0)
-                decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed = finish.lenses(
+                decisions, kinds, check_notes, dismissed_keys, plan_text, check_results, checks_failed, main_sha = finish.lenses(
                     picked, worktree, base, sha, saved, diff, check_rows, ci, rounds)
                 verdict, rounds = finish.complete_check(
                     picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
                     check_results, pr_number, rounds, check_notes, hashlib.sha256(diff.encode()).hexdigest(),
-                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log))
+                    kinds, conflict_fix=lambda files, log: finish.conflict_fix(picked, sha, files, log), main_sha=main_sha)
                 store.state_update(repo, issue, _event={"action": "verdict", "outcome": verdict})
             except Boundary:
                 outcome = (recorded[-1] if rerecord is not None else transitions[-1])["event"]["outcome"]
