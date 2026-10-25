@@ -101,10 +101,11 @@ def pr_run(pr: dict, snapshots: list[dict]) -> dict:
             matches.append(snapshot)
     if not matches:
         return {}
-    times = [stamp(snapshot.get("updated_at")) for snapshot in matches]
-    if not all(timestamp > 0 and math.isfinite(timestamp) for timestamp in times):
+    times = [(snapshot, stamp(snapshot.get("updated_at"))) for snapshot in matches]
+    valid = [(snapshot, timestamp) for snapshot, timestamp in times if timestamp > 0 and math.isfinite(timestamp)]
+    if not valid:
         return {}
-    latest = [select(snapshot, ("node", "last_error")) for snapshot, timestamp in zip(matches, times) if timestamp == max(times)]
+    latest = [select(snapshot, ("node", "last_error")) for snapshot, timestamp in valid if timestamp == max(timestamp for _, timestamp in valid)]
     return latest[0] if all(snapshot == latest[0] for snapshot in latest) else {}
 
 
