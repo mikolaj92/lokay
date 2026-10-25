@@ -406,11 +406,18 @@ def write_artifact(path: Path, text: str | bytes) -> None:
 
 def freeze_dataset(path: Path, payload: dict) -> None:
     ensure_directory(path.parent)
-    with path.open("x", encoding="utf-8") as stream:
-        json.dump(payload, stream, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        stream.write("\n")
-        stream.flush()
-        os.fsync(stream.fileno())
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                            prefix=path.name + ".", suffix=".tmp", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            json.dump(payload, stream, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+            stream.close()
+            os.link(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def ensure_directory(path: Path) -> None:
