@@ -466,9 +466,12 @@ def tracked_agent_state(x: CheckInput) -> CheckResult:
     if code:
         return CheckResult("tracked_agent_state", "unknown",
                            "cannot inspect tracked agent state: " + error[-800:], ())
-    if output and not output.endswith("\0"):
+    inventory = output[:-1].split("\0") if output.endswith("\0") else []
+    if output and (not output.endswith("\0") or any(
+            not path or path.startswith("/") or any(part in {"", ".", ".."} for part in path.split("/"))
+            for path in inventory) or len(inventory) != len(set(inventory))):
         return CheckResult("tracked_agent_state", "unknown", "invalid tracked-file inventory", ())
-    paths = sorted(path for path in output.split("\0") if path.split("/", 1)[0] in {".lokay", ".omo"})
+    paths = sorted(path for path in inventory if path.split("/", 1)[0] in {".lokay", ".omo"})
     findings = tuple(Finding(path, 1, 1,
                              "remove tracked agent state; ignore rules do not untrack existing files",
                              "tracked_agent_state") for path in paths)

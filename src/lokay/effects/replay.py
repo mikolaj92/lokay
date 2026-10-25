@@ -222,6 +222,11 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
             if command is not None:
                 raise Mismatch("pi call contains nested guard effects; choose a segment without pi")
             kind = Path(argv[0]).name
+            if (kind == "git" and argv[1:5] == ["ls-tree", "-r", "--name-only", "-z"]
+                    and not any(row.get("call") == "git" and row.get("effect", {}).get("argv") == argv
+                                for row in effects[position:])):
+                raise Mismatch(f"missing recorded committed-tree inventory for revision {argv[5]}; "
+                               "an index inventory cannot establish the requested snapshot")
             effect = consume(kind, argv)
             if effect["stdin"] != input:
                 raise Mismatch(f"seq={effects[position - 1]['seq']} stdin mismatch")
