@@ -2750,6 +2750,31 @@ with TemporaryDirectory() as directory:
 print("stall alarm pick checks: green")
 PY
 uv run python - <<'PY'
+from dataclasses import replace
+
+from lokay import graph, store
+from lokay.types import Built, Checked, Planned, RepoSnapshot, Run, Snapshot
+
+state = {"pr": 42, "node": "check", "progress_diff_fingerprint": "d1"}
+replanned = graph.step(Run.from_state(state), Planned(1)).state
+assert replanned["replan_diff_fingerprint"] == "d1", replanned
+limited = graph.step(Run.from_state({**state, "fix_rounds": graph.FIX_ROUND_LIMIT - 1}),
+                     Checked(1, outcome={"result": "fix"})).state
+assert limited["replan_diff_fingerprint"] == "d1", limited
+assert graph.same_patch(replanned, "d1")
+assert not graph.same_patch(replanned, "d2")
+parked = graph.step(Run.from_state(replanned), Built(2, outcome={"same_patch": True, "main_sha": "m1"})).state
+assert parked["result"] == "same_patch" and parked["same_main_sha"] == "m1" and parked["node"] == "plan", parked
+assert parked["replan_diff_fingerprint"] is None
+assert store.derive_waiting_on(parked) == "main"
+repo = RepoSnapshot(name="owner/repo", main_sha="m1", states={7: parked},
+                    prs=({"number": 42, "headRefName": "lokay/7"},), issues=(), open_prs=frozenset({7}))
+assert graph.pick(Snapshot(repos=(repo,), now=3)) is None
+picked = graph.pick(Snapshot(repos=(replace(repo, main_sha="m2"),), now=3))
+assert picked is not None and picked.kind == "pr" and picked.issue == 7, picked
+print("same patch park checks: green")
+PY
+uv run python - <<'PY'
 from contextlib import ExitStack
 from copy import deepcopy
 import hashlib
