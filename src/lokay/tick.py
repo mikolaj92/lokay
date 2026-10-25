@@ -78,7 +78,7 @@ def act(run: Run) -> Event:
         if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed", "main_red", "parked", "empty_patch"):
+        if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed", "main_red", "parked", "empty_patch", "same_patch"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, result="merged", failures=0, retry_at=0, reason=None)
@@ -407,7 +407,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     finally:
                         release_lock(held)
         main_sha = None
-        if root.is_dir() and any(state.get("empty_main_sha") for state in states.values()):
+        if root.is_dir() and any(state.get("empty_main_sha") or state.get("same_main_sha") for state in states.values()):
             code, sha, _ = git_try(root, "rev-parse", f"origin/{base_branch(root)}")
             if code == 0 and sha.strip():
                 main_sha = sha.strip()
@@ -1288,6 +1288,20 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             return out.strip()
         head = _retry(picked, active_node, read_head)
         diff_fingerprint = hashlib.sha256((diff or "").encode()).hexdigest()
+        if pending != "fix":
+            saved = state_read(picked["repo"], picked["issue"])
+            if saved.get("replan_diff_fingerprint"):
+                if graph.same_patch(saved, diff_fingerprint):
+                    code, main_sha, err = git_try(worktree, "rev-parse", f"origin/{base}")
+                    if code != 0:
+                        raise RuntimeError(err or "main revision lookup failed")
+                    main_sha = main_sha.strip()
+                    state_update(picked["repo"], picked["issue"], _event={"action": "build_complete", "outcome": {
+                        "same_patch": True, "main_sha": main_sha}})
+                    rounds_append(picked["repo"], picked["issue"],
+                                  f"Check: same patch after replan, diff={diff_fingerprint}, parked until origin/{base} moves from {main_sha}")
+                    return {"result": "same_patch", "reason": "same patch after replan", "same_main_sha": main_sha}
+                state_update(picked["repo"], picked["issue"], replan_diff_fingerprint=None)
         if pending == "fix" and verdict:
             signal, outcome = finish.fix(
                 picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
