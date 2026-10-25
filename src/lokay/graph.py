@@ -20,6 +20,10 @@ def merge_allowed(state: dict, sha: str) -> bool:
     return bool(sha) and recorded.get("sha") == sha and recorded.get("result") == "merge"
 
 
+def same_patch(state: dict, diff_fingerprint: str) -> bool:
+    return bool(state.get("pr")) and state.get("replan_diff_fingerprint") == diff_fingerprint
+
+
 def red_main_allows(status: dict, issue: int, children: list) -> bool:
     return status.get("status") != "red" or issue == status.get("issue") or issue in children
 
@@ -77,8 +81,14 @@ def step(run: Run, event: Event) -> Run:
                 fields.update(**deepcopy(PLAN_RESET))
         case Planned():
             fields.update(node="plan", **deepcopy(PLAN_RESET))
+            fingerprint = fields.get("progress_diff_fingerprint", current.get("progress_diff_fingerprint"))
+            if current.get("pr") and fingerprint is not None:
+                fields["replan_diff_fingerprint"] = fingerprint
         case Built():
-            if outcome.get("no_changes"):
+            if outcome.get("same_patch"):
+                fields.update(node="plan", result="same_patch", same_main_sha=outcome["main_sha"],
+                              replan_diff_fingerprint=None, reason="same patch after replan", retry_at=0)
+            elif outcome.get("no_changes"):
                 fields.update(node="build", result="empty_patch" if current.get("empty_main_sha") == outcome["main_sha"] else "parked",
                               empty_main_sha=outcome["main_sha"], reason="empty patch", retry_at=0,
                               h2_patch=None, h2_start=None, h2_context=None, h2_committed=None,
@@ -115,6 +125,9 @@ def step(run: Run, event: Event) -> Run:
                                       fix_limit_hits=current.get("fix_limit_hits", 1) + 1,
                                       split_pending=True, split_tasks=None, children=[],
                                       reason="fix round limit reached twice; split")
+                    fingerprint = fields.get("progress_diff_fingerprint", current.get("progress_diff_fingerprint"))
+                    if current.get("pr") and fingerprint is not None:
+                        fields["replan_diff_fingerprint"] = fingerprint
         case Fixed():
             sha = outcome.get("sha") or fields.get("sha")
             rechecks = current.get("dispute_rechecks", [])
@@ -221,8 +234,9 @@ def pick(snapshot: Snapshot) -> Pick | None:
         for repo in snapshot.repos))
     snapshot = replace(snapshot, repos=tuple(
         replace(repo, states={issue: {**state, "result": "parked"}
-                                 if state.get("result") == "empty_patch"
-                                 and repo.main_sha is not None and repo.main_sha != state.get("empty_main_sha")
+                                 if repo.main_sha is not None
+                                 and ((state.get("result") == "empty_patch" and repo.main_sha != state.get("empty_main_sha"))
+                                      or (state.get("result") == "same_patch" and repo.main_sha != state.get("same_main_sha")))
                                  else state for issue, state in repo.states.items()})
         for repo in snapshot.repos))
     blocked = {(repo.name, issue) for repo in snapshot.repos for issue in repo.states
@@ -260,7 +274,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
                 return Pick(repo.name, parent, "replan")
         due = []
         for issue, state in repo.states.items():
-            if ((repo.name, issue) in blocked or state.get("result") in ("merged", "closed", "empty_patch")
+            if ((repo.name, issue) in blocked or state.get("result") in ("merged", "closed", "empty_patch", "same_patch")
                     or state.get("waiting_on") == "children"
                     or (snapshot.only_issue is not None and snapshot.only_issue != issue)):
                 continue
@@ -299,7 +313,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             if snapshot.only_issue is not None and snapshot.only_issue != issue:
                 continue
             state = repo.states[issue]
-            if (repo.name, issue) in blocked or state.get("result") in ("closed", "merged", "empty_patch"):
+            if (repo.name, issue) in blocked or state.get("result") in ("closed", "merged", "empty_patch", "same_patch"):
                 continue
             parked = state.get("result") == "parked"
             if (parked or state.get("waiting_on", "ready" if not state else None) == "ready"):
@@ -320,7 +334,7 @@ def pick(snapshot: Snapshot) -> Pick | None:
             number = issue["number"]
             if ((repo.name, number) not in blocked and issue.get("state", "OPEN") == "OPEN"
                     and (snapshot.only_issue is None or snapshot.only_issue == number)
-                    and repo.states[number].get("result") not in ("merged", "closed", "empty_patch")
+                    and repo.states[number].get("result") not in ("merged", "closed", "empty_patch", "same_patch")
                     and (repo.states[number].get("result") == "parked"
                          or repo.states[number].get("waiting_on", "ready" if not repo.states[number] else None) == "ready")
                     and number not in repo.open_prs):
