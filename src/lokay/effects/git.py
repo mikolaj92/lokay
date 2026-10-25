@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from datetime import datetime
 from uuid import uuid4
 from tempfile import TemporaryDirectory
 from subprocess import CompletedProcess, TimeoutExpired
@@ -244,6 +245,8 @@ def merge_files(repo: Path, sha: str) -> list[dict] | None:
 
 
 def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
+    orphaned = {}
+
     def checked(where, args):
         code, out, err = git_try(where, *args)
         if code:
@@ -307,8 +310,21 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
             raise ValueError("repository top-level mismatch")
         common_dir = (repo / checked(repo, ["rev-parse", "--git-common-dir"]).strip()).resolve()
         if path.exists():
-            verify()
-            return {"result": "added", "path": str(path), "branch": branch}
+            try:
+                verify()
+                return {"result": "added", "path": str(path), "branch": branch}
+            except ValueError:
+                if not (path.is_dir() and not path.is_symlink() and not any(
+                        row.get("worktree") is not None and samefile(row["worktree"], path)
+                        for row in registrations()) and git_try(path, "rev-parse", "--git-dir")[0] != 0):
+                    raise
+                target = repo.parent / "_orphaned" / f"{path.name}-{datetime.now():%Y%m%d-%H%M%S}"
+                store.ensure_directory(target.parent)
+                dated = target
+                while target.exists() or target.is_symlink():
+                    target = dated.with_name(f"{dated.name}-{uuid4().hex[:8]}")
+                path.rename(target)
+                orphaned = {"orphaned": str(target)}
         records = registrations()
         if any(row.get("worktree") is not None and samefile(row["worktree"], path)
                for row in records):
@@ -333,9 +349,9 @@ def ensure_worktree(repo: Path, branch: str, path: Path) -> dict:
             raise RuntimeError(err.strip() or out.strip() or f"show-ref failed ({code})")
         checked(repo, args)
         verify()
-        return {"result": "added", "path": str(path), "branch": branch}
+        return {"result": "added", "path": str(path), "branch": branch, **orphaned}
     except (OSError, ValueError, RuntimeError) as exc:
-        return {"result": "failed", "error": str(exc)}
+        return {"result": "failed", "error": str(exc), **orphaned}
 
 
 def detached_worktree(root: Path, path: Path, start: str) -> None:

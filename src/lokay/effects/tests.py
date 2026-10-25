@@ -5,7 +5,7 @@ import re
 import tempfile
 from pathlib import Path
 
-UV_CACHE_DIR = (Path(tempfile.gettempdir()) / "lokay-uv-cache").resolve()
+UV_CACHE_DIR = (Path.home() / ".lokay" / "uv-cache").resolve()
 
 def executed_tests(log: str) -> int:
     patterns = (

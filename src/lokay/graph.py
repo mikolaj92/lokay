@@ -184,6 +184,24 @@ def _kind(row: dict, pr: bool = False) -> int:
     return int(change_kind(paths) == "docs")
 
 
+def superseded(repo: RepoSnapshot, rows) -> dict[int, int]:
+    parents = {}
+    branches = {pr.get("headRefName") for pr in repo.prs or () if pr.get("state", "OPEN") == "OPEN"}
+    for row in rows:
+        match = re.search(r"^Lokay parent: #(\d+); split: (\d+); task: \d+$", row.get("body") or "", re.MULTILINE)
+        if not match:
+            continue
+        child = int(row["number"])
+        parent, generation = map(int, match.groups())
+        saved = repo.states.get(parent, {})
+        state = repo.states.get(child, {})
+        if (saved.get("split_generation", 0) > generation and child not in saved.get("children", [])
+                and state.get("result") != "merged" and not state.get("pr")
+                and f"lokay/{child}" not in branches):
+            parents[child] = parent
+    return parents
+
+
 def blockers(repo: RepoSnapshot, issue: int) -> dict:
     state = repo.states.get(issue, {})
     body = "\n".join([state.get("issue_body") or "", state.get("remote_body") or "",
