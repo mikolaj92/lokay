@@ -16,7 +16,7 @@ from harness2.substrate.base import Install
 from lokay import store
 from lokay.config import HOME
 from lokay.effects import git
-from lokay.effects.pi import harness_session, start_harness_run, tick_deadline
+from lokay.effects.pi import harness_session, start_harness_run
 from lokay.gates import gate_contract
 from lokay.safety import untrusted_issue_block
 
@@ -187,35 +187,31 @@ class LokayAdapter:
 
 def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round=0):
     start_harness_run()
-    token = tick_deadline.set(None)
-    try:
-        adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
-        store.rounds_append(repo, issue, ("Fix" if findings is not None else "Build") + " prompt:\n" + adapter.prompt)
-        adapter.substrate.preflight()
-        tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
-        result = run_task(adapter.task_id, k=1,
-                          adapter=cast(BenchmarkAdapter, adapter), prop=PiProposer(adapter.spec.channels["proposer"], audit_dir=adapter.spec.runs_root / "proposer"),
-                          runs_root=adapter.spec.runs_root, modes=("agg",), library=adapter.library, tag=tag)
-        selection = result.selections.get("agg") or {}
-        chosen = selection.get("chosen_run_dir")
-        empty_selection = (result.status == "partial" and selection.get("ok")
-                           and (result.modes.get("agg") or {}).get("ok") and chosen
-                           and result.errors == [f"agg: selected run {selection.get('chosen_run_id')} produced no deliverable"])
-        if (result.status not in ("ok", "skipped") and not empty_selection) or not chosen:
-            return {"result": "failed", "reason": "; ".join(result.errors) or result.status}
-        directory = Path(chosen)
-        complete = all((Path(row["run_dir"]) / "complete.json").is_file() for row in result.to_dict()["base"])
-        executions = (adapter.spec.runs_root / "executions").resolve()
-        for record in git.git(root, "worktree", "list", "--porcelain", "-z").split("\0\0"):
-            fields = record.split("\0")
-            if "detached" not in fields:
-                continue
-            for field in fields:
-                if field.startswith("worktree "):
-                    path = Path(field.removeprefix("worktree "))
-                    if path.name == "worktree" and path.parent.parent == executions:
-                        git.worktree_remove(root, path)
-        return {"result": "done", "patch": directory / "patch.diff",
-                "summary": (directory / "final.md").read_text(), "all_ran": complete}
-    finally:
-        tick_deadline.reset(token)
+    adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
+    store.rounds_append(repo, issue, ("Fix" if findings is not None else "Build") + " prompt:\n" + adapter.prompt)
+    adapter.substrate.preflight()
+    tag = hashlib.sha256((adapter.start + adapter.prompt).encode()).hexdigest()[:16]
+    result = run_task(adapter.task_id, k=1,
+                      adapter=cast(BenchmarkAdapter, adapter), prop=PiProposer(adapter.spec.channels["proposer"], audit_dir=adapter.spec.runs_root / "proposer"),
+                      runs_root=adapter.spec.runs_root, modes=("agg",), library=adapter.library, tag=tag)
+    selection = result.selections.get("agg") or {}
+    chosen = selection.get("chosen_run_dir")
+    empty_selection = (result.status == "partial" and selection.get("ok")
+                       and (result.modes.get("agg") or {}).get("ok") and chosen
+                       and result.errors == [f"agg: selected run {selection.get('chosen_run_id')} produced no deliverable"])
+    if (result.status not in ("ok", "skipped") and not empty_selection) or not chosen:
+        return {"result": "failed", "reason": "; ".join(result.errors) or result.status}
+    directory = Path(chosen)
+    complete = all((Path(row["run_dir"]) / "complete.json").is_file() for row in result.to_dict()["base"])
+    executions = (adapter.spec.runs_root / "executions").resolve()
+    for record in git.git(root, "worktree", "list", "--porcelain", "-z").split("\0\0"):
+        fields = record.split("\0")
+        if "detached" not in fields:
+            continue
+        for field in fields:
+            if field.startswith("worktree "):
+                path = Path(field.removeprefix("worktree "))
+                if path.name == "worktree" and path.parent.parent == executions:
+                    git.worktree_remove(root, path)
+    return {"result": "done", "patch": directory / "patch.diff",
+            "summary": (directory / "final.md").read_text(), "all_ran": complete}

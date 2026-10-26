@@ -22,12 +22,12 @@ from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_b
 from lokay.effects.git import git, git_bytes, git_try, head as git_head
 
 from lokay.types import Finding, Note, parse_finding
-from lokay.config import load_repos, repo as repo_config, tick_budget
+from lokay.config import load_repos, repo as repo_config
 from lokay.effects.gh import gh_json, gh_ok, fit_body, auth_status, host_ops, open_issues, open_pr_for, pr_closed_by_factory
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
-from lokay.effects.pi import (OneHarnessRunDone, TickExpired, check_deadline, cleanup_process_groups, kill_process_groups,
-                       process_groups, run_process, tick_deadline, tick_harness_started)
+from lokay.effects.pi import (OneHarnessRunDone, cleanup_process_groups, kill_process_groups,
+                       process_groups, run_process, tick_harness_started)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
@@ -59,13 +59,12 @@ def act(run: Run) -> Event:
                          retry_at=0, awaiting=None)
             node = "check"
         try:
-            check_deadline()
             prepared = _prepare(picked) if node in ("plan", "build") else _resume(picked)
             outcome = prepared if isinstance(prepared, dict) else _finish(picked, *prepared)
-        except TickExpired as exc:
+        except OneHarnessRunDone:
             repo, issue = picked["repo"], picked["issue"]
-            reason = "tick yields after one harness2 run" if isinstance(exc, OneHarnessRunDone) else "tick budget exhausted"
-            line = "Tick: one harness2 run done; resume saved node" if isinstance(exc, OneHarnessRunDone) else "Tick: budget exhausted; resume saved node"
+            reason = "tick yields after one harness2 run"
+            line = "Tick: one harness2 run done; resume saved node"
             state_update(repo, issue, result="pending", reason=reason)
             rounds_append(repo, issue, line)
             return {"result": "pending", "reason": reason}
@@ -245,7 +244,6 @@ def pick(env: dict[str, str] | None = None) -> dict:
         held = None
         attempted = False
         try:
-            check_deadline()
             held = acquire_lock(lock_path(name.split("/")[0], name))
             if held["result"] != "held":
                 continue
@@ -255,7 +253,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             attempted = True
             store.save_main_status(name, {**current, "checked_at": time.time()})
             check_main(name, clone, config=repo, force=True)
-        except TickExpired:
+        except OneHarnessRunDone:
             raise
         except Exception as exc:
             store.log_event("main_checks", repo=name, outcome={"result": "failed", "reason": str(exc)})
@@ -418,7 +416,6 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                       states=states, busy=busy, main_sha=main_sha))
     snapshot = Snapshot(tuple(snapshots), time.time(), only_issue)
     while True:
-        check_deadline()
         snapshot = replace(snapshot, now=time.time())
         selected = graph.pick(snapshot)
         if selected is None:
@@ -615,16 +612,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cleanup_process_groups()
         log_event("start")
-        token = tick_deadline.set(time.monotonic() + tick_budget())
         harness_token = tick_harness_started.set(False)
         try:
             _tick()
             return 0
-        except TickExpired:
+        except OneHarnessRunDone:
             return 0
         finally:
             tick_harness_started.reset(harness_token)
-            tick_deadline.reset(token)
     finally:
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
@@ -682,7 +677,6 @@ def _retry[T](picked: dict, node: str, action: Callable[[], T], expected: str | 
     repo, issue = picked["repo"], picked["issue"]
     state_update(repo, issue, _event={"action": "enter_node", "outcome": {"node": node}})
     try:
-        check_deadline()
         if worktree and node in {"plan", "build", "check", "fix", "merge"}:
             _ensure_worktree(picked)
         outcome = action()
@@ -839,7 +833,6 @@ def _prepare(picked: dict) -> tuple | dict:
                      h2_summary=None, h2_all_ran=False, h2_committed=None, h2_published=False)
         saved = state_read(name, issue)
     state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "build"}}, branch=branch)
-    check_deadline()
     if not saved.get("h2_patch"):
         git(worktree, "fetch", "origin", base, timeout=300)
         if not saved.get("h2_start"):
@@ -1038,7 +1031,6 @@ def escalate(picked: dict, uwagi: list | None = None, *, force: bool = False,
 
 def fix_step(picked: dict, node: str, action, sha: str) -> dict:
     try:
-        check_deadline()
         _ensure_worktree(picked)
         outcome = action()
     except Exception as exc:
@@ -1071,7 +1063,6 @@ def published_cleanup(picked: dict) -> None:
 
 def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
     def lookup():
-        check_deadline()
         pr = open_pr_for(repo, branch)
         return pr if pr and pr.get("headRefOid") == sha else None
 
@@ -1220,7 +1211,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             worktree, branch, sha, tests, plan_rounds = prepared
             base = base_branch(worktree)
             pending = "check"
-        check_deadline()
         saved = state_read(picked["repo"], picked["issue"])
         if saved.get("merge_attempts", {}).get(sha, 0) >= 2:
             pending = "fix"
