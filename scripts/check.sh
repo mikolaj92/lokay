@@ -1007,6 +1007,39 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
 print("full log checks: green")
 PY
 uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay import checks, review
+
+noise = [f"noise line {number:06d} collected ok" for number in range(12000)]
+log = "\n".join(noise[:6000]) + "\n\n" + "\n".join([
+    "================ FAILURES ================",
+    "________________ test_b ________________",
+    "Traceback (most recent call last):",
+    '  File "tests/test_a.py", line 4, in test_b',
+    "    assert False",
+    "AssertionError: marker-xyz",
+    "================ short test summary info ================",
+    "FAILED tests/test_a.py::test_b - AssertionError: marker-xyz",
+]) + "\n\n" + "\n".join(noise[6000:])
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    ci = {"sha": "S", "result": "red", "tested": True, "log": log,
+          "failed": [{"warstwa": "tests", "plik": "tests/test_a.py", "log": log}]}
+    state = review.check_state(root, 1, "", "", ci)
+    result = checks.local_tests(checks.CheckInput("owner/repo", 1, "S", "", "", "", [], ci, root))
+    fallback = checks.evidence("local_tests", False, "checks failed", [], log, "fix checks")
+    for text in (state["failures"][0]["log"], result.reason, result.findings[0].zmiana, fallback.reason):
+        for marker in ("marker-xyz", "Traceback (most recent call last)", "tests/test_a.py::test_b"):
+            assert marker in text, marker
+        for sample in (noise[0], noise[5999], noise[6000], noise[-1]):
+            assert sample not in text, sample
+    assert Path(state["test_log_path"]).read_text() == log
+assert review.log_excerpt("first block\n\nlast block\nstill last\n") == "last block\nstill last"
+print("log excerpt checks")
+PY
+uv run python - <<'PY'
 import json
 import os
 from pathlib import Path

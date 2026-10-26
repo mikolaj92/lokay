@@ -11,6 +11,7 @@ from urllib.parse import unquote
 from lokay.gates import dead_test_candidates, dead_tests, moved_test_candidates, moved_tests, named_test
 from lokay.lint import diff_lines, lint_diff, unit_test_hints
 from lokay.scope import ASSERTION, is_artifact, is_test, kind as change_kind
+from lokay.review import log_excerpt
 from lokay.types import CheckResult, Finding, parse_finding
 
 
@@ -33,8 +34,8 @@ class CheckInput:
 def evidence(name: str, passed: bool, reason: str, failures: list[dict],
              log: str, fix_hint: str) -> CheckResult:
     details = "; ".join(
-        f"{item.get('warstwa', '')}: {item.get('log', '')}" for item in failures
-    ) or log
+        f"{item.get('warstwa', '')}: {log_excerpt(item.get('log', ''))}" for item in failures
+    ) or log_excerpt(log)
     findings = []
     if not passed:
         for failure in failures:

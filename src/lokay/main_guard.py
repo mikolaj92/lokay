@@ -157,7 +157,7 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
 
 
 def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = None) -> dict:
-    from lokay.review import test_failures
+    from lokay.review import log_excerpt, test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
     if (ci.get("tested") is not True
@@ -172,7 +172,7 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
     if not failures or not inherited:
         return ci
     novel = sorted(failures - inherited)
-    failed = [{"warstwa": "tests", "plik": item, "log": ci["log"],
+    failed = [{"warstwa": "tests", "plik": item, "log": log_excerpt(ci["log"]),
                "on_main": False} for item in novel]
     return {**ci, "baseline": {"sha": main["sha"], "argv": main.get("argv"),
                               "failures": sorted(inherited),
