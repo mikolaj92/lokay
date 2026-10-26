@@ -9,6 +9,8 @@ import shutil
 import time
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
+from functools import wraps
 from copy import deepcopy
 from dataclasses import asdict, is_dataclass
 from json import dumps as dumps
@@ -30,6 +32,30 @@ TICK = str(uuid.uuid4())
 SEQ = 0
 CONTEXT: dict = {}
 EVENT_LOCK = RLock()
+ISSUE_WRITES = ContextVar("issue_writes", default=None)
+
+
+def defer_host_down(action):
+    @wraps(action)
+    def deferred(*args, **kwargs):
+        if ISSUE_WRITES.get() is not None:
+            return action(*args, **kwargs)
+        writes = []
+        token = ISSUE_WRITES.set(writes)
+        try:
+            result = action(*args, **kwargs)
+        except BaseException:
+            ISSUE_WRITES.reset(token)
+            for function, values in writes:
+                function(*values)
+            raise
+        ISSUE_WRITES.reset(token)
+        outcome = result.outcome if isinstance(result, Event) else result[1] if isinstance(result, tuple) else result
+        if not isinstance(outcome, dict) or outcome.get("reason") != "host_down":
+            for function, values in writes:
+                function(*values)
+        return result
+    return deferred
 
 
 def prune_blobs(directory: Path) -> None:
@@ -380,6 +406,11 @@ def derive_waiting_on(state: dict, now: float | None = None) -> str | None:
 
 
 def state_read(repo: str, issue: int) -> dict:
+    for function, values in reversed(ISSUE_WRITES.get() or []):
+        if function is save and values[:2] == (repo, issue):
+            state = dict(values[2].state)
+            state["waiting_on"] = derive_waiting_on(state)
+            return state
     path = run_dir(repo, issue) / "state.json"
     if not path.exists():
         return {}
@@ -440,6 +471,11 @@ def load(repo: str, issue: int) -> Run:
 
 
 def save(repo: str, issue: int, run: Run, event: Event) -> None:
+    if event.outcome.get("reason") == "host_down":
+        return
+    if (writes := ISSUE_WRITES.get()) is not None:
+        writes.append((save, (repo, issue, run, event)))
+        return
     before = load(repo, issue).state
     current = dict(run.state)
     raw = event_record(event)
@@ -463,6 +499,9 @@ def save(repo: str, issue: int, run: Run, event: Event) -> None:
 
 def rounds_append(repo: str, issue: int, line: str) -> Path:
     path = run_dir(repo, issue) / "rounds.md"
+    if (writes := ISSUE_WRITES.get()) is not None:
+        writes.append((rounds_append, (repo, issue, line)))
+        return path
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as stream:
         stream.write(f"- {datetime.now(timezone.utc).isoformat()} {line}\n")

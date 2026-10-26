@@ -339,6 +339,7 @@ def assertion_base_violations(worktree: Path, base_revision: str, patch: str) ->
     return violations
 
 
+@store.defer_host_down
 def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
         clone_path, base, read_diff, sync_head) -> tuple[Literal["return"], dict] | tuple[Literal["continue"], tuple]: 
     from lokay.tick import (escalate, dumps, gh_json, _retry, replan_prompt,
@@ -474,7 +475,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         return outcome
 
     fixed = fix_step(picked, "harness2", fix_action, sha)
-    if fixed["result"] == "failed":
+    if fixed.get("reason") == "host_down" or fixed["result"] == "failed":
         return "return", fixed
     if fixed.get("no_changes") and not diff:
         from lokay.store import empty_patch
