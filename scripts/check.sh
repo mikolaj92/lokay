@@ -25,7 +25,7 @@ import yaml
 expected = (Path.cwd() / 'src/lokay').resolve()
 if lokay.__file__ is None or Path(lokay.__file__).resolve().parent != expected:
     raise SystemExit(f'wrong lokay location: {lokay.__file__}; expected {expected}')
-assert 'tick_deadline.get' not in Path(lokay.h2.__file__).read_text()
+assert not hasattr(lokay.h2, 'tick_deadline')
 
 def import_failed(name):
     raise ImportError(f'cannot import {name}')
@@ -746,7 +746,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from lokay import graph, merge, tick
-from lokay.effects.pi import TickExpired
+from lokay.effects.pi import OneHarnessRunDone
 from lokay.types import Run, parse_event
 
 rounds = {"plan_rounds": 2, "check_rounds": 3}
@@ -761,18 +761,18 @@ with patch.object(merge, "state_read", return_value={}), \
         patch.object(merge, "base_branch", return_value="main"), \
         patch.object(merge, "gh_merge", return_value={"result": "merged", "merge_sha": "merge-sha"}), \
         patch.object(merge, "worktree_remove") as cleanup:
-    def expired(*args, **kwargs):
+    def yielded(*args, **kwargs):
         update.assert_any_call("owner/repo", 1, **merged_fields)
-        raise TickExpired()
+        raise OneHarnessRunDone()
 
-    with patch.object(merge, "check_main", side_effect=expired) as check:
+    with patch.object(merge, "check_main", side_effect=yielded) as check:
         try:
             merge.merge_sha("owner/repo", 7, "head", None, Path("worktree"), "owner", 1,
                             rounds, clone_path=Path("clone"))
-        except TickExpired:
+        except OneHarnessRunDone:
             pass
         else:
-            raise AssertionError("check_main did not expire")
+            raise AssertionError("check_main did not yield")
     check.assert_called_once_with("owner/repo", Path("clone"), "merge-sha", 7, base="main")
     cleanup.assert_not_called()
 
@@ -1166,7 +1166,6 @@ for changed, stalled in ((False, False), (True, False), (False, True)):
         rounds = stack.enter_context(patch.object(finish, "rounds_append"))
         stack.enter_context(patch.object(tick, "escalate", return_value=None))
         stack.enter_context(patch.object(tick, "_ensure_worktree"))
-        stack.enter_context(patch.object(tick, "check_deadline"))
         prompt = stack.enter_context(patch.object(tick, "replan_prompt", return_value=reason))
         stack.enter_context(patch.object(tick, "pushed_pr", return_value=True))
         stack.enter_context(patch.object(tick, "refresh_body", return_value={"result": "updated"}))
@@ -2054,7 +2053,7 @@ for factory in (True, False):
 print("human close checks: green")
 PY
 uv run python - <<'PY'
-from lokay.effects.pi import OneHarnessRunDone, TickExpired, start_harness_run, tick_harness_started
+from lokay.effects.pi import OneHarnessRunDone, start_harness_run, tick_harness_started
 
 assert tick_harness_started.get() is None
 start_harness_run()
@@ -2066,8 +2065,8 @@ for _ in range(2):
         assert tick_harness_started.get() is True
         try:
             start_harness_run()
-        except TickExpired as exc:
-            assert isinstance(exc, OneHarnessRunDone)
+        except OneHarnessRunDone:
+            pass
         else:
             raise AssertionError("second harness2 start allowed in one tick")
     finally:
@@ -2076,6 +2075,40 @@ assert tick_harness_started.get() is None
 start_harness_run()
 start_harness_run()
 print("one harness2 per tick checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import time
+from unittest.mock import patch
+
+from lokay import config, store, tick
+from lokay.effects import pi
+
+returned = []
+
+def work():
+    time.sleep(0.05)
+    returned.append(pi.run_process(["true"]).returncode)
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_STATE_DIR": directory,
+                                               "LOKAY_TICK_BUDGET": "0.01"}))
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(tick, "_tick", side_effect=work))
+    assert tick.main([]) == 0
+    assert returned == [0], returned
+
+for path in (*Path("src").rglob("*"), Path("README.md")):
+    if path.is_file():
+        assert b"LOKAY_TICK_BUDGET" not in path.read_bytes(), path
+assert not hasattr(pi, "tick_deadline")
+assert not hasattr(config, "tick_budget")
+print("no tick budget checks")
 PY
 uv run python - <<'PY'
 from unittest.mock import patch
@@ -2893,7 +2926,6 @@ for scenario in ("revert", "no culprit", "parent red", "setup", "lock", "exhaust
         stack.enter_context(patch.object(tick, "repo_config", return_value={"test": ["checks"]}))
         stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
         stack.enter_context(patch.object(tick, "_ensure_worktree"))
-        stack.enter_context(patch.object(tick, "check_deadline"))
         stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
         stack.enter_context(patch.object(git_effects, "git_try", return_value=(0, "", "")))
         def git(path, *args, **kwargs):
@@ -3027,7 +3059,6 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(tick, "repo_config", return_value={"test": []}))
     stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
     stack.enter_context(patch.object(tick, "_retry", side_effect=lambda picked, node, fn, *args, **kwargs: fn()))
-    stack.enter_context(patch.object(tick, "check_deadline"))
     stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
     stack.enter_context(patch.object(tick, "escalate", return_value=None))
     stack.enter_context(patch.object(tick, "fix_step", return_value={"result": "pushed", "sha": sha}))
@@ -3545,7 +3576,6 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(merge, 'main_status', return_value={}))
     stack.enter_context(patch.object(tick, 'open_pr_for', return_value={'number': 38, 'headRefOid': 'head'}))
     stack.enter_context(patch.object(tick, '_ensure_worktree'))
-    stack.enter_context(patch.object(tick, 'check_deadline'))
     events = stack.enter_context(patch.object(store, 'log_event'))
     stack.enter_context(patch.object(finish, 'rounds_append', side_effect=AssertionError('unexpected merge round')))
     store.state_update(name, issue, empty_main_sha=None)
@@ -3574,7 +3604,6 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     stack.enter_context(patch.object(tick, 'repo_config', return_value={'test': []}))
     stack.enter_context(patch.object(tick, '_repo_paths', return_value=(root, root)))
     stack.enter_context(patch.object(tick, '_ensure_worktree'))
-    stack.enter_context(patch.object(tick, 'check_deadline'))
     stack.enter_context(patch.object(tick, 'base_branch', return_value='main'))
     stack.enter_context(patch.object(tick, 'git', side_effect=lambda path, *args, **kwargs: '' if args[0] == 'rev-list' else sha))
     stack.enter_context(patch.object(tick, 'git_head', return_value='head'))

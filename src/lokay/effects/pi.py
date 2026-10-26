@@ -75,24 +75,20 @@ def cleanup_process_groups() -> None:
 def cleanup_worktree_caches(worktree: Path) -> None:
     from lokay.effects.git import git_try
 
-    token = tick_deadline.set(None)
-    try:
-        for name in (".cache", ".validation"):
-            directory = worktree / name
-            if directory.is_symlink() or not directory.is_dir():
-                continue
-            code, out, err = git_try(worktree, "ls-files", "-z", "--", name, timeout=30)
-            if code != 0:
-                raise RuntimeError(err or "tracked cache lookup failed")
-            if out:
-                continue
-            code, _, err = git_try(worktree, "check-ignore", "-q", "--", name + "/", timeout=30)
-            if code == 0:
-                shutil.rmtree(directory)
-            elif code != 1:
-                raise RuntimeError(err or "ignored cache lookup failed")
-    finally:
-        tick_deadline.reset(token)
+    for name in (".cache", ".validation"):
+        directory = worktree / name
+        if directory.is_symlink() or not directory.is_dir():
+            continue
+        code, out, err = git_try(worktree, "ls-files", "-z", "--", name, timeout=30)
+        if code != 0:
+            raise RuntimeError(err or "tracked cache lookup failed")
+        if out:
+            continue
+        code, _, err = git_try(worktree, "check-ignore", "-q", "--", name + "/", timeout=30)
+        if code == 0:
+            shutil.rmtree(directory)
+        elif code != 1:
+            raise RuntimeError(err or "ignored cache lookup failed")
 
 
 def scrubbed_env(base: Mapping[str, str]) -> dict[str, str]:
@@ -160,15 +156,10 @@ def sandboxed(argv: list[str], worktree: str | Path, env: Mapping[str, str], ext
     ]
 
 
-class TickExpired(BaseException):
+class OneHarnessRunDone(BaseException):
     pass
 
 
-class OneHarnessRunDone(TickExpired):
-    pass
-
-
-tick_deadline: ContextVar[float | None] = ContextVar("tick_deadline", default=None)
 tick_harness_started: ContextVar[bool | None] = ContextVar("tick_harness_started", default=None)
 
 
@@ -180,17 +171,8 @@ def start_harness_run() -> None:
         tick_harness_started.set(True)
 
 
-def check_deadline() -> None:
-    deadline = tick_deadline.get()
-    if deadline is not None and time.monotonic() >= deadline:
-        raise TickExpired()
-
-
 def retry_sleep(seconds: float) -> None:
-    check_deadline()
-    deadline = tick_deadline.get()
-    time.sleep(seconds if deadline is None else min(seconds, max(0, deadline - time.monotonic())))
-    check_deadline()
+    time.sleep(seconds)
 
 
 def pi_command(argv: Sequence[str]) -> int | None:
@@ -352,7 +334,6 @@ def _pi_admission(argv, env, expires, expired):
         raise ValueError("LOKAY2_WORKERS must be 1, 2 or 3")
     idle = None
     while True:
-        check_deadline()
         if time.monotonic() >= expires:
             expired()
         held = None
@@ -414,7 +395,6 @@ def _process(argv, cwd, env, input, *, text=False, expires=None, expired=None):
             if pi_command(argv) is not None:
                 assert expires is not None and expired is not None
                 while process.poll() is None:
-                    check_deadline()
                     if time.monotonic() >= expires:
                         expired()
                     try:
@@ -450,21 +430,14 @@ def _run_process(
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("process timeout must be finite and positive")
     timeout = min(timeout, 3600)
-    deadline = tick_deadline.get()
-    remaining = None if deadline is None else deadline - time.monotonic()
-    if remaining is not None and remaining <= 0:
-        raise TickExpired()
     if pi_command(argv) is not None:
         return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=cast(str | None, input))
     with _process(argv, cwd, env, input, text=text) as process:
-        remaining = None if deadline is None else max(0, deadline - time.monotonic())
-        tick_limited = remaining is not None and remaining <= timeout
-        effective_timeout = timeout if remaining is None else min(timeout, remaining)
         try:
             if input is None:
-                stdout, stderr = process.communicate(timeout=effective_timeout)
+                stdout, stderr = process.communicate(timeout=timeout)
             else:
-                stdout, stderr = process.communicate(input=input, timeout=effective_timeout)
+                stdout, stderr = process.communicate(input=input, timeout=timeout)
         except subprocess.TimeoutExpired as error:
             kill_process_groups([process.pid])
             try:
@@ -472,8 +445,6 @@ def _run_process(
             except subprocess.TimeoutExpired as drain_error:
                 stdout = drain_error.output if drain_error.output is not None else error.output
                 stderr = drain_error.stderr if drain_error.stderr is not None else error.stderr
-            if tick_limited:
-                raise TickExpired() from None
             raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr) from None
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)
 
@@ -498,17 +469,13 @@ def _run_pi_process(
         prompt = argv.index("-p", command + 1)
         argv[prompt + 1:prompt + 1] = ["--mode", "json"]
     started = time.monotonic()
-    deadline = tick_deadline.get()
-    tick_limited = deadline is not None and deadline - started <= timeout
-    expires = started + timeout if deadline is None else min(started + timeout, deadline)
+    expires = started + timeout
     output = {"stdout": bytearray(), "stderr": bytearray()}
 
     def collected(name: str) -> str:
         return output[name].decode(errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
     def expired() -> None:
-        if tick_limited:
-            raise TickExpired()
         raise subprocess.TimeoutExpired(argv, timeout, output=collected("stdout"), stderr=collected("stderr"))
 
     while True:

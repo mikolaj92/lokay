@@ -48,36 +48,18 @@ Environment overrides can go in `~/.config/lokay/env`:
 The service uses the checkout SHA as the heartbeat version after self-update;
 manual runs use the installed package version.
 
-`LOKAY_TICK_BUDGET` sets the tick budget in seconds (default: `2700`).
-It must be a numeric string representing finite positive seconds; invalid values
-stop the tick before queue selection. For example, `LOKAY_TICK_BUDGET=0.25`
-sets a quarter-second budget. A shared monotonic deadline starts before queue
-selection. Plan, Check, Merge and process retries outside harness2 stop starting
-work at the deadline; harness2 Build/Fix runs finish independently of it. The saved node, SHA and findings resume on the next tick;
-the tick owner releases its lock even if saving fails.
-
-Process calls outside harness2 use the minimum of their operation timeout,
-3600 seconds and the remaining tick budget; harness2 calls retain their own
-process timeout, capped at 3600 seconds. GitHub calls use 60 seconds; setup/local CI use 600 seconds.
+GitHub calls use 60 seconds; setup/local CI use 600 seconds.
 Timed-out process groups are killed. Output draining and process reaping share
-a five-second cleanup budget. Tick expiry saves `pending`, without failure
-backoff; an operation timeout remains an ordinary error. Retry waits stop at the
-deadline. This is not a hard wall-clock limit on filesystem operations or guard
-cleanup. Closed-issue cleanup saves dirty/unpushed changes in `cleanup.patch`, records `cleanup=done|failed` once, and never retries.
+a five-second cleanup budget. Closed-issue cleanup saves dirty/unpushed changes in `cleanup.patch`, records `cleanup=done|failed` once, and never retries.
 
 Ready repositories are ordered by their latest persisted attempt, oldest first.
 Each repository saves `runs/<repo>/attempt.json` under its lock before fetching
-its queue, so API failures and budget exhaustion also rotate selection. Existing
+its queue, so API failures also rotate selection. Existing
 issue timestamps remain a fallback. Missing timestamps count as zero; ties use
 repository name. Within a repository, PRs retain priority and use oldest issue
 attempt, then PR number.
-The attempt timestamp is saved before processing, including failed or exhausted
-ticks. An issue-only repository now competes with PR repositories, but continuous
+The attempt timestamp is saved before processing, including failed ticks. An issue-only repository now competes with PR repositories, but continuous
 PR arrivals **can still starve issues within the same repository**.
-For two ready repositories with the default budget, estimate the second
-repository's wait as about 2700 seconds + cleanup + the service interval.
-This is not a one-hour guarantee for arbitrary budgets, more repositories, host
-failures or unbounded filesystem I/O. Production timing has not been measured.
 
 ## Dashboard
 
