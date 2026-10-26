@@ -70,7 +70,7 @@ class PiProposer(Proposer):
             "Read MISSION.md first. Do what it asks. Reply with the requested output as "
             "your final message AND save it verbatim to output/answer.md."
         )
-        proc = harness_session(cwd, prompt, cwd, timeout=wall)
+        proc = harness_session(cwd, prompt, cwd)
         if proc.returncode:
             return "", 0.0, proc.stderr or "pi failed"
         answer = cwd / "output/answer.md"
@@ -120,7 +120,7 @@ class LokayAdapter:
             return directory
         install = self.substrate.materialise(harness_dir, self.spec,
                                              {"staging_dir": str(directory / "config")})
-        return self.substrate.execute(task_id, install, [run_id], timeout or 3600)[0]
+        return self.substrate.execute(task_id, install, [run_id], timeout)[0]
 
     def _launch(self, task_ref, install, run_id, timeout):
         directory = install.staging_dir.parent
@@ -136,7 +136,7 @@ class LokayAdapter:
             store.log_event("pi_resume", directory=str(directory))
         else:
             git.detached_worktree(self.root, worktree, self.start)
-        proc = harness_session(worktree, self.prompt, directory, install=install, timeout=timeout, resume=resume)
+        proc = harness_session(worktree, self.prompt, directory, install=install, resume=resume)
         store.write_artifact(directory / "final.md", proc.stdout or "")
         store.write_artifact(directory / "trajectory.txt", (proc.stdout or "") + "\n[ERROR]\n" + (proc.stderr or ""))
         if proc.returncode:

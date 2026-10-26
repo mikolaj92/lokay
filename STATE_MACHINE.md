@@ -140,7 +140,7 @@ Nie jest to start co 60 sekund niezależnie od czasu ticka.[S9][S14]
 Stan JSON zastępuje plik przez plik tymczasowy. Rounds są dopisywane osobno.
 Nie jest to transakcja obejmująca Git, GitHub, stan i logi.[S12]
 Budżet domyślny to 2700 s. Deadline zaczyna się przed wyborem pracy.
-Poza harness2 proces ma limit minimum z timeout operacji, 3600 s i pozostałego budżetu; harness2 Build/Fix nie podlega deadline ticka, ale zachowuje timeout każdego procesu do 3600 s; sprzątanie procesu ma dodatkowe 5 s.[S2][S7][S8]
+Pi działa do zakończenia procesu, bez limitu ciszy i czasu. Pozostałe procesy zachowują timeout operacji do 3600 s; sprzątanie procesu ma dodatkowe 5 s.[S2][S7][S8]
 Limit 8 rund Check→Fix: wyłącznie deterministyczne uwagi bramek → Fix; pozostałe: pierwsze trafienie → Plan; drugie → podział issue, awaiting=children; PR pozostaje otwarty, difficulty bez too_big; oba → retro.
 Operacje plikowe i sprzątanie guardów nie mają twardego wspólnego limitu czasu.[S7]
 
