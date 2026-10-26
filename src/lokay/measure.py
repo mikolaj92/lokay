@@ -252,8 +252,11 @@ def report(home):
         readiness[row["repo"]] = main
     closed = {}
     for path in (home / "runs").glob("*/[0-9]*/state.json"):
-        state = json.loads(path.read_text())
-        if state.get("result") != "closed":
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(state, dict) or state.get("result") != "closed":
             continue
         repo = path.parent.parent.name.replace("__", "/")
         reason = state.get("reason") or "unknown"
