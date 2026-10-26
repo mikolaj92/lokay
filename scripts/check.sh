@@ -2203,6 +2203,8 @@ with ExitStack() as stack:
     assert poll() == ["closed"]
     assert store.state_read(name, 1)["result"] == "closed"
     assert store.state_read(name, 1)["closed_on_github"] is True
+    assert store.state_read(name, 1)["closed_by"] == "owner"
+    assert store.state_read(name, 1)["reason"] == "owner_closed"
 
     os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
                       GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid")
@@ -2748,6 +2750,47 @@ with TemporaryDirectory() as directory:
         assert observe.monitor()["result"] == "stalled"
         action.assert_not_called()
 print("stall alarm pick checks: green")
+PY
+uv run python - <<'PY'
+import json
+import os
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import observe, store
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    now = datetime.now(timezone.utc)
+    store.write_artifact(root / "runs/owner__fala/main.json",
+                         json.dumps({"status": "red", "since": (now - timedelta(hours=195)).timestamp()}))
+    picks = [{"kind": "pick", "repo": "owner/fala", "reason": "red_main",
+              "ts": (now - timedelta(hours=1)).isoformat()} for _ in range(38)]
+    store.write_artifact(root / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in picks))
+    stalls = observe.stalled_repos(root, now=now.timestamp())
+    assert len(stalls) == 1, stalls
+    assert stalls[0]["repo"] == "owner/fala" and abs(stalls[0]["hours"] - 195) < 1, stalls
+    assert stalls[0]["picks"] == 38 and stalls[0]["merges"] == 0, stalls
+    store.write_artifact(root / "heartbeat.json", json.dumps({"time": now.isoformat()}))
+    with patch.object(observe, "HOME", root), patch.object(observe, "RUNS", root / "runs"), \
+            patch.dict(os.environ, {"LOKAY_ALARM_REPO": "mikolaj92/lokay"}), \
+            patch.object(observe, "gh_json", return_value=[]), patch.object(observe, "gh_ok") as action:
+        assert observe.monitor()["result"] == "stalled"
+        args = action.call_args.args[0]
+        body = args[args.index("--body") + 1]
+        assert all(text in body for text in ("owner/fala", "repo bez merge 7 dni",
+                                             "red_main 19", "picks 38", "merges 7d 0")), body
+        merged = picks + [{"kind": "merged", "repo": "owner/fala",
+                           "ts": (now - timedelta(hours=1)).isoformat()}]
+        store.write_artifact(root / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in merged))
+        with patch.object(observe, "gh_json", return_value=[{"number": 42, "title": "lokay-stalled"}]):
+            action.reset_mock()
+            assert observe.monitor() == {"result": "ok", "closed": [42]}
+            args = action.call_args.args[0]
+            assert args[:3] == ["issue", "close", "42"], args
+print("stalled repo alarm checks: green")
 PY
 uv run python - <<'PY'
 from dataclasses import replace
@@ -3331,7 +3374,11 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     output = io.StringIO()
     with redirect_stdout(output):
         assert measure.main([]) == 0
-    assert all(text in output.getvalue() for text in ("escape_rate_48h=1/1", "p50", "merges_per_day")), output.getvalue()
+    assert all(text in output.getvalue() for text in ("escape_rate_48h=1/1 (za mało danych)", "p50", "merges_per_day")), output.getvalue()
+    for count, expected in ((3, "0/3 (za mało danych)"), (20, "0/20")):
+        with patch.object(measure, "escapes", return_value=[]), patch.object(measure, "ledger", return_value=[
+                {**merged, "issue": number, "ts": old.isoformat()} for number in range(count)]):
+            assert measure.report(home)["escape_rate_48h"] == expected
     calls = lookups.call_count
     with redirect_stdout(io.StringIO()):
         assert measure.main([]) == 0
@@ -3400,7 +3447,12 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
             ("o/s", 5, {"status": "green", "executed": 12, "lock": "pass"})):
         store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": issue + 10,
                              "sha": str(issue), "main": main})
+    store.state_update("o/r", 6, _event={"action": "closed", "outcome": {
+        "closed_by": "factory", "reason": "superseded"}})
+    store.state_update("o/r", 7, _event={"action": "closed", "outcome": {
+        "closed_by": "owner", "reason": "owner_closed"}})
     report = measure.report(home)
+    assert report["closed"] == {"o/r": {"owner_closed": 1, "superseded": 1}}, report
     assert report["readiness_regressions"] == [{"repo": "o/r", "issue": 4, "pr": 14, "sha": "4",
         "why": ["status green->red", "executed 120->80", "lock pass->fail"]}], report
     assert report["readiness"]["o/r"]["status"] == "red", report
@@ -3781,9 +3833,42 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     for issue in (310, 311, 312):
         saved = store.state_read(name, issue)
         assert saved["result"] == "closed" and saved["closed_on_github"]
+        assert saved["closed_by"] == "factory" and saved["reason"] == "superseded", saved
     selected = graph.pick(Snapshot((repo,), 10000))
     assert selected is None or selected.issue != 312, selected
 print("replan orphan checks: green")
+PY
+uv run python - <<'PY'
+import json
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import store, tick
+from lokay.types import Run
+
+name = "owner/rounds"
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(tick, "published_cleanup"))
+    remote = stack.enter_context(patch.object(tick, "gh_ok"))
+    for issue, field in ((1, "plan_rounds"), (2, "check_rounds")):
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "check"}},
+                           result="running", pr=issue + 6, **{field: 13})
+        event = tick.act(Run.from_state({"repo": name, "issue": issue, "node": "check"}))
+        reason = f"{field.removesuffix('_rounds').title()} round limit: 13 rounds"
+        saved = store.state_read(name, issue)
+        assert event.outcome == {"result": "parked", "reason": reason}, event.outcome
+        assert saved["result"] == "parked" and saved["reason"] == reason, saved
+        assert remote.call_args.args[0] == ["api", f"repos/{name}/issues/{issue + 6}/labels",
+                                            "-f", "labels[]=lokay-parked"], remote.call_args
+    rows = [json.loads(line) for path in (root / "ticks").glob("*.jsonl")
+            for line in path.read_text().splitlines()]
+    assert {(row.get("plan_rounds"), row.get("check_rounds")) for row in rows if row.get("kind") == "round_limit"} == {(13, 0), (0, 13)}, rows
+print("round limit checks: green")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

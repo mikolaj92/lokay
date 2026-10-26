@@ -12,6 +12,7 @@ import copy
 import gzip
 import html
 import json
+import math
 import os
 import re
 import shlex
@@ -79,6 +80,33 @@ def stamp(value) -> float:
         return parsed.replace(tzinfo=timezone.utc).timestamp() if parsed.tzinfo is None else parsed.timestamp()
     except (ValueError, TypeError, OverflowError):
         return 0
+
+
+def age_hours(value, now: float) -> float | None:
+    created = stamp(value)
+    return max(0, (now - created) / 3600) if created and math.isfinite(created) else None
+
+
+def pr_run(pr: dict, snapshots: list[dict]) -> dict:
+    matches = []
+    for snapshot in snapshots:
+        identity = snapshot.get("pr")
+        if identity is None or identity == "":
+            matched = bool(pr.get("headRefName")) and snapshot.get("branch") == pr["headRefName"]
+        elif isinstance(identity, str) and identity.startswith("https://"):
+            matched = identity == f'https://github.com/{pr["repo"]}/pull/{number(pr.get("number"))}'
+        else:
+            matched = number(pr_number(identity)) == number(pr.get("number")) > 0
+        if matched:
+            matches.append(snapshot)
+    if not matches:
+        return {}
+    times = [(snapshot, stamp(snapshot.get("updated_at"))) for snapshot in matches]
+    valid = [(snapshot, timestamp) for snapshot, timestamp in times if timestamp > 0 and math.isfinite(timestamp)]
+    if not valid:
+        return {}
+    latest = [select(snapshot, ("node", "last_error")) for snapshot, timestamp in valid if timestamp == max(timestamp for _, timestamp in valid)]
+    return latest[0] if all(snapshot == latest[0] for snapshot in latest) else {}
 
 
 def date(value) -> str:
@@ -302,6 +330,9 @@ class Dashboard:
             current = select(read_json(current_path), RUN_FIELDS)
             current.update(repo=current_path.parent.parent.name.replace("__", "/"), issue=current_path.parent.name)
             current_label = "last active run (heartbeat idle)"
+        snapshots = {}
+        for _, _, path in paths:
+            snapshots.setdefault(path.parent.parent.name.replace("__", "/"), []).append(read_json(path))
         recent = []
         for _, _, path in sorted(paths, reverse=True)[:10]:
             data = current if path == current_path else select(read_json(path), RUN_FIELDS)
@@ -316,6 +347,10 @@ class Dashboard:
             item = cache["repos"].get(name, {})
             merges = [{**pr, "repo": name} for pr in item.get("merged", [])]
             opens = [{**pr, "repo": name} for pr in item.get("open", [])]
+            for pr in opens:
+                pr.update(age_hours=age_hours(pr.get("createdAt"), now),
+                          **pr_run(pr, snapshots.get(name, [])),
+                          main_status=safe((statuses.get(name) or {}).get("status")))
             merged.extend(merges)
             opened.extend(opens)
             last = max(merges, key=lambda pr: stamp(pr.get("mergedAt")), default={})
@@ -331,7 +366,8 @@ class Dashboard:
         return {"now": now, "heartbeat": heartbeat, "current": current, "current_label": current_label, "recent": recent, **models(),
                 "last_refresh": cache["last_refresh"], "error": cache["error"], "merged": merged[:100],
                 "growth_days": buckets(merged, opened, now, False), "growth_hours": buckets(merged, opened, now, True),
-                "open_prs": len(opened), "repos": per_repo,
+                "open_prs": len(opened), "open": opened,
+                "old_prs": sum(pr["age_hours"] is not None and pr["age_hours"] > 168 for pr in opened), "repos": per_repo,
                 "total": {"open_issues": total_issues,
                           "eta24": eta(total_issues, sum(r["merges24"] for r in per_repo) / 24, now),
                           "eta7": eta(total_issues, sum(r["merges7"] for r in per_repo) / 168, now)}}
@@ -415,6 +451,11 @@ def render(data: dict) -> str:
     body += '<h2>Finished lokay/* merges</h2>' + table(["Merged (Warsaw)", "Repo", "PR", "Title", "+ / −", "Kind"], [
         [esc(date(pr.get("mergedAt"))), esc(pr["repo"]), link(pr["repo"], pr.get("number")), esc(pr.get("title")),
          esc(f'+{number(pr.get("additions"))} / −{number(pr.get("deletions"))}'), esc(pr.get("kind", "?"))] for pr in data["merged"]])
+    body += f'<h2>Open lokay/* PRs — older than 7 days: {esc(data.get("old_prs", 0))}</h2>'
+    body += table(["Repo", "PR", "Age (hours)", "Last node", "Last error", "Main status"], [
+        [esc(pr["repo"]), link(pr["repo"], pr.get("number")),
+         esc(f'{pr["age_hours"]:.1f}' if pr.get("age_hours") is not None else None),
+         esc(pr.get("node")), esc(pr.get("last_error")), esc(pr.get("main_status"))] for pr in data.get("open", [])])
     body += f'<h2>Growth</h2><p>Current open lokay/* PRs: {esc(data["open_prs"])}</p>'
     for key, title in (("growth_days", "Last 14 days"), ("growth_hours", "Last 24 hours")):
         maximum = max((bucket["merges"] for bucket in data[key]), default=1) or 1
