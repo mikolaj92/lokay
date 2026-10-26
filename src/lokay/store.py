@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from lokay import graph
-from lokay.config import HOME
+from lokay.config import HOME, ROOT
 from lokay.redact import redact_text
 from lokay.types import PLAN_RESET, CheckResult, Event, Run, event_record, parse_event, pr_number
 
@@ -203,6 +203,29 @@ def log_event(kind: str, *, _env=None, **fields) -> None:
                 os.fsync(stream.fileno())
     except Exception:
         return
+
+
+def deploy_fingerprint() -> dict:
+    paths = (Path(os.environ.get("HOME", str(Path.home()))) / ".config/lokay/env",
+             Path(os.environ.get("LOKAY2_REPOS_FILE") or ROOT / "repos.yaml").resolve())
+    files = {}
+    for path in paths:
+        try:
+            files[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+        except FileNotFoundError:
+            files[str(path)] = None
+    return {"head": os.environ.get("LOKAY_VERSION"), "files": files}
+
+
+def record_deploy() -> None:
+    head = os.environ.get("LOKAY_VERSION")
+    if not head:
+        return
+    path = HOME / "deploy.json"
+    with shared_file_lock(HOME / "deploy.lock"):
+        recorded = json.loads(path.read_text()) if path.exists() else {}
+        if recorded.get("head") != head:
+            write_json(path, deploy_fingerprint())
 
 
 def ledger_append(row: dict) -> None:

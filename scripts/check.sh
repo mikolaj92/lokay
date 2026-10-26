@@ -3869,5 +3869,94 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     assert not any("labels[]=lokay-parked" in call.args[0] for call in remote.call_args_list), remote.call_args_list
 print("no round limit checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack, redirect_stdout
+import gzip
+import io
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import time
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from lokay import observe, store
+from lokay.effects import pi
+
+ps = """1 0 launchd /sbin/launchd
+10 1 python3 /app/.venv/bin/python3 /app/.venv/bin/lokay start
+11 10 sh sh -c pi
+12 11 pi pi -p factory
+20 1 dsh dsh web
+21 20 pi pi -p foreign
+"""
+with ExitStack() as stack:
+    snapshot = stack.enter_context(patch.object(pi.subprocess, "run", return_value=SimpleNamespace(stdout=ps)))
+    assert pi._pi_pids(time.monotonic() + 10) == {12}
+    stack.enter_context(patch.object(pi.shutil, "disk_usage", return_value=SimpleNamespace(free=6000000000)))
+    stack.enter_context(patch.object(store, "acquire_lock", return_value={"result": "held"}))
+    stack.enter_context(patch.object(store, "release_lock"))
+    events = stack.enter_context(patch.object(store, "log_event"))
+    with pi._pi_admission(["pi", "-p", "prompt"], {"LOKAY2_WORKERS": "2"}, time.monotonic() + 10,
+                          lambda: (_ for _ in ()).throw(AssertionError("admission expired"))):
+        pass
+    assert snapshot.call_count == 2, snapshot.call_count
+    events.assert_called_once_with("outside factory", pids=[21])
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    home = Path(directory)
+    for module in (store, observe):
+        stack.enter_context(patch.object(module, "HOME", home))
+        stack.enter_context(patch.object(module, "RUNS", home / "runs"))
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_VERSION": "deploy-head",
+                                               "LOKAY2_REPOS_FILE": str(home / "repos.yaml")}))
+    merged = {"kind": "merged", "tick": "a65e0acc", "repo": "owner/repo", "issue": 2323, "sha": "abc123"}
+    store.write_text_atomic(home / "ledger.jsonl", json.dumps(merged) + "\n")
+    transition = {"kind": "transition", "tick": "a65e0acc", "repo": "owner/repo", "issue": 2323,
+                  "before": {"node": "fix"}, "after": {"node": "fix", "result": "merged"},
+                  "event": {"action": "dispatched", "outcome": {"result": "merged"}},
+                  "commit": "Lokay-Merge: owner/repo#2323"}
+    path = home / "ticks" / "2026-07-16.jsonl"
+    store.write_text_atomic(path, json.dumps(transition) + "\n")
+    with redirect_stdout(io.StringIO()) as output:
+        observe.status()
+    assert "outside factory" in output.getvalue(), output.getvalue()
+    assert all(str(value) in output.getvalue() for value in ("owner/repo", 2323, "abc123"))
+    assert observe.outside_factory(tick="another-tick") == []
+    assert observe.outside_factory(tick="a65e0acc") == [
+        {key: merged[key] for key in ("repo", "issue", "sha", "tick")}]
+    enter = {**transition, "before": {"node": "check"},
+             "after": store.write_blob(path.parent, json.dumps({"node": "merge"}).encode()),
+             "event": {"action": "verdict", "outcome": {"next": "merge"}}}
+    normal = {**transition, "before": {"node": "merge"}, "after": {"node": "merge", "result": "merged"}}
+    store.write_text_atomic(path, json.dumps(enter) + "\n" + json.dumps(normal) + "\n")
+    store.write_artifact(path.with_suffix(".jsonl.gz"), gzip.compress(path.read_bytes()))
+    store.remove_file(path)
+    with redirect_stdout(io.StringIO()) as output:
+        observe.status()
+    assert "outside factory" not in output.getvalue(), output.getvalue()
+    store.write_text_atomic(home / "repos.yaml", "repos: []\n")
+    env = home / ".config/lokay/env"
+    store.write_text_atomic(env, "VALUE=original\n")
+    store.record_deploy()
+    with redirect_stdout(io.StringIO()) as output:
+        observe.status()
+    assert "outside factory" not in output.getvalue(), output.getvalue()
+    for file in (env, home / "repos.yaml"):
+        original = file.read_text()
+        store.write_text_atomic(file, original + "\n")
+        store.record_deploy()
+        with redirect_stdout(io.StringIO()) as output:
+            observe.status()
+        assert "outside factory" in output.getvalue() and str(file) in output.getvalue(), output.getvalue()
+        store.write_text_atomic(file, original)
+    store.write_text_atomic(env, "VALUE=new-deploy\n")
+    with patch.dict(os.environ, {"LOKAY_VERSION": "next-head"}):
+        store.record_deploy()
+        with redirect_stdout(io.StringIO()) as output:
+            observe.status()
+        assert "outside factory" not in output.getvalue(), output.getvalue()
+print("one control checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
