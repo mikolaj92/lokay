@@ -832,6 +832,8 @@ def _prepare(picked: dict) -> tuple | dict:
         if saved["difficulty"] == "too_big" or saved.get("split_pending"):
             return _split_issue(picked, root)
     elif saved.get("split_pending"):
+        if saved.get("rule_conflicts"):
+            return _split_issue(picked, root)
         state_update(picked["repo"], picked["issue"], split_pending=False)
 
     _ensure_worktree(picked)
@@ -1116,10 +1118,14 @@ def _resume(picked: dict) -> tuple | dict:
         saved = state_read(picked["repo"], picked["issue"])
         verdict = saved.get("verdict") or {}
         if not any(parse_finding(row).lens == "conflict" for row in verdict.get("uwagi", [])):
-            verdict = {"result": "fix", "sha": sha, "uwagi": [
-                {"pytanie": "conflict", "plik": name, "log": "Resolve the interrupted merge; preserve local changes."}
+            from lokay.review import validate_verdict
+
+            verdict = validate_verdict({"result": "fix", "sha": sha, "uwagi": [
+                {"rule_id": "merge_clean", "pytanie": "conflict", "plik": name,
+                 "log": "Resolve the interrupted merge; preserve local changes."}
                 for name in filter(None, files.split("\0"))
-            ] or [{"pytanie": "conflict", "plik": "", "log": "Complete the pending merge (MERGE_HEAD exists)."}]}
+            ] or [{"rule_id": "merge_clean", "pytanie": "conflict", "plik": "",
+                   "log": "Complete the pending merge (MERGE_HEAD exists)."}]})
         state_update(picked["repo"], picked["issue"], _event={"action": "enter_node", "outcome": {"node": "fix"}}, result="fix", sha=sha, verdict=verdict)
         return worktree, branch, sha, repo.get("test") or [], 1
     from lokay.build import tidy_and_commit
@@ -1363,6 +1369,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix, main_sha)
+        from lokay.review import issue_conflicts
+
+        if issue_conflicts(picked, verdict):
+            return {"result": "pending", "next": "plan"}
         if replan_deleted_files(picked, verdict, sha):
             return {"result": "pending", "next": "plan"}
         derived = graph.step(store.load(picked["repo"], picked["issue"]),

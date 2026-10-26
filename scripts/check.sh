@@ -321,7 +321,7 @@ from lokay.review import verdict
 from lokay.types import CheckResult
 
 log = "ruff check: Found 43 errors"
-failure = {"warstwa": "GitHub CI", "plik": "", "log": log}
+failure = {"warstwa": "GitHub CI", "plik": "", "log": log, "rule_id": "ci_green"}
 ci = {"sha": "head", "result": "red", "ci": "red", "failed": [failure]}
 result = verdict("head", ci, [], (CheckResult("ci_green", "fail", log, ()),))
 assert result["result"] == "fix", result
@@ -329,6 +329,67 @@ assert result["uwagi"] == [failure], result
 assert result["uwagi"][0]["log"] == log, result
 assert result["unlocated_findings"] == [failure], result
 print("unlocated failure checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import finish, review, store, tick
+from lokay.replay import unpack
+from lokay.types import to_dict
+
+fixture = Path("fixtures/ticks/datasource-kit__96__check2")
+rows = [json.loads(line) for line in (fixture / "segment.jsonl").read_text().splitlines()]
+saved = next(after for row in reversed(rows) if row["kind"] == "transition"
+             for after in [unpack(row["after"], fixture, source=fixture)] if after.get("check_inputs"))
+outcome = review.recompute_verdict(saved["check_inputs"]["sha"], saved)
+assert outcome and outcome["uwagi"]
+review.validate_verdict(outcome)
+assert all(row["rule_id"] in review.rule_ids() for row in outcome["uwagi"])
+with patch.object(finish, "state_update"), patch.object(review, "validate_verdict", wraps=review.validate_verdict) as contract:
+    conflict = finish.conflict_fix({"repo": "owner/repo", "issue": 2326}, "head", ["a.py"], "conflict")
+    contract.assert_called_once()
+    assert conflict["uwagi"][0]["rule_id"] == "merge_clean"
+for row in outcome["uwagi"]:
+    assert row["rule_id"]
+for result in outcome["checks"]:
+    for row in result.findings:
+        assert to_dict(row)["rule_id"]
+for invalid in ({}, {"rule_id": "not_a_rule"}):
+    try:
+        review.validate_verdict({"uwagi": [invalid]})
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(invalid)
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    gh = stack.enter_context(patch("lokay.effects.gh.gh_ok", return_value=""))
+    decide = stack.enter_context(patch("lokay.effects.decide.decide"))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "Contradictory spec", "body": "spec"}))
+    stack.enter_context(patch.object(tick, "repo_config", return_value={}))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+    split = stack.enter_context(patch.object(tick, "_split_issue", return_value={"result": "split"}))
+    for pair in review.CONTRADICTIONS:
+        picked = {"repo": "owner/repo", "issue": 2326}
+        store.state_update(**picked, issue_title="Contradictory spec", issue_body="spec", pr=7, difficulty="hard")
+        verdict = {"result": "fix", "uwagi": [{"rule_id": rule} for rule in pair]}
+        decide.return_value = {"contradiction": {"choice": "false", "probabilities": {"true": 0.1, "false": 0.9}}}
+        assert not review.issue_conflicts(picked, verdict)
+        assert store.state_read(**picked)["difficulty"] == "hard"
+        decide.return_value = {"contradiction": {"choice": "true", "probabilities": {"true": 0.9, "false": 0.1}}}
+        assert review.issue_conflicts(picked, verdict)
+        state = store.state_read(**picked)
+        assert state["difficulty"] == "too_big" and state["split_pending"] and state["pr"] == 7, state
+        assert tick._prepare(picked) == {"result": "split"}
+    assert split.call_count == len(review.CONTRADICTIONS)
+    assert all(call.args[0][:2] != ["pr", "close"] for call in gh.call_args_list)
+print("rule id checks: green")
 PY
 (
     fail() { printf '%s\n' "pi sandbox check failed: $*" >&2; exit 1; }
@@ -3137,7 +3198,7 @@ real_retry = tick._retry
 name = "owner/split"
 sha = "a" * 40
 finding = {"plik": "src/a.py", "linia_od": 1, "linia_do": 1,
-           "zmiana": "logic bug", "pytanie": "correctness", "uzasadnienie": "quoted evidence"}
+           "zmiana": "logic bug", "pytanie": "correctness", "rule_id": "llm_correctness", "uzasadnienie": "quoted evidence"}
 findings = [dict(finding, uzasadnienie=f"finding {index} " + "x" * 1000) for index in range(30)]
 verdict = {"result": "fix", "sha": sha, "uwagi": [finding]}
 tasks = [{"title": "first", "body": "first spec"}, {"title": "second", "body": "second spec"}]

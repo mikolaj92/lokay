@@ -53,6 +53,8 @@ def compatible_checks(actual, expected) -> Any:
         for new, old in CHECK_HINTS:
             if old in expected or any(older in expected for newer, older in CHECK_HINTS if newer == old):
                 actual = re.sub(new, lambda match: old, actual)
+    if isinstance(actual, str) and isinstance(expected, str) and '"rule_id"' not in expected:
+        actual = re.sub(r',?\n[ \t]*"rule_id": "[a-z_]+",?', '', actual)
     header = "| name | status | reason |\n| --- | --- | --- |\n"
     if isinstance(actual, str) and isinstance(expected, str) and header in actual and header in expected:
         prefix, _, tail = actual.partition(header)
@@ -67,6 +69,8 @@ def compatible_checks(actual, expected) -> Any:
     if not isinstance(actual, dict) or not isinstance(expected, dict):
         return actual
     actual = actual.copy()
+    if "rule_id" not in expected:
+        actual.pop("rule_id", None)
     if "main_sha" not in expected and actual.get("main_sha") is None:
         actual.pop("main_sha", None)
     for key in actual.keys() & expected.keys():
