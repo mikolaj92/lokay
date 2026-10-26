@@ -12,17 +12,6 @@ from lokay.types import (
 
 
 FIX_ROUND_LIMIT = 8
-ROUND_LIMIT = 12
-
-
-def round_limit(state: dict) -> str | None:
-    if state.get("result") in ("merged", "closed", "parked"):
-        return None
-    if (state.get("plan_rounds") or 0) > ROUND_LIMIT:
-        return f"Plan round limit: {state['plan_rounds']} rounds"
-    if (state.get("check_rounds") or 0) > ROUND_LIMIT:
-        return f"Check round limit: {state['check_rounds']} rounds"
-    return None
 
 
 def merge_allowed(state: dict, sha: str) -> bool:
