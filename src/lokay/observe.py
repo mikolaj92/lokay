@@ -62,6 +62,43 @@ def status() -> None:
     widths = [max(len(row[i]) for row in rows) for i in range(5)]
     for row in rows:
         print("  ".join(value.ljust(width) for value, width in zip(row, widths)))
+    for entry in outside_factory():
+        print("outside factory " + dumps(entry))
+
+
+def outside_factory(home=None, *, tick=None, since=None) -> list[dict]:
+    from lokay import store
+    from lokay.measure import json_rows, ledger
+    from lokay.replay import unpack
+
+    home = HOME if home is None else home
+    merged = [row for row in ledger(home) if row.get("kind") == "merged" and row.get("tick")
+              and (tick is None or row["tick"] == tick)]
+    keys = {(row["tick"], row.get("repo"), row.get("issue")) for row in merged}
+    entered = set()
+    directory = home / "ticks"
+    paths = (*directory.glob("*.jsonl"), *directory.glob("*.jsonl.gz"))
+    for row in json_rows(path for path in paths if keys and (since is None or path.name[:10] >= since)):
+        key = (row.get("tick"), row.get("repo"), row.get("issue"))
+        if row.get("kind") != "transition" or key not in keys:
+            continue
+        try:
+            states = [unpack(row.get(field, {}), directory, source=directory) for field in ("before", "after")]
+            if any(state.get("node") == "merge" for state in states):
+                entered.add(key)
+        except (OSError, ValueError, TypeError, AttributeError, EOFError):
+            continue
+    result = [{key: row.get(key) for key in ("repo", "issue", "sha", "tick")}
+              for row in merged if (row["tick"], row.get("repo"), row.get("issue")) not in entered]
+    path = home / "deploy.json"
+    if path.exists():
+        recorded = json.loads(path.read_text())
+        current_files = store.deploy_fingerprint()["files"]
+        recorded_files = recorded.get("files", {})
+        for file in sorted(current_files.keys() | recorded_files.keys()):
+            if file not in current_files or file not in recorded_files or current_files[file] != recorded_files[file]:
+                result.append({"file": file, "head": recorded.get("head")})
+    return result
 
 
 def latest_needs_help() -> dict:

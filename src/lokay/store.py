@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from lokay import graph
-from lokay.config import HOME
+from lokay.config import HOME, ROOT
 from lokay.redact import redact_text
 from lokay.types import PLAN_RESET, CheckResult, Event, Run, event_record, parse_event, pr_number
 
@@ -203,6 +203,79 @@ def log_event(kind: str, *, _env=None, **fields) -> None:
                 os.fsync(stream.fileno())
     except Exception:
         return
+
+
+def deploy_fingerprint() -> dict:
+    repos = Path(os.environ.get("LOKAY2_REPOS_FILE") or ROOT / "repos.yaml").resolve()
+    if repos == (HOME / "deploy-repos.yaml").resolve():
+        recorded = json.loads((HOME / "deploy.json").read_text())
+        repos = Path(recorded["repos_file"])
+    paths = (Path(os.environ.get("HOME", str(Path.home()))) / ".config/lokay/env", repos)
+    files = {}
+    for path in paths:
+        try:
+            files[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+        except FileNotFoundError:
+            files[str(path)] = None
+    return {"head": os.environ.get("LOKAY_VERSION"), "files": files, "repos_file": str(repos)}
+
+
+def record_deploy() -> None:
+    from lokay import config
+    from lokay.effects.git import git
+
+    head = os.environ.get("LOKAY_VERSION")
+    if not head:
+        return
+    path = HOME / "deploy.json"
+    with shared_file_lock(HOME / "deploy.lock"):
+        if head != git(ROOT, "rev-parse", "HEAD"):
+            return
+        recorded = json.loads(path.read_text()) if path.exists() else {}
+        if recorded.get("head") == head:
+            return
+        fingerprint = deploy_fingerprint()
+        repos = Path(fingerprint["repos_file"])
+        raw = repos.read_bytes()
+        fingerprint.update(repos_file=str(repos), repos_sha256=hashlib.sha256(raw).hexdigest(),
+                           values={key: os.environ.get(key) for key in (
+                               "LOKAY2_PROVIDER", "LOKAY2_MODEL", "LOKAY2_DECISION_API",
+                               "LOKAY2_DECISION_BASE_URL", "LOKAY2_DECISION_MODEL")
+                                   if not any(word in key for word in ("TOKEN", "KEY", "SECRET", "PASSWORD"))})
+        write_text_atomic(HOME / "deploy-repos.yaml", raw.decode())
+        write_json(path, fingerprint)
+        os.environ["LOKAY2_REPOS_FILE"] = str(repos)
+        config._load_repos.cache_clear()
+
+
+def enforce_deploy() -> None:
+    from lokay import config
+
+    path = HOME / "deploy.json"
+    with shared_file_lock(HOME / "deploy.lock"):
+        if not path.exists():
+            return
+        recorded = json.loads(path.read_text())
+        for key, deployed in recorded.get("values", {}).items():
+            running = os.environ.get(key)
+            if running != deployed:
+                log_event("outside factory", key=key, running=running, deployed=deployed)
+                if deployed is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = deployed
+        fingerprint = deploy_fingerprint()
+        files = fingerprint["files"]
+        for file in sorted(files.keys() | recorded.get("files", {}).keys()):
+            if files.get(file) != recorded.get("files", {}).get(file):
+                log_event("outside factory", file=file, head=recorded.get("head"))
+        repos = fingerprint["repos_file"]
+        if files[repos] != recorded["repos_sha256"]:
+            snapshot = HOME / "deploy-repos.yaml"
+            if hashlib.sha256(snapshot.read_bytes()).hexdigest() != recorded["repos_sha256"]:
+                raise ValueError("deployed repos fingerprint mismatch")
+            os.environ["LOKAY2_REPOS_FILE"] = str(snapshot)
+        config._load_repos.cache_clear()
 
 
 def ledger_append(row: dict) -> None:
