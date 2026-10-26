@@ -147,7 +147,7 @@ Operacje plikowe i sprzątanie guardów nie mają twardego wspólnego limitu cza
 `test: []` daje local green z tested=false i notatką. Brak GitHub checks daje no_ci, nie green; anulowany CheckRun jest pomijany tylko przy nieanulowanym CheckRun z tym samym workflowName i name.
 Oba wyniki mogą dopuścić Merge przy braku uwag. To świadoma granica dowodu w tej implementacji,
 nie dowód wykonania testów lub sukcesu wymaganych kontroli.[S6][S15]
-Review dostaje pełne hunki, Fix pełne logi. Wspólne błędy tej samej komendy na main trafiają do main_red w Merge.
+Review ma pełne hunki; modele bloki błędów, Fix ścieżkę logu. Wspólne błędy komendy na main trafiają do main_red w Merge.
 Próg binarny to 0.85; follow-up wymaga zwycięskiego pliku z p ≥ 2 × p(none).
 Co najmniej pięć identycznych wskazań różnych kategorii trafia do notes zamiast blokowania.
 Dispute może odrzucić uwagę dla tego SHA. Te mechanizmy nie dowodzą braku błędów.[S4][S15]

@@ -168,7 +168,8 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
     return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
             "test_log_path": str(log), "test_result": ci["result"],
             "tested": ci.get("tested", False), "ci": ci.get("ci"),
-            "failures": ci.get("failed") or [],
+            "failures": [{**item, **({"log": log_excerpt(item["log"])} if "log" in item else {})}
+                         for item in ci.get("failed") or []],
             **({"baseline": ci["baseline"]} if ci.get("baseline") else {})}
 
 
@@ -301,6 +302,42 @@ def _decision_batches(rows, request, decide_request, api, model):
             question["instructions"] = item.get("instructions", item.get("question"))
         answers = decide_request(internal)
         yield batch, answers
+
+
+def log_excerpt(log: str) -> str:
+    log = re.sub(r"\x1b\[[0-9;]*m", "", log)
+    separator = re.compile(r"^\s*(?:_+|=+|-+)(?:\s.*?\s(?:_+|=+|-+))?\s*$")
+    blocks = []
+    pending = []
+    for line in log.splitlines():
+        if not line.strip() or separator.fullmatch(line):
+            if pending:
+                blocks.append("\n".join(pending))
+                pending = []
+            if line.strip():
+                blocks.append(line)
+        else:
+            pending.append(line)
+    if pending:
+        blocks.append("\n".join(pending))
+    selected = []
+    section = False
+    traceback = False
+    for block in blocks:
+        if separator.fullmatch(block) and block.lstrip().startswith("="):
+            section = bool(re.search(r"\b(?:FAILURES|ERRORS)\b", block))
+        keep = section or traceback or "short test summary info" in block
+        for line in block.splitlines():
+            if "Traceback (most recent call last):" in line:
+                traceback = True
+                keep = True
+            elif traceback and re.match(r"^[\w.]+(?::|$)", line):
+                traceback = False
+            if re.search(r"^E\s|\w+Error:|(?i:\berror[:\[])|\b(?:FAILED|ERROR)\b", line):
+                keep = True
+        if keep:
+            selected.append(block)
+    return "\n\n".join(dict.fromkeys(selected or blocks[-1:]))
 
 
 def test_failures(log: str) -> set[str]:

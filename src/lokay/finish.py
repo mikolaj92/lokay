@@ -349,6 +349,7 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
 
     from lokay.gates import gate_rows, gate_location
     from lokay.effects.git import gate_tasks, revert_gates
+    from lokay.review import log_excerpt
 
     gate_only = gate_rows(verdict.get("uwagi"))
     escalated = None if gate_only else escalate(picked, verdict.get("uwagi"))
@@ -381,7 +382,8 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         "diff_hash": diff_fingerprint, "fingerprint": fingerprint,
         "hunk_fingerprint": hunk_fingerprint, "counts": counts,
     })).no_progress
-    test_log = ((saved.get("local_ci") or {}).get("log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
+    test_log = log_excerpt(((saved.get("local_ci") or {}).get("log") or "") if (saved.get("local_ci") or {}).get("sha") == head else "")
+    test_log_path = str(run_dir(picked["repo"], picked["issue"]) / f"check-{saved.get('check_rounds', 0)}-test.log")
     def replan():
         rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
         title, body = saved.get("issue_title"), saved.get("issue_body")
@@ -423,7 +425,8 @@ def fix(picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, re
         outcome = h2.run_issue(
             picked["repo"], int(picked["issue"]), clone_path, sha,
             saved.get("issue_title") or "", saved.get("issue_body") or "",
-            findings=tasks,
+            findings=[{**item, **({"log": log_excerpt(item["log"])} if "log" in item else {}),
+                       **({"test_log_path": test_log_path} if test_log else {})} for item in tasks],
             fix_round=saved.get("fix_rounds", 0),
         )
         if outcome["result"] != "done":
