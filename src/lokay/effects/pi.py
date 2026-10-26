@@ -299,19 +299,27 @@ def run_process(
 
 
 def _pi_pids(expires: float) -> set[int]:
-    proc = subprocess.run(["ps", "-ww", "-axo", "pid=,comm=,args="], capture_output=True,
+    return _pi_processes(expires)[0]
+
+
+def _pi_processes(expires: float) -> tuple[set[int], set[int]]:
+    proc = subprocess.run(["ps", "-ww", "-axo", "pid=,ppid=,comm=,args="], capture_output=True,
                           text=True, timeout=max(0.001, expires - time.monotonic()), check=True)
-    pids = set()
+    processes = {}
     for line in proc.stdout.splitlines():
-        row = line.strip().split(None, 2)
-        if len(row) < 3:
-            continue
-        pid, executable, command = row
-        args = command.split()
+        row = line.strip().split(None, 3)
+        if len(row) == 4 and row[0].isdecimal() and row[1].isdecimal():
+            processes[int(row[0])] = (int(row[1]), row[2], row[3].split())
+    starts = {pid for pid, (_, _, args) in processes.items()
+              if any(Path(arg).name == "lokay" and following == "start"
+                     for arg, following in zip(args, args[1:]))}
+    pids = set()
+    foreign = set()
+    for pid, (parent, executable, args) in processes.items():
         name = Path(executable).name
         if "-p" not in args[1:]:
             continue
-        if not pid.isdecimal() or not args:
+        if not args:
             continue
         native = Path(args[0]).name == "pi" and name not in ("sh", "bash", "zsh", "dash", "env")
         node = name in ("node", "nodejs") and len(args) > 1 and (
@@ -319,8 +327,16 @@ def _pi_pids(expires: float) -> set[int]:
                 Path(args[1]).name in ("cli.js", "cli.mjs", "index.js")
                 and ("/pi/" in args[1] or "pi-coding-agent/" in args[1])))
         if native or node:
-            pids.add(int(pid))
-    return pids
+            seen = {pid}
+            while parent in processes and parent not in seen:
+                if parent in starts:
+                    pids.add(pid)
+                    break
+                seen.add(parent)
+                parent = processes[parent][0]
+            if pid not in pids:
+                foreign.add(pid)
+    return pids, foreign
 
 
 @contextmanager
@@ -343,7 +359,10 @@ def _pi_admission(argv, env, expires, expired):
             held = store.acquire_lock(HOME / "pi-admission.lock")
             if held["result"] == "held":
                 try:
-                    admitted = len(_pi_pids(expires)) < int(workers)
+                    pids, foreign = _pi_processes(expires)
+                    admitted = len(pids) < int(workers)
+                    if foreign:
+                        store.log_event("outside factory", pids=sorted(foreign))
                 except Exception:
                     admitted = False
                 if admitted:

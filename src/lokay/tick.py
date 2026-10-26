@@ -609,9 +609,12 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(128 + signum)
 
     handlers = {sig: signal.signal(sig, shutdown) for sig in (signal.SIGTERM, signal.SIGINT)}
+    tick_date = time.strftime("%Y-%m-%d", time.gmtime())
     try:
         cleanup_process_groups()
         log_event("start")
+        store.record_deploy()
+        store.enforce_deploy()
         harness_token = tick_harness_started.set(False)
         try:
             _tick()
@@ -621,6 +624,14 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             tick_harness_started.reset(harness_token)
     finally:
+        from lokay.observe import outside_factory
+
+        try:
+            for entry in outside_factory(store.HOME, tick=store.TICK, since=tick_date):
+                print("outside factory " + dumps(entry), file=sys.stderr)
+                log_event("outside factory", output=entry)
+        except (OSError, ValueError, TypeError) as exc:
+            log_event("observation_failed", reason=str(exc))
         for sig, handler in handlers.items():
             signal.signal(sig, handler)
 
