@@ -193,6 +193,7 @@ class Finding:
     zmiana: str = ""
     lens: str = ""
     lenses: tuple[str, ...] = ()
+    rule_id: str = field(default="", kw_only=True)
     _raw: dict | None = field(default=None, repr=False, compare=False, kw_only=True)
 
 
@@ -226,13 +227,14 @@ def parse_finding(raw: dict) -> Finding | Note:
     lens = text("pytanie") or text("lens")
     if text("plik"):
         return Finding(text("plik"), line("linia_od"), line("linia_do"), text("zmiana"), lens,
-                       tuple(raw.get("lenses") or ()), _raw=dict(raw))
+                       tuple(raw.get("lenses") or ()), rule_id=text("rule_id"), _raw=dict(raw))
     return Note(lens, text("pytanie"), text("note"), _raw=dict(raw))
 
 
 def finding_summary(raw: dict) -> dict:
     item = parse_finding(raw)
-    return {"pytanie": item.lens if "pytanie" in raw else raw.get("warstwa", ""),
+    return {"rule_id": raw.get("rule_id"),
+            "pytanie": item.lens if "pytanie" in raw else raw.get("warstwa", ""),
             "plik": item.plik if isinstance(item, Finding) else "",
             "linie": [item.linia_od if isinstance(item, Finding) and "linia_od" in raw else None,
                       item.linia_do if isinstance(item, Finding) and "linia_do" in raw else None],
@@ -274,6 +276,8 @@ def to_dict(item: Finding | Note) -> dict:
     else:
         raw = {"pytanie": item.pytanie or item.lens, "note": item.note}
     if isinstance(item, Finding):
+        if item.rule_id:
+            raw["rule_id"] = item.rule_id
         if item.lenses:
             raw["lenses"] = list(item.lenses)
         elif raw.get("lenses"):

@@ -1,4 +1,5 @@
 {
+  "rule_id": "llm_architecture",
   "id": "architecture",
   "type": "bool",
   "question": "Does this hunk break a module boundary, add a dependency, or duplicate existing code?",

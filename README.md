@@ -28,7 +28,7 @@ It parses the entire script before running, so an update cannot change a running
   `issue_since` (first pick until Merge), `failures` and `last_error`.
   The monitor alarms on blocked idle, at least three failures, an old issue,
   or queued work without a merge past the configured threshold.
-- Each Check round posts its result, findings and CI outcome on the PR.
+- Check findings require closed-list `rule_id`; issue contradictions split without closing the PR.
 - Worker 0 runs `lokay monitor` every `LOKAY_MONITOR_TICKS` iterations (default 5).
   It opens one ordinary `lokay-stalled` issue with heartbeat and latest `needs_help`;
   recovery closes it with heartbeat evidence. A stopped service cannot monitor itself.

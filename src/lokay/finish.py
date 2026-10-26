@@ -23,9 +23,11 @@ def sync_head(worktree, branch):
 
 
 def conflict_fix(picked, sha, files, log):
-    finding = {"result": "fix", "sha": sha, "uwagi": [
-        {"pytanie": "conflict", "plik": file, "log": log} for file in files
-    ]}
+    from lokay.review import validate_verdict
+
+    finding = validate_verdict({"result": "fix", "sha": sha, "uwagi": [
+        {"rule_id": "merge_clean", "pytanie": "conflict", "plik": file, "log": log} for file in files
+    ]})
     if not finding["uwagi"]:
         raise RuntimeError("merge conflict without PR files")
     state_update(picked["repo"], picked["issue"],
