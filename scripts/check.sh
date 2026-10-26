@@ -3331,7 +3331,11 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     output = io.StringIO()
     with redirect_stdout(output):
         assert measure.main([]) == 0
-    assert all(text in output.getvalue() for text in ("escape_rate_48h=1/1", "p50", "merges_per_day")), output.getvalue()
+    assert all(text in output.getvalue() for text in ("escape_rate_48h=1/1 (za mało danych)", "p50", "merges_per_day")), output.getvalue()
+    for count, expected in ((3, "0/3 (za mało danych)"), (20, "0/20")):
+        with patch.object(measure, "escapes", return_value=[]), patch.object(measure, "ledger", return_value=[
+                {**merged, "issue": number, "ts": old.isoformat()} for number in range(count)]):
+            assert measure.report(home)["escape_rate_48h"] == expected
     calls = lookups.call_count
     with redirect_stdout(io.StringIO()):
         assert measure.main([]) == 0
