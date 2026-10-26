@@ -3465,6 +3465,51 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
 print("readiness checks: green")
 PY
 uv run python - <<'PY'
+import io
+import json
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import measure, store
+from lokay.effects.pi import pi_usage
+
+usage = "\n".join(json.dumps(event) for event in (
+    {"type": "message_end", "message": {"role": "assistant", "content": [], "usage": {"input": 120, "output": 30}}},
+    {"type": "message_end", "message": {"role": "assistant", "content": [], "usage": {"input": 80, "output": 20}}}))
+assert pi_usage(usage) == {"tokens_in": 200, "tokens_out": 50}, pi_usage(usage)
+assert pi_usage(json.dumps({"type": "message_end", "message": {"role": "assistant", "content": []}})) is None
+with TemporaryDirectory() as directory:
+    home = Path(directory)
+    with patch.object(store, "RUNS", home / "runs"), patch.object(store, "LOCKS", home / "locks"):
+        for issue in (1, 2):
+            store.ledger_append({"kind": "pick", "repo": "o/r", "issue": issue, "reason": "pr"})
+        now = datetime.now(timezone.utc).isoformat()
+        rows = [
+            {"kind": "call", "call": "pi", "repo": "o/r", "issue": 1, "ts": now, "ms": 1000,
+             "usage": {"tokens_in": 200, "tokens_out": 50}},
+            {"kind": "call", "call": "pi", "repo": "o/r", "issue": 2, "ts": now, "ms": 2000}]
+        store.write_text_atomic(home / "ticks" / (now[:10] + ".jsonl"),
+                                "".join(json.dumps(row) + "\n" for row in rows))
+        measure.record_merge("o/r", 1, 5, "M", ["src/app.py"])
+        measure.record_merge("o/r", 2, 6, "N", ["src/app.py"])
+        merged = {row["issue"]: row for row in measure.ledger(home) if row["kind"] == "merged"}
+        assert merged[1]["tokens_in"] == 200 and merged[1]["tokens_out"] == 50, merged[1]
+        assert merged[1]["cost_source"] == "pi", merged[1]
+        assert merged[2]["tokens_in"] is None and merged[2]["tokens_out"] is None, merged[2]
+        assert merged[2]["cost_source"] == "none", merged[2]
+        report = measure.report(home)
+        assert report["tokens_in_per_merge"] == 200 and report["tokens_out_per_merge"] == 50, report
+        store.write_text_atomic(home / "ledger.jsonl", json.dumps(merged[2]) + "\n")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            assert measure.main([]) == 0
+        assert "tokens_in_per_merge=brak danych" in output.getvalue(), output.getvalue()
+print("merge token checks: green")
+PY
+uv run python - <<'PY'
 import ast
 from contextlib import ExitStack
 from dataclasses import replace

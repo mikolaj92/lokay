@@ -215,6 +215,30 @@ def pi_assistant_text(stdout: str) -> str:
     return stdout if text is None else text
 
 
+def pi_usage(stdout: str) -> dict | None:
+    tokens_in = tokens_out = 0
+    found = False
+    try:
+        for line in stdout.split("\n"):
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if event.get("type") != "message_end":
+                continue
+            message = event["message"]
+            if message.get("role") != "assistant":
+                continue
+            usage = message.get("usage")
+            if not isinstance(usage, dict) or not isinstance(usage.get("input"), int) or not isinstance(usage.get("output"), int):
+                continue
+            tokens_in += usage["input"]
+            tokens_out += usage["output"]
+            found = True
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    return {"tokens_in": tokens_in, "tokens_out": tokens_out} if found else None
+
+
 def run_process(
     argv: Sequence[str],
     *,
@@ -236,6 +260,7 @@ def run_process(
     call = Path(argv[command]).name
     started = time.monotonic()
     output = None
+    usage = None
     ok = False
     attempts = []
 
@@ -273,6 +298,7 @@ def run_process(
                 return match[0] if match else None
 
             proc = retry(execute, 4, transient, call="pi")
+            usage = pi_usage(proc.stdout)
             proc.stdout = pi_assistant_text(proc.stdout)
         output = {"stdout": proc.stdout.decode(errors="replace") if isinstance(proc.stdout, bytes) else proc.stdout,
                   "stderr": proc.stderr.decode(errors="replace") if isinstance(proc.stderr, bytes) else proc.stderr,
@@ -286,7 +312,7 @@ def run_process(
         log_event("call", call=call, name="pi -p" if call == "pi" else " ".join(argv[command + 1:command + 3])[:200],
                   input={"argv": list(argv[command:]),
                          "stdin": input.decode(errors="replace") if isinstance(input, bytes) else input},
-                  output=output, started=started, ok=ok, _env=env,
+                  output=output, started=started, ok=ok, _env=env, **({"usage": usage} if call == "pi" else {}),
                   effect={"argv": list(argv), "stdin": input, "attempts": attempts})
 
 

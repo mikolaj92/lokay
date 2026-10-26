@@ -168,13 +168,37 @@ def record_merge(repo, issue, pr, sha, files, main=None):
     paths = (path for path in (store.RUNS.parent / "ticks").glob("*.jsonl*")
              if picked and re.fullmatch(r"\d{4}-\d\d-\d\d\.jsonl(?:\.gz)?", path.name)
              and path.name[:10] >= picked[:10])
-    pi_ms = sum(row["ms"] for row in json_rows(paths) if row.get("call") == "pi"
-                and (row.get("repo"), row.get("issue")) == (repo, issue)
-                and timestamp(row.get("ts")) and timestamp(row["ts"]) >= timestamp(picked)
-                and isinstance(row.get("ms"), (int, float))) if picked else None
+    pi_ms = tokens_in = tokens_out = None
+    cost_source = "none"
+    if picked:
+        pi_ms = 0
+        since = timestamp(picked)
+        reported = 0
+        missing = False
+        for row in json_rows(paths):
+            if row.get("call") != "pi" or (row.get("repo"), row.get("issue")) != (repo, issue):
+                continue
+            when = timestamp(row.get("ts"))
+            if when is None or since is None or when < since:
+                continue
+            if isinstance(row.get("ms"), (int, float)):
+                pi_ms += row["ms"]
+            usage = row.get("usage")
+            if isinstance(usage, dict) and isinstance(usage.get("tokens_in"), (int, float)) \
+                    and isinstance(usage.get("tokens_out"), (int, float)):
+                tokens_in = (tokens_in or 0) + usage["tokens_in"]
+                tokens_out = (tokens_out or 0) + usage["tokens_out"]
+                reported += 1
+            else:
+                missing = True
+        if reported and not missing:
+            cost_source = "pi"
+        else:
+            tokens_in = tokens_out = None
     ci = state.get("local_ci") if isinstance(state.get("local_ci"), dict) else {}
     store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": pr, "sha": sha,
                          "picked_at": picked, "attempt": state.get("last_attempt"), "pi_ms": pi_ms,
+                         "tokens_in": tokens_in, "tokens_out": tokens_out, "cost_source": cost_source,
                          "fix_rounds": state.get("check_rounds"),
                          "executed": main["baseline"]["ci"].get("executed", 0) if isinstance(main, dict) else 0,
                          "checks_source": "gh" if ci.get("ci") in ("green", "inherited")
@@ -276,11 +300,17 @@ def report(home):
         return sum(values) / len(values) if values else None
     matured_rows = matured(home)
     escape_rate = f"{len(escapes(home))}/{len(matured_rows)}"
+    token_rows = [row for row in rows if row.get("cost_source") == "pi"]
+    def token_mean(field):
+        values = [row[field] for row in token_rows if isinstance(row.get(field), (int, float))]
+        return sum(values) / len(values) if values else None
     return {"blocked_pick_errors": sum(row.get("kind") == "pick" and any(result != "merged" for result in row.get("blocked_by", {}).values()) for row in entries),
             "red_main": red_main,
             "red_main_errors": [repo for repo, row in red_main.items() if row["hours"] > 2 and not row["picks"]],
             "merges_per_day": days, "change_counts": counts, "mean_fix_rounds": mean("fix_rounds"),
             "pi_minutes_per_merge": mean("pi_ms", 60000),
+            "tokens_in_per_merge": token_mean("tokens_in"),
+            "tokens_out_per_merge": token_mean("tokens_out"),
             "pick_to_merge_p50_minutes": durations[math.ceil(len(durations) * .5) - 1] if durations else None,
             "pick_to_merge_p90_minutes": durations[math.ceil(len(durations) * .9) - 1] if durations else None,
             "readiness": readiness, "readiness_regressions": regressions, "readiness_recorded": f"{recorded}/{len(rows)}",
@@ -371,7 +401,9 @@ def main(argv: list[str]) -> int:
             return 0
         if not args.baseline:
             data = report(config.HOME)
-            print(json.dumps(data) if args.json else "measure " + " | ".join(f"{key}={value}" for key, value in data.items()))
+            text = " | ".join(f"{key}={'brak danych' if value is None and key.startswith('tokens_') else value}"
+                              for key, value in data.items())
+            print(json.dumps(data) if args.json else "measure " + text)
             return 1 if data["red_main_errors"] or data["blocked_pick_errors"] else 0
         start_a, start_b = boundary(args.baseline), boundary(args.since)
         end_a = boundary(args.baseline_until) if args.baseline_until else start_b
