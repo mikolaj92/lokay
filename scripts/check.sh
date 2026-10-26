@@ -2203,6 +2203,8 @@ with ExitStack() as stack:
     assert poll() == ["closed"]
     assert store.state_read(name, 1)["result"] == "closed"
     assert store.state_read(name, 1)["closed_on_github"] is True
+    assert store.state_read(name, 1)["closed_by"] == "owner"
+    assert store.state_read(name, 1)["reason"] == "owner_closed"
 
     os.environ.update(GIT_AUTHOR_NAME="mikolaj92", GIT_AUTHOR_EMAIL="check@example.invalid",
                       GIT_COMMITTER_NAME="mikolaj92", GIT_COMMITTER_EMAIL="check@example.invalid")
@@ -3445,7 +3447,12 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
             ("o/s", 5, {"status": "green", "executed": 12, "lock": "pass"})):
         store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": issue + 10,
                              "sha": str(issue), "main": main})
+    store.state_update("o/r", 6, _event={"action": "closed", "outcome": {
+        "closed_by": "factory", "reason": "superseded"}})
+    store.state_update("o/r", 7, _event={"action": "closed", "outcome": {
+        "closed_by": "owner", "reason": "owner_closed"}})
     report = measure.report(home)
+    assert report["closed"] == {"o/r": {"owner_closed": 1, "superseded": 1}}, report
     assert report["readiness_regressions"] == [{"repo": "o/r", "issue": 4, "pr": 14, "sha": "4",
         "why": ["status green->red", "executed 120->80", "lock pass->fail"]}], report
     assert report["readiness"]["o/r"]["status"] == "red", report
@@ -3781,6 +3788,7 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     for issue in (310, 311, 312):
         saved = store.state_read(name, issue)
         assert saved["result"] == "closed" and saved["closed_on_github"]
+        assert saved["closed_by"] == "factory" and saved["reason"] == "superseded", saved
     selected = graph.pick(Snapshot((repo,), 10000))
     assert selected is None or selected.issue != 312, selected
 print("replan orphan checks: green")

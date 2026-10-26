@@ -152,7 +152,9 @@ def step(run: Run, event: Event) -> Run:
                 fields.update(node="check", verdict=None)
         case Closed():
             fields.update(result="closed", waiting_on=None, awaiting=None, retry_at=0,
-                          issue_since=None, failures=0, reason=None, last_error=None)
+                          issue_since=None, failures=0, reason=outcome.get("reason"), last_error=None)
+            if outcome.get("closed_by"):
+                fields["closed_by"] = outcome["closed_by"]
         case Merged():
             fields["result"] = outcome["result"]
         case RedMain():

@@ -257,6 +257,18 @@ def report(home):
             if why:
                 regressions.append({key: row.get(key) for key in ("repo", "issue", "pr", "sha")} | {"why": why})
         readiness[row["repo"]] = main
+    closed = {}
+    for path in (home / "runs").glob("*/[0-9]*/state.json"):
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(state, dict) or state.get("result") != "closed":
+            continue
+        repo = path.parent.parent.name.replace("__", "/")
+        reason = state.get("reason") or "unknown"
+        closed.setdefault(repo, {})
+        closed[repo][reason] = closed[repo].get(reason, 0) + 1
     durations = sorted((utc(row["ts"]) - utc(row["picked_at"])).total_seconds() / 60
                        for row in rows if timestamp(row.get("picked_at")) and timestamp(row.get("ts")))
     def mean(field, divisor=1):
@@ -272,7 +284,8 @@ def report(home):
             "pick_to_merge_p50_minutes": durations[math.ceil(len(durations) * .5) - 1] if durations else None,
             "pick_to_merge_p90_minutes": durations[math.ceil(len(durations) * .9) - 1] if durations else None,
             "readiness": readiness, "readiness_regressions": regressions, "readiness_recorded": f"{recorded}/{len(rows)}",
-            "escape_rate_48h": escape_rate + (" (za mało danych)" if len(matured_rows) < MATURED_THRESHOLD else "")}
+            "escape_rate_48h": escape_rate + (" (za mało danych)" if len(matured_rows) < MATURED_THRESHOLD else ""),
+            "closed": closed}
 
 
 def daily(home: Path, days: int) -> list[dict]:
