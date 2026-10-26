@@ -30,11 +30,11 @@ class CheckInput:
     main: dict | None = None
 
 
-def evidence(name: str, passed: bool, reason: str, failures: list[dict], limit: int,
+def evidence(name: str, passed: bool, reason: str, failures: list[dict],
              log: str, fix_hint: str) -> CheckResult:
     details = "; ".join(
-        f"{item.get('warstwa', '')}: {item.get('log', '')[-limit:]}" for item in failures
-    ) or log[-limit:]
+        f"{item.get('warstwa', '')}: {item.get('log', '')}" for item in failures
+    ) or log
     findings = []
     if not passed:
         for failure in failures:
@@ -61,7 +61,7 @@ def ci_green(x: CheckInput) -> CheckResult:
     failures = [item for item in x.ci.get("failed", []) if item.get("warstwa") == "GitHub CI"]
     return evidence("ci_green", passed,
                     f"GitHub CI {x.ci.get('ci')} at {x.ci.get('sha')}; expected green or no_ci at {x.sha}",
-                    failures, 3000, "", "run and fix GitHub CI for the current SHA")
+                    failures, "", "run and fix GitHub checks for the current SHA")
 
 
 def local_tests(x: CheckInput) -> CheckResult:
@@ -79,10 +79,13 @@ def local_tests(x: CheckInput) -> CheckResult:
             return CheckResult("local_tests", "pass", "syntax only (repos.yaml syntax_only: true)", ())
         return CheckResult("local_tests", "unknown", "exit 0 but no executed test count in log", ())
     reason = "local tests not green or not run"
+    if baseline := x.ci.get("baseline"):
+        reason += (f"; main {baseline['sha']}, command {baseline.get('argv')}: "
+                   f"same failures {baseline.get('inherited', [])}; remaining failures are not on main")
     timeout = next((item["timeout"] for item in failures if item.get("timeout") is not None), None)
     if not passed and timeout is not None:
         reason = f"tests timed out after {timeout} s"
-    return evidence("local_tests", passed, reason, failures, 800,
+    return evidence("local_tests", passed, reason, failures,
                     "" if passed else x.ci.get("log", ""), "run and fix the complete local test suite")
 
 

@@ -19,7 +19,6 @@ from lokay.types import CheckResult, Finding, Note, dismissed_key, parse_finding
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
 THRESHOLD = 0.85
-HUNK_LIMIT = 1500
 NIT = 0.5
 
 
@@ -76,7 +75,7 @@ def hunks(diff: str) -> list[dict]:
                 current = rows.setdefault(name, {"path": name, "start": None,
                                                   "end": 1, "added": 0, "deleted": 0, "body": ""})
         elif line.startswith("@@") and current is not None:
-            current["body"] = (current["body"] + line + "\n")[:HUNK_LIMIT]
+            current["body"] += line + "\n"
             plus = line.split("+", 1)[1].split(" ", 1)[0]
             start, _, count = plus.partition(",")
             start = int(start)
@@ -84,7 +83,7 @@ def hunks(diff: str) -> list[dict]:
             current["start"] = min(current["start"], start) if current["start"] is not None else start
             current["end"] = max(current["end"], end)
         elif current is not None:
-            current["body"] = (current["body"] + line + "\n")[:HUNK_LIMIT]
+            current["body"] += line + "\n"
             if line.startswith("+"):
                 current["added"] += 1
             elif line.startswith("-"):
@@ -169,9 +168,8 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
     return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
             "test_log_path": str(log), "test_result": ci["result"],
             "tested": ci.get("tested", False), "ci": ci.get("ci"),
-            "failures": [{**item, "log": item.get("log", "")[
-                -3000 if item.get("warstwa") == "GitHub CI" else -800:]}
-                         for item in ci.get("failed") or []]}
+            "failures": ci.get("failed") or [],
+            **({"baseline": ci["baseline"]} if ci.get("baseline") else {})}
 
 
 def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None) -> dict:
@@ -268,7 +266,7 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
 
 
 def _decision_batches(rows, request, decide_request, api, model):
-    from lokay.effects.decide import _trim_wire, to_wire
+    from lokay.effects.decide import to_wire
 
     limit = 60000 if api == "chat" else 5500
 
@@ -295,8 +293,7 @@ def _decision_batches(rows, request, decide_request, api, model):
     batches.append(batch)
     for batch in batches:
         internal = request(batch)
-        wire = _trim_wire(review_wire(internal), limit=limit,
-                          string_limit=limit if api == "chat" else 3000)
+        wire = review_wire(internal)
         internal["state"] = wire.get("state", wire.get("input"))
         wire_questions = wire["questions"]
         for question, item in zip(internal["questions"],

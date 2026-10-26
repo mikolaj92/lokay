@@ -115,9 +115,9 @@ def local_checks(picked, worktree, repo, sha, clone_path, base, tests, rows):
     else:
         ci = _retry(picked, "check", lambda: run_repo_tests(repo, sha, worktree))
         ci = {**ci, "log": setup.get("log", "") + "\n" + ci["log"]}
+    ci = {**ci, "argv": list(tests)}
     if ci["result"] == "red" and not setup.get("failed"):
         ci = _retry(picked, "check", lambda: local_baseline(picked["repo"], clone_path, ci, base=base))
-    ci = {**ci, "argv": list(tests)}
     state_update(picked["repo"], picked["issue"], local_ci=ci)
     if ci["notes"]:
         rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + dumps(ci["notes"]))

@@ -938,6 +938,75 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
 print("red main subset checks: green")
 PY
 uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import checks, main_guard, merge, review, store
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory}))
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    marker = "FULL_LOG_START"
+    log = marker + "x" * (5000 - len(marker))
+    for layer in ("checks", "GitHub CI"):
+        ci = {"sha": "S", "result": "red", "tested": True, "ci": "red",
+              "log": log, "failed": [{"warstwa": layer, "plik": "file.py", "log": log}]}
+        state = review.check_state(root, 1, "", "", ci)
+        assert marker in state["failures"][0]["log"], state
+        x = checks.CheckInput("owner/repo", 1, "S", "", "", "", [], ci, root)
+        result = checks.ci_green(x) if layer == "GitHub CI" else checks.local_tests(x)
+        assert log in result.reason and log in result.findings[0].zmiana, result
+    argv = ["python", "checks.py"]
+    log += "\n1 passed\nFAILED tests/example.py::broken"
+    ci = {"sha": "S", "argv": argv, "result": "red", "tested": True, "executed": 1,
+          "ci": "no_ci", "notes": [], "log": log,
+          "failed": [{"warstwa": "python checks.py", "plik": "", "log": log}]}
+    baseline = {"sha": "MAIN", "argv": argv, "ci": ci}
+    main = {"status": "red", "baseline": baseline}
+    stack.enter_context(patch.object(main_guard, "check_main", return_value=main))
+    compared = main_guard.local_baseline("owner/repo", root, ci)
+    x = checks.CheckInput("owner/repo", 1, "S", "", "", "", [], compared, root)
+    results = (checks.local_tests(x), checks.ci_green(x))
+    verdict = review.verdict("S", compared, [], results)
+    assert verdict["result"] == "merge", verdict
+    store.save_main_status("owner/repo", main)
+    store.state_update("owner/repo", 1, sha="S", verdict=verdict, last_check=verdict,
+                       check_inputs={"sha": "S", "main_sha": "MAIN", "ci": compared,
+                                     "decisions": [], "results": results, "scope": None,
+                                     "dismissed_keys": []})
+    gh_merge = stack.enter_context(patch.object(merge, "gh_merge"))
+    outcome = merge.merge_sha("owner/repo", 101, "S", verdict, None, "owner", 1, {})
+    assert outcome["result"] == "main_red" and outcome["result"] != "fix", outcome
+    gh_merge.assert_not_called()
+    novel = {**ci, "log": log + "\nFAILED tests/example.py::new"}
+    compared = main_guard.local_baseline("owner/repo", root, novel)
+    assert compared["result"] == "red" and log in compared["failed"][0]["log"], compared
+    assert compared["baseline"]["inherited"] == ["tests/example.py::broken"], compared
+    assert main_guard.local_baseline("owner/repo", root, {**ci, "argv": ["other"]}) == {**ci, "argv": ["other"]}
+    assert not hasattr(review, "HUNK_LIMIT")
+    body = "x" * 4000
+    diff = "diff --git a/file.py b/file.py\n--- a/file.py\n+++ b/file.py\n@@ -0,0 +1 @@\n+" + body + "\n"
+    rows = review.hunks(diff)
+    assert rows[0]["body"] == "@@ -0,0 +1 @@\n+" + body + "\n", rows
+    from lokay.effects.decide import to_wire
+
+    for api in ("mini", "tensorfold", "chat"):
+        request = {"state": {"hunks": {"file.py": body * 20}},
+                   "questions": [{"id": "next", "type": "choice", "instructions": "Check",
+                                  "options": {"ok": "ok", "issue": "issue"}}]}
+        wire = to_wire(api, "model", request)
+        import json
+
+        state = json.loads(wire["messages"][1]["content"])["state"] if api == "chat" else wire.get("state", wire.get("input"))
+        assert state["hunks"]["file.py"] == body * 20
+print("full log checks: green")
+PY
+uv run python - <<'PY'
 import json
 import os
 from pathlib import Path
