@@ -34,6 +34,10 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict | None, workt
             state_update(repo_name, issue, _event={"action": "enter_node", "outcome": {"node": "check"}},
                          sha=sha, verdict=None, result="check")
             return {"result": "check", "sha": sha, "merge_sha": None}
+        baseline = saved.get("check_inputs", {}).get("ci", {}).get("baseline") or {}
+        if baseline.get("sha") == main_sha and baseline.get("inherited"):
+            state_update(repo_name, issue, result="pending", reason="main red: merge waits for green main")
+            return {"result": "main_red", "merge_sha": None}
     if worktree is not None and clone_path is None:
         raise ValueError("clone_path is required to remove a worktree")
     attempts = state_read(repo_name, issue).get("merge_attempts", {})

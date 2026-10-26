@@ -49,6 +49,8 @@ def _check(internal: Mapping, response: Mapping) -> dict:
 
 
 def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
+    if "hunks" in wire.get("state", wire.get("input", {})):
+        return wire
     strings = []
 
     def trim(value):

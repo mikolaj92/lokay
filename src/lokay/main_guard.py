@@ -165,12 +165,17 @@ def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = 
         item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
     ):
         return ci
+    if ci.get("argv") != main.get("argv"):
+        return ci
     failures = test_failures(ci["log"])
     inherited = test_failures(main["ci"]["log"])
     if not failures or not inherited:
         return ci
     novel = sorted(failures - inherited)
-    failed = [{"warstwa": "tests", "plik": item, "log": item} for item in novel]
-    return {**ci, "baseline": {"sha": main["sha"], "failures": sorted(inherited)},
+    failed = [{"warstwa": "tests", "plik": item, "log": ci["log"],
+               "on_main": False} for item in novel]
+    return {**ci, "baseline": {"sha": main["sha"], "argv": main.get("argv"),
+                              "failures": sorted(inherited),
+                              "inherited": sorted(failures & inherited)},
             "result": "red" if novel else "green", "failed": failed,
             "tested": ci.get("tested", False) or not novel}
