@@ -23,8 +23,6 @@ from lokay.config import HOME
 from lokay.effects.retry import retry
 
 
-PI_IDLE_SECONDS = 300
-
 process_groups: dict[int, subprocess.Popen | None] = {}
 
 
@@ -298,13 +296,13 @@ def run_process(
                   effect={"argv": list(argv), "stdin": input, "attempts": attempts})
 
 
-def _pi_pids(expires: float) -> set[int]:
-    return _pi_processes(expires)[0]
+def _pi_pids() -> set[int]:
+    return _pi_processes()[0]
 
 
-def _pi_processes(expires: float) -> tuple[set[int], set[int]]:
+def _pi_processes() -> tuple[set[int], set[int]]:
     proc = subprocess.run(["ps", "-ww", "-axo", "pid=,ppid=,comm=,args="], capture_output=True,
-                          text=True, timeout=max(0.001, expires - time.monotonic()), check=True)
+                          text=True, check=True)
     processes = {}
     for line in proc.stdout.splitlines():
         row = line.strip().split(None, 3)
@@ -340,7 +338,7 @@ def _pi_processes(expires: float) -> tuple[set[int], set[int]]:
 
 
 @contextmanager
-def _pi_admission(argv, env, expires, expired):
+def _pi_admission(argv, env):
     if pi_command(argv) is None:
         yield
         return
@@ -350,8 +348,6 @@ def _pi_admission(argv, env, expires, expired):
         raise ValueError("LOKAY2_WORKERS must be 1, 2 or 3")
     idle = None
     while True:
-        if time.monotonic() >= expires:
-            expired()
         held = None
         reason = "disk"
         if shutil.disk_usage(Path.home()).free >= 5000000000:
@@ -359,7 +355,7 @@ def _pi_admission(argv, env, expires, expired):
             held = store.acquire_lock(HOME / "pi-admission.lock")
             if held["result"] == "held":
                 try:
-                    pids, foreign = _pi_processes(expires)
+                    pids, foreign = _pi_processes()
                     admitted = len(pids) < int(workers)
                     if foreign:
                         store.log_event("outside factory", pids=sorted(foreign))
@@ -367,8 +363,6 @@ def _pi_admission(argv, env, expires, expired):
                     admitted = False
                 if admitted:
                     try:
-                        if time.monotonic() >= expires:
-                            expired()
                         if idle is not None:
                             from lokay.observe import current
 
@@ -385,14 +379,14 @@ def _pi_admission(argv, env, expires, expired):
             print(f"idle {reason}", file=sys.stderr, flush=True)
             store.log_event("idle", reason=reason)
             idle = reason
-        time.sleep(min(1, max(0, expires - time.monotonic())))
+        time.sleep(1)
 
 
 @contextmanager
-def _process(argv, cwd, env, input, *, text=False, expires=None, expired=None):
+def _process(argv, cwd, env, input, *, text=False):
     process: subprocess.Popen[Any] | None = None
     try:
-        with _pi_admission(argv, env, expires, expired):
+        with _pi_admission(argv, env):
             blocked = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTERM, signal.SIGINT})
             try:
                 process = subprocess.Popen(
@@ -412,16 +406,13 @@ def _process(argv, cwd, env, input, *, text=False, expires=None, expired=None):
                 signal.pthread_sigmask(signal.SIG_SETMASK, blocked)
             assert process is not None
             if pi_command(argv) is not None:
-                assert expires is not None and expired is not None
                 while process.poll() is None:
-                    if time.monotonic() >= expires:
-                        expired()
                     try:
-                        if process.pid in _pi_pids(expires):
+                        if process.pid in _pi_pids():
                             break
                     except Exception:
                         pass
-                    time.sleep(min(0.05, max(0, expires - time.monotonic())))
+                    time.sleep(0.05)
         assert process is not None
         yield process
     finally:
@@ -445,12 +436,12 @@ def _run_process(
     input: str | bytes | None = None,
     text: bool = True,
 ) -> subprocess.CompletedProcess[Any]:
+    if pi_command(argv) is not None:
+        return _run_pi_process(argv, cwd=cwd, env=env, input=cast(str | None, input))
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("process timeout must be finite and positive")
     timeout = min(timeout, 3600)
-    if pi_command(argv) is not None:
-        return _run_pi_process(argv, cwd=cwd, env=env, timeout=timeout, input=cast(str | None, input))
     with _process(argv, cwd, env, input, text=text) as process:
         try:
             if input is None:
@@ -473,11 +464,8 @@ def _run_pi_process(
     *,
     cwd: str | Path | None,
     env: Mapping[str, str] | None,
-    timeout: float,
     input: str | None,
 ) -> subprocess.CompletedProcess[str]:
-    from lokay.store import log_event
-
     argv = list(argv)
     command = pi_command(argv)
     assert command is not None
@@ -487,79 +475,41 @@ def _run_pi_process(
     else:
         prompt = argv.index("-p", command + 1)
         argv[prompt + 1:prompt + 1] = ["--mode", "json"]
-    started = time.monotonic()
-    expires = started + timeout
     output = {"stdout": bytearray(), "stderr": bytearray()}
 
     def collected(name: str) -> str:
         return output[name].decode(errors="replace").replace("\r\n", "\n").replace("\r", "\n")
 
-    def expired() -> None:
-        raise subprocess.TimeoutExpired(argv, timeout, output=collected("stdout"), stderr=collected("stderr"))
-
-    while True:
-        if time.monotonic() >= expires:
-            expired()
-        attempt = time.monotonic()
-        with _process(argv, cwd, env, input, expires=expires, expired=expired) as process:
-            with selectors.DefaultSelector() as selector:
-                for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
-                    assert stream is not None
-                    os.set_blocking(stream.fileno(), False)
-                    selector.register(stream, selectors.EVENT_READ, name)
-                pending = memoryview(input.encode() if input is not None else b"")
-                if process.stdin is not None:
-                    if pending:
-                        os.set_blocking(process.stdin.fileno(), False)
-                        selector.register(process.stdin, selectors.EVENT_WRITE, "stdin")
+    with _process(argv, cwd, env, input) as process:
+        with selectors.DefaultSelector() as selector:
+            for stream, name in ((process.stdout, "stdout"), (process.stderr, "stderr")):
+                assert stream is not None
+                os.set_blocking(stream.fileno(), False)
+                selector.register(stream, selectors.EVENT_READ, name)
+            pending = memoryview(input.encode() if input is not None else b"")
+            if process.stdin is not None:
+                if pending:
+                    os.set_blocking(process.stdin.fileno(), False)
+                    selector.register(process.stdin, selectors.EVENT_WRITE, "stdin")
+                else:
+                    process.stdin.close()
+            while selector.get_map():
+                for key, _ in selector.select():
+                    if key.data == "stdin":
+                        try:
+                            pending = pending[os.write(key.fd, pending[:65536]):]
+                        except BrokenPipeError:
+                            pending = memoryview(b"")
+                        if not pending:
+                            selector.unregister(key.fileobj)
+                            cast(BinaryIO, key.fileobj).close()
                     else:
-                        process.stdin.close()
-                last_output = time.monotonic()
-                while True:
-                    now = time.monotonic()
-                    if now >= expires or now - last_output >= PI_IDLE_SECONDS:
-                        kill_process_groups([process.pid])
-                        process.wait(timeout=5)
-                        for key in list(selector.get_map().values()):
-                            if key.data == "stdin":
-                                continue
-                            while True:
-                                try:
-                                    chunk = os.read(key.fd, 65536)
-                                except BlockingIOError:
-                                    break
-                                if not chunk:
-                                    break
-                                output[key.data].extend(chunk)
-                        if now >= expires:
-                            expired()
-                        log_event("call", call="pi", name="pi idle-retry",
-                                  input={"argv": argv[command:], "stdin": input},
-                                  output={"stdout": collected("stdout"), "stderr": collected("stderr"),
-                                          "returncode": process.returncode}, started=attempt, ok=False, _env=env,
-                                  effect={"argv": list(argv), "stdin": input,
-                                          "attempts": [{"argv": list(argv), "stdin": input,
-                                                        "stdout": collected("stdout"), "stderr": collected("stderr"),
-                                                        "returncode": process.returncode}]})
-                        break
-                    if not selector.get_map() and process.poll() is not None:
-                        return subprocess.CompletedProcess(argv, process.returncode, collected("stdout"), collected("stderr"))
-                    for key, _ in selector.select(min(0.1, expires - now, PI_IDLE_SECONDS - (now - last_output))):
-                        if key.data == "stdin":
-                            try:
-                                pending = pending[os.write(key.fd, pending[:65536]):]
-                            except BrokenPipeError:
-                                pending = memoryview(b"")
-                            if not pending:
-                                selector.unregister(key.fileobj)
-                                cast(BinaryIO, key.fileobj).close()
+                        chunk = os.read(key.fd, 65536)
+                        if chunk:
+                            output[key.data].extend(chunk)
                         else:
-                            chunk = os.read(key.fd, 65536)
-                            if chunk:
-                                output[key.data].extend(chunk)
-                                last_output = time.monotonic()
-                            else:
-                                selector.unregister(key.fileobj)
+                            selector.unregister(key.fileobj)
+            return subprocess.CompletedProcess(argv, process.wait(), collected("stdout"), collected("stderr"))
 
 
 def run_pi(
@@ -569,7 +519,6 @@ def run_pi(
     *,
     env: Mapping[str, str],
     cwd: Path | None,
-    timeout: float = 3600,
     extra_dir: Path | None = None,
     guarded: bool = True,
     json_mode: bool = False,
@@ -585,7 +534,6 @@ def run_pi(
             sandboxed(argv, worktree, env, extra_dir),
             cwd=cwd,
             env=env,
-            timeout=timeout,
         )
     except Exception as exc:
         if missing_is_failure and isinstance(exc, FileNotFoundError):
@@ -597,7 +545,7 @@ def run_pi(
     return proc
 
 
-def harness_session(worktree, prompt, directory, *, install=None, timeout=3600, resume=False):
+def harness_session(worktree, prompt, directory, *, install=None, resume=False):
     child = pi_env(os.environ, worktree)
     if child["LOKAY_PI_GITDIR"] == str(worktree.resolve()):
         child["LOKAY_PI_GITDIR"] = str(Path(child["LOKAY_STATE_DIR"]) / "protected-git")
@@ -616,7 +564,7 @@ def harness_session(worktree, prompt, directory, *, install=None, timeout=3600, 
         )
     try:
         proc = run_pi(worktree, prompt + "\nNever commit, push, or use GitHub. Leave edits for lokay.",
-                      env=child, cwd=worktree, extra_dir=directory, timeout=timeout,
+                      env=child, cwd=worktree, extra_dir=directory,
                       guarded=False, harness_args=args)
         if isinstance(proc, dict):
             raise RuntimeError(str(proc))
@@ -631,7 +579,6 @@ def pi_step(
     *,
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
-    timeout: float = 3600,
 ) -> dict[str, str]:
     worktree = cwd if cwd is not None else Path.cwd()
     child = pi_env(os.environ if env is None else env, worktree)
@@ -648,7 +595,6 @@ def pi_step(
             prompt,
             env=child,
             cwd=cwd,
-            timeout=timeout,
             extra_dir=artifact.parent.resolve(),
             guarded=False,
             json_mode=True,

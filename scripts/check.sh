@@ -3922,13 +3922,12 @@ ps = """1 0 launchd /sbin/launchd
 """
 with ExitStack() as stack:
     snapshot = stack.enter_context(patch.object(pi.subprocess, "run", return_value=SimpleNamespace(stdout=ps)))
-    assert pi._pi_pids(time.monotonic() + 10) == {12}
+    assert pi._pi_pids() == {12}
     stack.enter_context(patch.object(pi.shutil, "disk_usage", return_value=SimpleNamespace(free=6000000000)))
     stack.enter_context(patch.object(store, "acquire_lock", return_value={"result": "held"}))
     stack.enter_context(patch.object(store, "release_lock"))
     events = stack.enter_context(patch.object(store, "log_event"))
-    with pi._pi_admission(["pi", "-p", "prompt"], {"LOKAY2_WORKERS": "2"}, time.monotonic() + 10,
-                          lambda: (_ for _ in ()).throw(AssertionError("admission expired"))):
+    with pi._pi_admission(["pi", "-p", "prompt"], {"LOKAY2_WORKERS": "2"}):
         pass
     assert snapshot.call_count == 2, snapshot.call_count
     events.assert_called_once_with("outside factory", pids=[21])
@@ -4018,6 +4017,44 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     assert config.load_repos()[0]["name"] == "owner/b"
     config._load_repos.cache_clear()
 print("one control checks: green")
+PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import time
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from lokay import store
+from lokay.effects import pi
+
+assert not hasattr(pi, "PI_IDLE_SECONDS")
+real_monotonic = time.monotonic
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"HOME": directory, "LOKAY_STATE_DIR": directory,
+                                               "LOKAY2_WORKERS": "2"}))
+    stack.enter_context(patch.object(pi, "HOME", root))
+    stack.enter_context(patch.object(store, "HOME", root))
+    stack.enter_context(patch.object(pi.shutil, "disk_usage", return_value=SimpleNamespace(free=6000000000)))
+    stack.enter_context(patch.object(pi, "_pi_processes", return_value=(set(), set())))
+    stack.enter_context(patch.object(pi, "_pi_pids", side_effect=lambda: set(pi.process_groups)))
+    stack.enter_context(patch.object(pi.time, "monotonic",
+                                     side_effect=lambda: real_monotonic() + (4000 if pi.process_groups else 0)))
+    executable = root / "pi"
+    store.write_artifact(executable, '#!/bin/sh\ni=0\nwhile [ "$i" -lt 50000 ]; do i=$((i + 1)); done\nprintf "alive\\n"\n')
+    executable.chmod(0o755)
+    proc = pi.run_process([str(executable), "-p", "x"])
+    assert proc.returncode == 0 and proc.stdout == "alive\n", proc
+    store.write_artifact(executable, "#!/bin/sh\nexit 3\n")
+    started = real_monotonic()
+    proc = pi.run_process([str(executable), "-p", "x"])
+    elapsed = real_monotonic() - started
+    assert proc.returncode == 3 and proc.stdout == "", proc
+    assert elapsed < 0.8, elapsed
+print("pi alive checks")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
