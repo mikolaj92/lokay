@@ -2750,6 +2750,47 @@ with TemporaryDirectory() as directory:
 print("stall alarm pick checks: green")
 PY
 uv run python - <<'PY'
+import json
+import os
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import observe, store
+
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    now = datetime.now(timezone.utc)
+    store.write_artifact(root / "runs/owner__fala/main.json",
+                         json.dumps({"status": "red", "since": (now - timedelta(hours=195)).timestamp()}))
+    picks = [{"kind": "pick", "repo": "owner/fala", "reason": "red_main",
+              "ts": (now - timedelta(hours=1)).isoformat()} for _ in range(38)]
+    store.write_artifact(root / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in picks))
+    stalls = observe.stalled_repos(root, now=now.timestamp())
+    assert len(stalls) == 1, stalls
+    assert stalls[0]["repo"] == "owner/fala" and abs(stalls[0]["hours"] - 195) < 1, stalls
+    assert stalls[0]["picks"] == 38 and stalls[0]["merges"] == 0, stalls
+    store.write_artifact(root / "heartbeat.json", json.dumps({"time": now.isoformat()}))
+    with patch.object(observe, "HOME", root), patch.object(observe, "RUNS", root / "runs"), \
+            patch.dict(os.environ, {"LOKAY_ALARM_REPO": "mikolaj92/lokay"}), \
+            patch.object(observe, "gh_json", return_value=[]), patch.object(observe, "gh_ok") as action:
+        assert observe.monitor()["result"] == "stalled"
+        args = action.call_args.args[0]
+        body = args[args.index("--body") + 1]
+        assert all(text in body for text in ("owner/fala", "repo bez merge 7 dni",
+                                             "red_main 19", "picks 38", "merges 7d 0")), body
+        merged = picks + [{"kind": "merged", "repo": "owner/fala",
+                           "ts": (now - timedelta(hours=1)).isoformat()}]
+        store.write_artifact(root / "ledger.jsonl", "".join(json.dumps(row) + "\n" for row in merged))
+        with patch.object(observe, "gh_json", return_value=[{"number": 42, "title": "lokay-stalled"}]):
+            action.reset_mock()
+            assert observe.monitor() == {"result": "ok", "closed": [42]}
+            args = action.call_args.args[0]
+            assert args[:3] == ["issue", "close", "42"], args
+print("stalled repo alarm checks: green")
+PY
+uv run python - <<'PY'
 from dataclasses import replace
 
 from lokay import graph, store
