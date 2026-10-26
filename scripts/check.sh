@@ -3839,36 +3839,35 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
 print("replan orphan checks: green")
 PY
 uv run python - <<'PY'
-import json
 from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from lokay import store, tick
+from lokay import graph, store, tick
 from lokay.types import Run
 
 name = "owner/rounds"
+assert not hasattr(graph, "round_limit") and not hasattr(graph, "ROUND_LIMIT")
 with TemporaryDirectory() as directory, ExitStack() as stack:
     root = Path(directory)
     for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
         stack.enter_context(patch.object(store, key, value))
     stack.enter_context(patch.object(tick, "published_cleanup"))
     remote = stack.enter_context(patch.object(tick, "gh_ok"))
-    for issue, field in ((1, "plan_rounds"), (2, "check_rounds")):
-        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "check"}},
-                           result="running", pr=issue + 6, **{field: 13})
-        event = tick.act(Run.from_state({"repo": name, "issue": issue, "node": "check"}))
-        reason = f"{field.removesuffix('_rounds').title()} round limit: 13 rounds"
-        saved = store.state_read(name, issue)
-        assert event.outcome == {"result": "parked", "reason": reason}, event.outcome
-        assert saved["result"] == "parked" and saved["reason"] == reason, saved
-        assert remote.call_args.args[0] == ["api", f"repos/{name}/issues/{issue + 6}/labels",
-                                            "-f", "labels[]=lokay-parked"], remote.call_args
-    rows = [json.loads(line) for path in (root / "ticks").glob("*.jsonl")
-            for line in path.read_text().splitlines()]
-    assert {(row.get("plan_rounds"), row.get("check_rounds")) for row in rows if row.get("kind") == "round_limit"} == {(13, 0), (0, 13)}, rows
-print("round limit checks: green")
+    stack.enter_context(patch.object(tick, "_prepare", return_value={"result": "pending"}))
+    stack.enter_context(patch.object(tick, "_resume", return_value={"result": "pending"}))
+    cases = ((1, "check", {"result": "running", "check_rounds": 13}),
+             (2, "check", {"result": "running", "plan_rounds": 13}),
+             (3, "plan", {"result": "parked", "reason": "Check round limit: 28 rounds", "check_rounds": 28}),
+             (4, "plan", {"result": "parked", "reason": "Plan round limit: 34 rounds", "plan_rounds": 34}))
+    for issue, node, fields in cases:
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": node}},
+                           pr=issue + 6, **fields)
+        event = tick.act(Run.from_state({"repo": name, "issue": issue, "node": node}))
+        assert event.outcome == {"result": "pending"}, (issue, event.outcome)
+    assert not any("labels[]=lokay-parked" in call.args[0] for call in remote.call_args_list), remote.call_args_list
+print("no round limit checks: green")
 PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
