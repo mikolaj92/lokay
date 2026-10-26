@@ -70,7 +70,7 @@ Każda strzałka warunkowa ma rozwinięcie w tabelach poniżej.
 | Usługa | brak executable, błąd logu, niedozwolony canary repo | exit 69, 73 lub 64 | brak stanu grafu | koniec procesu usługi | [S9] |
 | Usługa | `--once` | exit z kodem start / canary | brak nowego node | koniec procesu | [S9] |
 | Tick | nieważny budżet | ValueError przed pick | brak | błąd procesu | [S8][S2] |
-| Pick | którykolwiek probe ≠ ok | brak wyboru | obserwacja idle_reason=host_down | idle, exit 0 | [S1][S2] |
+| Pick / Build / Fix | probe decyzji lub completion modelu ≠ 200 albo błąd modelu pi | bez zmian issue/PR | idle_reason=host_down; bez zapisu stanu, rund i complete.json | idle, ponów | [S1][S2] |
 | Pick PR | host gotowy | repo według najstarszego repo_attempt, potem nazwy; PR `lokay/N` według last_attempt, potem numeru | repo_attempt pod lockiem | kandydat PR | [S1][S12] |
 | Pick PR | retry_at > teraz | odłożenie kandydata | bez zmiany jego node | szukanie gotowego PR | [S1] |
 | Pick PR | lock busy | repo pomijane w tej próbie; PR wykryty przed lockiem | blocked w pamięci | inne repo albo idle | [S1][S13] |

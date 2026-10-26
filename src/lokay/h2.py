@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import cast
 
@@ -82,6 +83,7 @@ class LokayAdapter:
     def __init__(self, repo, issue, root, start, title, body, *, findings=None, fix_round=0):
         self.task_id = f"{repo}#{issue}" + (f"@fix{fix_round}" if findings is not None else "")
         self.domain = repo.replace("/", "__")
+        self.host_down = False
         self.root = root
         self.start = git.git(root, "rev-parse", start)
         self.prompt = untrusted_issue_block(title, body)
@@ -139,6 +141,20 @@ class LokayAdapter:
         proc = harness_session(worktree, self.prompt, directory, install=install, resume=resume)
         store.write_artifact(directory / "final.md", proc.stdout or "")
         store.write_artifact(directory / "trajectory.txt", (proc.stdout or "") + "\n[ERROR]\n" + (proc.stderr or ""))
+        sessions = sorted((directory / "sessions").glob("*.jsonl"), key=lambda path: path.stat().st_mtime_ns)
+        last = None
+        if sessions:
+            for line in sessions[-1].read_text().splitlines():
+                record = json.loads(line)
+                message = record.get("message", {})
+                if message.get("role") == "assistant":
+                    last = message
+        self.host_down = bool(last and (last.get("stopReason") == "error" or last.get("errorMessage"))) or bool(
+            proc.returncode and re.search(
+                r"\b[45]\d\d\b|connection|timed out|timeout|could not resolve host|fetch failed",
+                (proc.stderr or "") + (proc.stdout or ""), re.IGNORECASE))
+        if self.host_down:
+            raise RuntimeError("host_down")
         if proc.returncode:
             raise RuntimeError(proc.stderr or "pi failed")
         store.write_artifact(directory / "patch.diff", git.worktree_patch(worktree))
@@ -185,6 +201,7 @@ class LokayAdapter:
         return None
 
 
+@store.defer_host_down
 def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round=0):
     start_harness_run()
     adapter = LokayAdapter(repo, issue, root, start, title, body, findings=findings, fix_round=fix_round)
@@ -194,6 +211,8 @@ def run_issue(repo, issue, root, start, title, body, *, findings=None, fix_round
     result = run_task(adapter.task_id, k=1,
                       adapter=cast(BenchmarkAdapter, adapter), prop=PiProposer(adapter.spec.channels["proposer"], audit_dir=adapter.spec.runs_root / "proposer"),
                       runs_root=adapter.spec.runs_root, modes=("agg",), library=adapter.library, tag=tag)
+    if adapter.host_down:
+        return {"result": "idle", "reason": "host_down", "failed": "build_host=fail"}
     selection = result.selections.get("agg") or {}
     chosen = selection.get("chosen_run_dir")
     empty_selection = (result.status == "partial" and selection.get("ok")

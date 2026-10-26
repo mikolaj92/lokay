@@ -4219,5 +4219,100 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     assert elapsed < 0.8, elapsed
 print("pi alive checks")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+import hashlib
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from lokay import finish, h2, store, tick
+from lokay.types import Run
+
+env = {"LOKAY2_PROVIDER": "omniroute", "LOKAY2_MODEL": "gb10/current",
+       "LOKAY2_DECISION_API": "chat", "LOKAY2_DECISION_MODEL": "working",
+       "LOKAY2_DECISION_BASE_URL": "http://router/v1", "LOKAY2_DECISION_API_KEY": "secret"}
+def request(args, **kwargs):
+    assert "secret" not in " ".join(args)
+    assert kwargs["input"] == "authorization: Bearer secret\n"
+    assert args[:5] == ["/usr/bin/curl", "-sS", "-m", "5", "-w"]
+    build = args[-1].endswith("/chat/completions")
+    if build:
+        assert json.loads(args[args.index("-d") + 1])["model"] == "gb10/current"
+    return SimpleNamespace(returncode=0, stdout="500 connection refused\n500" if build else "{}\n200")
+with ExitStack() as stack:
+    stack.enter_context(patch.object(tick, "run_process", side_effect=request))
+    stack.enter_context(patch.object(tick, "auth_status", return_value=SimpleNamespace(returncode=0)))
+    stack.enter_context(patch.object(tick.shutil, "which", return_value="pi"))
+    stack.enter_context(patch.object(tick.maintenance, "sweep"))
+    stack.enter_context(patch.object(tick.shutil, "disk_usage", return_value=SimpleNamespace(free=20000000000)))
+    calls = [stack.enter_context(patch.object(tick, name, side_effect=AssertionError(name)))
+             for name in ("load_repos", "list_prs", "open_issues", "gh_json", "gh_ok")]
+    report = tick.probes(env)
+    assert report["decision_host"] == "ok" and report["build_host"] == "fail", report
+    assert not tick.host_ready(report)
+    assert tick.pick(env)["reason"] == "host_down"
+    assert tick.probes(dict(env, LOKAY2_GB10="down"))["build_host"] == "fail"
+    for call in calls:
+        call.assert_not_called()
+
+with TemporaryDirectory() as temporary, ExitStack() as stack:
+    root = Path(temporary)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(h2, "HOME", root))
+    stack.enter_context(patch.dict(os.environ, env))
+    stack.enter_context(patch.object(h2, "start_harness_run"))
+    stack.enter_context(patch.object(h2.git, "git", return_value="head"))
+    stack.enter_context(patch.object(h2.git, "detached_worktree"))
+    stack.enter_context(patch.object(tick, "repo_config", return_value={"test": []}))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+    stack.enter_context(patch.object(tick, "_ensure_worktree"))
+    stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(tick, "git", return_value=""))
+    stack.enter_context(patch.object(tick, "git_head", return_value="head"))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "Title", "body": "Body"}))
+    stack.enter_context(patch.object(tick, "published_cleanup"))
+    help_call = stack.enter_context(patch.object(tick, "needs_help", side_effect=AssertionError("needs_help")))
+    def session(worktree, prompt, directory, **kwargs):
+        store.write_artifact(directory / "sessions/run.jsonl", json.dumps({"type": "message", "message": {
+            "role": "assistant", "stopReason": "error", "errorMessage": "500 connection refused"}}) + "\n")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    stack.enter_context(patch.object(h2, "harness_session", side_effect=session))
+    def task(task_id, **kwargs):
+        adapter = kwargs["adapter"]
+        try:
+            adapter.execute(task_id, h2.BASE, task_id)
+        except RuntimeError:
+            pass
+        return SimpleNamespace(selections={}, errors=["model error"], status="partial")
+    stack.enter_context(patch.object(h2, "run_task", side_effect=task))
+    picked = {"repo": "owner/repo", "issue": 2333, "node": "build"}
+    for node in ("build", "fix"):
+        store.state_update(picked["repo"], picked["issue"],
+                           _event={"action": "enter_node", "outcome": {"node": node}},
+                           issue_title="Title", issue_body="Body", difficulty="easy", h2_start="head",
+                           h2_context=hashlib.sha256(tick.dumps(["Title", "Body", "easy", []]).encode()).hexdigest())
+        path = store.run_dir(picked["repo"], picked["issue"]) / "state.json"
+        before = path.read_bytes()
+        if node == "build":
+            event = tick.act(Run.from_state({**store.state_read(picked["repo"], picked["issue"]), **picked}))
+            outcome = event.outcome
+            store.save(picked["repo"], picked["issue"], store.load(picked["repo"], picked["issue"]), event)
+        else:
+            with patch.object(tick, "escalate", return_value=None):
+                _, outcome = finish.fix(picked, root, "lokay/2333", "head",
+                    {"uwagi": [{"name": "problem", "location": "file:1"}]}, "diff", "head", "hash",
+                    {}, root, "main", lambda: "diff", lambda: "head")
+        assert outcome["result"] == "idle" and outcome["reason"] == "host_down", outcome
+        assert path.read_bytes() == before
+        assert not list(root.rglob("complete.json"))
+        assert not (path.parent / "rounds.md").exists()
+    help_call.assert_not_called()
+print("build host checks")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

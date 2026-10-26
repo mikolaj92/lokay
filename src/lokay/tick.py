@@ -43,6 +43,7 @@ def tick(repo: str, issue: int, act: Callable[[Run], Event]) -> Run:
     return run
 
 
+@store.defer_host_down
 def act(run: Run) -> Event:
     picked = run.state
 
@@ -74,7 +75,7 @@ def act(run: Run) -> Event:
             return {"result": "failed", "reason": str(exc)}
         except Exception as exc:
             outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
-        if outcome.get("next") in ("plan", "build"):
+        if outcome.get("reason") == "host_down" or outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
         if outcome.get("result") in ("pending", "pr_open", "check", "wait", "closed", "main_red", "parked", "empty_patch", "same_patch"):
@@ -92,7 +93,7 @@ def act(run: Run) -> Event:
         outcome = dispatch()
         return Dispatched(time.time(), fields=store.load(picked["repo"], picked["issue"]).state, outcome=outcome)
     finally:
-        if sys.exception() is None:
+        if sys.exception() is None and outcome.get("reason") != "host_down":
             published_cleanup(picked)
 
 
@@ -140,6 +141,25 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     out["provider"] = "ok" if child.get("LOKAY2_PROVIDER") and child.get("LOKAY2_PROVIDER") != child.get("PI_PROVIDER", "") else "fail"
     if child.get("LOKAY2_PROVIDER") and "PI_PROVIDER" not in child:
         out["provider"] = "ok"
+    out["build_host"] = "fail"
+    if child.get("LOKAY2_GB10") != "down" and child.get("LOKAY2_MODEL"):
+        base = child.get("LOKAY2_DECISION_BASE_URL") or ""
+        args = ["/usr/bin/curl", "-sS", "-m", "5", "-w", "\n%{http_code}",
+                "-H", "content-type: application/json", "-d", json.dumps({
+                    "model": child["LOKAY2_MODEL"], "max_tokens": 1,
+                    "messages": [{"role": "user", "content": "ok"}],
+                })]
+        key = child.get("LOKAY2_DECISION_API_KEY")
+        if key:
+            args.extend(["-H", "@-"])
+        args.append(base.rstrip("/") + "/chat/completions")
+        try:
+            fetched = run_process(args, env=child, timeout=8,
+                                  input=f"authorization: Bearer {key}\n" if key else None)
+            code = (fetched.stdout or "").rpartition("\n")[2].strip()
+            out["build_host"] = "ok" if fetched.returncode == 0 and code == "200" else "fail"
+        except Exception:
+            pass
     out["model"] = "ok" if child.get("LOKAY2_MODEL") else "fail"
     out["decision"] = "ok" if api == "mini" or child.get("LOKAY2_DECISION_MODEL") else "fail"
     out["pi"] = "ok" if shutil.which("pi", path=child.get("PATH")) else "fail"
@@ -780,6 +800,7 @@ def _split_issue(picked: dict, root: Path) -> dict:
     return {"result": "pending", "children": children}
 
 
+@store.defer_host_down
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_publish, tidy_and_commit
     from lokay import plan
@@ -865,6 +886,8 @@ def _prepare(picked: dict) -> tuple | dict:
             state_update(name, issue, h2_start=git_head(worktree))
         built = run_issue(name, issue, root, start=state_read(name, issue)["h2_start"], title=title,
                           body=body)
+        if built.get("reason") == "host_down":
+            return built
         if built.get("result") != "done":
             return needs_help(picked, built.get("reason") or "harness2 failed")
         state_update(name, issue, h2_patch=str(built["patch"]), h2_summary=built.get("summary") or "",
@@ -1048,6 +1071,8 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
         outcome = action()
     except Exception as exc:
         return needs_help(picked, f"{node}: {type(exc).__name__}: {exc}", sha)
+    if outcome.get("reason") == "host_down":
+        return outcome
     expected = "done" if node == "harness2" else "pushed"
     if outcome.get("result") != expected and not (
         node == "fix_publish" and outcome.get("result") == "remote_moved" and outcome.get("sha")
