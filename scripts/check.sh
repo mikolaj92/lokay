@@ -3838,5 +3838,36 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
     assert selected is None or selected.issue != 312, selected
 print("replan orphan checks: green")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import graph, store, tick
+from lokay.types import Run
+
+name = "owner/rounds"
+assert not hasattr(graph, "round_limit") and not hasattr(graph, "ROUND_LIMIT")
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(tick, "published_cleanup"))
+    remote = stack.enter_context(patch.object(tick, "gh_ok"))
+    stack.enter_context(patch.object(tick, "_prepare", return_value={"result": "pending"}))
+    stack.enter_context(patch.object(tick, "_resume", return_value={"result": "pending"}))
+    cases = ((1, "check", {"result": "running", "check_rounds": 13}),
+             (2, "check", {"result": "running", "plan_rounds": 13}),
+             (3, "plan", {"result": "parked", "reason": "Check round limit: 28 rounds", "check_rounds": 28}),
+             (4, "plan", {"result": "parked", "reason": "Plan round limit: 34 rounds", "plan_rounds": 34}))
+    for issue, node, fields in cases:
+        store.state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": node}},
+                           pr=issue + 6, **fields)
+        event = tick.act(Run.from_state({"repo": name, "issue": issue, "node": node}))
+        assert event.outcome == {"result": "pending"}, (issue, event.outcome)
+    assert not any("labels[]=lokay-parked" in call.args[0] for call in remote.call_args_list), remote.call_args_list
+print("no round limit checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
