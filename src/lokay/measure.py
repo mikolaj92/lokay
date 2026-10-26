@@ -153,6 +153,9 @@ def ledger(home: Path) -> list[dict]:
     return list(json_rows([home / "ledger.jsonl"]))
 
 
+MATURED_THRESHOLD = 20
+
+
 def record_merge(repo, issue, pr, sha, files, main=None):
     picked = None
     for row in ledger(store.RUNS.parent):
@@ -169,9 +172,13 @@ def record_merge(repo, issue, pr, sha, files, main=None):
                 and (row.get("repo"), row.get("issue")) == (repo, issue)
                 and timestamp(row.get("ts")) and timestamp(row["ts"]) >= timestamp(picked)
                 and isinstance(row.get("ms"), (int, float))) if picked else None
+    ci = state.get("local_ci") if isinstance(state.get("local_ci"), dict) else {}
     store.ledger_append({"kind": "merged", "repo": repo, "issue": issue, "pr": pr, "sha": sha,
                          "picked_at": picked, "attempt": state.get("last_attempt"), "pi_ms": pi_ms,
                          "fix_rounds": state.get("check_rounds"),
+                         "executed": main["baseline"]["ci"].get("executed", 0) if isinstance(main, dict) else 0,
+                         "checks_source": "gh" if ci.get("ci") in ("green", "inherited")
+                         else "local" if ci.get("tested") is True else "none",
                          "main": {"status": main["status"], "executed": main["baseline"]["ci"].get("executed", 0),
                                   "lock": main["baseline"]["lockfile"]["status"]} if isinstance(main, dict) else None,
                          "change_kind": kind([{"path": path} if isinstance(path, str) else path for path in files]) if files else None})
@@ -255,6 +262,8 @@ def report(home):
     def mean(field, divisor=1):
         values = [row[field] / divisor for row in rows if isinstance(row.get(field), (int, float))]
         return sum(values) / len(values) if values else None
+    matured_rows = matured(home)
+    escape_rate = f"{len(escapes(home))}/{len(matured_rows)}"
     return {"blocked_pick_errors": sum(row.get("kind") == "pick" and any(result != "merged" for result in row.get("blocked_by", {}).values()) for row in entries),
             "red_main": red_main,
             "red_main_errors": [repo for repo, row in red_main.items() if row["hours"] > 2 and not row["picks"]],
@@ -263,7 +272,7 @@ def report(home):
             "pick_to_merge_p50_minutes": durations[math.ceil(len(durations) * .5) - 1] if durations else None,
             "pick_to_merge_p90_minutes": durations[math.ceil(len(durations) * .9) - 1] if durations else None,
             "readiness": readiness, "readiness_regressions": regressions, "readiness_recorded": f"{recorded}/{len(rows)}",
-            "escape_rate_48h": f"{len(escapes(home))}/{len(matured(home))}"}
+            "escape_rate_48h": escape_rate + (" (za mało danych)" if len(matured_rows) < MATURED_THRESHOLD else "")}
 
 
 def daily(home: Path, days: int) -> list[dict]:
