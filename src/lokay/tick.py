@@ -52,6 +52,8 @@ def act(run: Run) -> Event:
             return {}
         saved = state_read(picked["repo"], picked["issue"])
         before = saved.get("updated_at")
+        if reason := parked_round_limit(saved):
+            return round_limit_park(picked, reason)
         if saved.get("result") == "wait":
             if store.derive_waiting_on(saved) != "ready":
                 return saved.get("verdict") or {"result": "wait"}
@@ -532,6 +534,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 resumed.pop("node")
                                 resumed.pop("result")
                                 resumed.pop("reason")
+                                if str(saved.get("reason") or "").startswith(("Plan round limit", "Check round limit")):
+                                    resumed.update(plan_rounds=0, check_rounds=0)
                                 node = "plan"
                             node = node if node in ("plan", "build", "check", "fix", "merge") else "check"
                         else:
@@ -548,6 +552,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                                 resumed.pop("node")
                                 resumed.pop("result")
                                 resumed.pop("reason")
+                                if str(saved.get("reason") or "").startswith(("Plan round limit", "Check round limit")):
+                                    resumed.update(plan_rounds=0, check_rounds=0)
                                 node = "plan"
                         now = time.time()
                         state_update(name, number, _event={"action": "enter_node", "outcome": {"node": node}}, branch=branch, pr=pr["number"] if pr else None,
@@ -775,6 +781,27 @@ def _split_issue(picked: dict, root: Path) -> dict:
     return {"result": "pending", "children": children}
 
 
+def parked_round_limit(state: dict) -> str | None:
+    reason = str(state.get("reason") or "")
+    if state.get("result") == "parked" and reason.startswith(("Plan round limit", "Check round limit")):
+        return reason
+    return graph.round_limit(state)
+
+
+def round_limit_park(picked: dict, reason: str) -> dict:
+    repo, issue = picked["repo"], picked["issue"]
+    state_update(repo, issue, result="parked", reason=reason, retry_at=0)
+    saved = state_read(repo, issue)
+    store.log_event("round_limit", repo=repo, issue=issue,
+                     plan_rounds=saved.get("plan_rounds", 0),
+                     check_rounds=saved.get("check_rounds", 0), reason=reason)
+    rounds_append(repo, issue, f"{reason} → parked")
+    if saved.get("pr"):
+        gh_ok(["api", f"repos/{repo}/issues/{int(saved['pr'])}/labels",
+               "-f", "labels[]=lokay-parked"], error="park label failed")
+    return {"result": "parked", "reason": reason}
+
+
 def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_publish, tidy_and_commit
     from lokay import plan
@@ -836,8 +863,11 @@ def _prepare(picked: dict) -> tuple | dict:
     context = hashlib.sha256(dumps([title, body, saved["difficulty"], saved.get("plan_history", [])]).encode()).hexdigest()
     if saved.get("h2_context") != context:
         state_update(name, issue, h2_context=context, h2_start=None, h2_patch=None,
-                     h2_summary=None, h2_all_ran=False, h2_committed=None, h2_published=False)
+                     h2_summary=None, h2_all_ran=False, h2_committed=None, h2_published=False,
+                     plan_rounds=saved.get("plan_rounds", 0) + 1)
         saved = state_read(name, issue)
+    if reason := parked_round_limit(saved):
+        return round_limit_park(picked, reason)
     state_update(name, issue, _event={"action": "enter_node", "outcome": {"node": "build"}}, branch=branch)
     check_deadline()
     if not saved.get("h2_patch"):
@@ -1362,6 +1392,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         verdict, rounds = finish.complete_check(
             picked, worktree, base, sha, ci, decisions, plan_text, checks_failed, dismissed_keys,
             check_results, pr_number, rounds, check_notes, diff_fingerprint, kinds, conflict_fix, main_sha)
+        saved = state_read(picked["repo"], picked["issue"])
+        if reason := parked_round_limit(saved):
+            return round_limit_park(picked, reason)
         if replan_deleted_files(picked, verdict, sha):
             return {"result": "pending", "next": "plan"}
         derived = graph.step(store.load(picked["repo"], picked["issue"]),
