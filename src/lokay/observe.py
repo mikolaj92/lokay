@@ -99,6 +99,34 @@ def latest_needs_help() -> dict:
     return {"latest_needs_help": latest, "unreadable_records_or_files": unreadable}
 
 
+STALL_RED_SECONDS = 48 * 3600
+STALL_MERGE_SECONDS = 7 * 86400
+
+
+def stalled_repos(home, now=None) -> list[dict]:
+    from lokay.measure import ledger, report, timestamp
+
+    now = datetime.now(timezone.utc).timestamp() if now is None else now
+    entries = ledger(home)
+    last_merge = {}
+    for row in entries:
+        stamp = timestamp(row.get("ts"))
+        if row.get("kind") == "merged" and row.get("repo") and stamp is not None:
+            last_merge[row["repo"]] = max(last_merge.get(row["repo"], 0), stamp.timestamp())
+    result = []
+    for repo, data in report(home)["red_main"].items():
+        last = last_merge.get(repo)
+        if data["hours"] <= STALL_RED_SECONDS / 3600:
+            continue
+        if last is not None and now - last < STALL_MERGE_SECONDS:
+            continue
+        result.append({"repo": repo, "hours": data["hours"], "picks": data["picks"],
+                       "merges": sum(row.get("kind") == "merged" and row.get("repo") == repo
+                                     and (stamp := timestamp(row.get("ts"))) is not None
+                                     and now - stamp.timestamp() < STALL_MERGE_SECONDS for row in entries)})
+    return result
+
+
 def monitor() -> dict:
     path = HOME / "heartbeat.json"
     reasons = []
@@ -123,6 +151,14 @@ def monitor() -> dict:
     except (OSError, ValueError, KeyError, TypeError) as exc:
         beat = {}
         reasons.append(f"Heartbeat unavailable: {exc}")
+    try:
+        stalls = stalled_repos(HOME)
+    except (OSError, ValueError, KeyError, TypeError, OverflowError) as exc:
+        stalls = []
+        reasons.append(f"Stalled repo lookup failed: {exc}")
+    for stall in stalls:
+        reasons.append(f"{stall['repo']}: repo bez merge 7 dni i czerwony main ponad 48 h; "
+                       f"red_main {stall['hours']:.1f} h; picks {stall['picks']}; merges 7d {stall['merges']}")
     repo = os.environ.get("LOKAY_ALARM_REPO", "mikolaj92/lokay")
     rows = gh_json(["issue", "list", "--repo", repo, "--state", "open",
                     "--search", "lokay-stalled in:title", "--limit", "1000000", "--json", "number,title,body"],
