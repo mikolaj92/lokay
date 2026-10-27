@@ -140,7 +140,8 @@ def corpus(source: Path, since: datetime, until: datetime, evidence: list[dict],
         completed = (row.get("kind") == "transition" and before.get("node") == "check"
                      and (after.get("check_rounds", 0) > before.get("check_rounds", 0)
                           or event.get("action") == "verdict" and event.get("outcome", {}).get("result") in ("fix", "merge")))
-        if key not in pending and not (start or completed or row.get("call") == "decide"):
+        if key not in pending and not (start or completed or row.get("call") == "decide"
+                                      and row.get("name") != "shadow"):
             continue
         if key not in pending and completed and (key, after.get("check_rounds"), after.get("sha")) in finished:
             continue
@@ -184,7 +185,7 @@ def corpus(source: Path, since: datetime, until: datetime, evidence: list[dict],
             row = item["record"]
             effect = row.get("effect", {})
             internal = effect.get("input", {})
-            if row.get("call") != "decide" or not isinstance(internal, dict):
+            if row.get("call") != "decide" or row.get("name") == "shadow" or not isinstance(internal, dict):
                 continue
             state = internal.get("state", {})
             if state.get("sha") != current["sha"]:

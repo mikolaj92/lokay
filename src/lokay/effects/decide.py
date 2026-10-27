@@ -88,7 +88,7 @@ def _trim_wire(wire: dict, limit: int = 6000, string_limit: int = 3000) -> dict:
     return wire
 
 
-def to_wire(api: str, model: str, internal: Mapping) -> dict:
+def to_wire(api: str, model: str, internal: Mapping, reasoning: str | None = None) -> dict:
     if api == "chat":
         questions = [{key: question[key] for key in ("id", "instructions", "options")}
                      for question in internal["questions"]]
@@ -108,7 +108,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 },
                 "required": ["probabilities", "choice", "reason"], "additionalProperties": False,
             }
-        return {
+        wire = {
             "model": model,
             "messages": [
                 {"role": "system", "content": "You are a careful code reviewer. Answer each question "
@@ -126,6 +126,10 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                            "required": list(properties), "additionalProperties": False},
             }},
         }
+        effort = reasoning or os.environ.get("LOKAY2_DECISION_REASONING")
+        if effort:
+            wire["reasoning_effort"] = effort
+        return wire
     if api == "tensorfold":
         questions = [{
             "id": question["id"],
@@ -226,15 +230,38 @@ def decide(internal: Mapping) -> dict:
                   effect={"input": internal, "requests": responses, "output": output})
 
 
-def _decide(internal: Mapping, recorder: list | None = None) -> dict:
+def shadow(internal: Mapping) -> None:
+    from lokay.store import log_event
+
+    model = os.environ.get("LOKAY2_SHADOW_DECISION_MODEL")
+    if not model:
+        return
+    started = time.monotonic()
+    output = None
+    ok = False
+    responses: list = []
+    try:
+        output = _decide(internal, responses, api="chat", model=model, reasoning="low")
+        ok = True
+    except BaseException as exc:
+        output = {"error": type(exc).__name__, "reason": str(exc)}
+    finally:
+        log_event("call", call="decide", name="shadow", input=internal, output=output,
+                  started=started, ok=ok,
+                  effect={"input": internal, "requests": responses, "output": output})
+
+
+def _decide(internal: Mapping, recorder: list | None = None, api: str | None = None,
+            model: str | None = None, reasoning: str | None = None) -> dict:
     from lokay.effects.pi import run_process
     from lokay.effects.retry import retry
 
-    api = os.environ.get("LOKAY2_DECISION_API") or "mini"
-    model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
+    api = api or os.environ.get("LOKAY2_DECISION_API") or "mini"
+    if model is None:
+        model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
     path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "chat": "/chat/completions"}[api]
-    body = dumps(to_wire(api, model, internal))
+    body = dumps(to_wire(api, model, internal, reasoning))
     timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or (180 if api == "chat" else 30))))
     cmd = [
         "curl", "-sS", "-m", timeout,

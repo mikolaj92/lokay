@@ -155,12 +155,14 @@ def remote_checks(picked, branch, sha):
 
 
 def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
+    import os
+
     from lokay.tick import _retry, dumps
     from lokay.effects.git import git_try
     from lokay.review import QUESTIONS, check_state, classify_multilens, decide_batches, docs_only
     from lokay.checks import CheckInput, run_checks
     from lokay.graph import red_main_allows
-    from lokay.effects.decide import decide
+    from lokay.effects.decide import decide, shadow
 
     def read_stat():
         code, out, err = git_try(worktree, "diff", "--stat", f"origin/{base}...HEAD", timeout=30)
@@ -190,17 +192,27 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
                                  issue_body=(saved.get("issue_body") or "")[:4000],
                                  history=saved.get("check_history", [])[-5:])
     decisions = []
+    shadow_model = os.environ.get("LOKAY2_SHADOW_DECISION_MODEL")
+    shadow_requests = []
     kinds = () if checks_failed else ("alignment", "docs") if docs_only(diff or "") else tuple(
         p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json"))
         if p.stem != "check_docs")
+
+    def lens_decide(request):
+        if shadow_model:
+            shadow_requests.append(request)
+        return _retry(picked, "check", lambda: decide(request))
+
     for kind in kinds:
-        decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
-                                  lambda request: _retry(picked, "check", lambda: decide(request)))
+        decision = decide_batches(kind, rows, {**decision_state, "kind": kind}, lens_decide)
         decision["sha"] = sha
         decisions.append(decision)
         rounds_append(picked["repo"], picked["issue"],
                       f"Check lens {kind}, round={rounds + 1}: next={decision['next']}, "
                       f"p={dumps(decision.get('probabilities', []))}")
+    if shadow_model:
+        for request in shadow_requests:
+            shadow(request)
     groups = {}
     for decision in decisions:
         for finding in decision["uwagi"]:
