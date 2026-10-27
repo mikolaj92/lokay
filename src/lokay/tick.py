@@ -899,6 +899,7 @@ def _prepare(picked: dict) -> tuple | dict:
         from lokay.effects.gh import fit_body
 
         if not saved.get("h2_all_ran") or not (saved.get("h2_summary") or "").strip():
+            state_update(name, issue, h2_patch=None)
             return needs_help(picked, "harness2: empty patch without complete execution and summary evidence")
         previous = store.main_status().get(name, {})
         main = check_main(name, root, base=base, config=repo, force=True,

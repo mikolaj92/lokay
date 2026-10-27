@@ -32,6 +32,17 @@ PI_SURFACE = SurfaceSpec(
 BASE = Path(__file__).resolve().parents[2] / "harness/pi"
 
 
+def model_error(directory: Path) -> bool:
+    sessions = sorted((directory / "sessions").glob("*.jsonl"), key=lambda path: path.stat().st_mtime_ns)
+    last = None
+    if sessions:
+        for line in sessions[-1].read_text().splitlines():
+            message = json.loads(line).get("message", {})
+            if message.get("role") == "assistant":
+                last = message
+    return bool(last and (last.get("stopReason") == "error" or last.get("errorMessage")))
+
+
 class PiSubstrate:
     name = "pi"
 
@@ -115,7 +126,7 @@ class LokayAdapter:
         harness_dir = harness_dir or self.base_harness()
         self.validate_tree(read_tree(PI_SURFACE, harness_dir))
         directory = self.spec.runs_root / "executions" / hashlib.sha256(run_id.encode()).hexdigest()
-        if (directory / "complete.json").is_file():
+        if (directory / "complete.json").is_file() and not model_error(directory):
             completed = json.loads((directory / "complete.json").read_text())
             if completed.get("start") != self.start:
                 raise RuntimeError("completed rollout belongs to a different starting SHA")
@@ -141,15 +152,7 @@ class LokayAdapter:
         proc = harness_session(worktree, self.prompt, directory, install=install, resume=resume)
         store.write_artifact(directory / "final.md", proc.stdout or "")
         store.write_artifact(directory / "trajectory.txt", (proc.stdout or "") + "\n[ERROR]\n" + (proc.stderr or ""))
-        sessions = sorted((directory / "sessions").glob("*.jsonl"), key=lambda path: path.stat().st_mtime_ns)
-        last = None
-        if sessions:
-            for line in sessions[-1].read_text().splitlines():
-                record = json.loads(line)
-                message = record.get("message", {})
-                if message.get("role") == "assistant":
-                    last = message
-        self.host_down = bool(last and (last.get("stopReason") == "error" or last.get("errorMessage"))) or bool(
+        self.host_down = model_error(directory) or bool(
             proc.returncode and re.search(
                 r"\b[45]\d\d\b|connection|timed out|timeout|could not resolve host|fetch failed",
                 (proc.stderr or "") + (proc.stdout or ""), re.IGNORECASE))
