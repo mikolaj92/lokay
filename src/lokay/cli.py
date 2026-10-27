@@ -91,6 +91,12 @@ def dataset(args, rest) -> int:
     return dataset_main(rest)
 
 
+def review_b(args, rest) -> int:
+    from lokay.review_b import main as review_b_main
+
+    return review_b_main(rest)
+
+
 def measure(args, rest) -> int:
     from lokay.measure import main as measure_main
 
@@ -108,6 +114,7 @@ NODES = {
     "lint": lint,
     "measure": measure,
     "dataset": dataset,
+    "review-b": review_b,
 }
 
 
