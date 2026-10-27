@@ -4314,5 +4314,73 @@ with TemporaryDirectory() as temporary, ExitStack() as stack:
     help_call.assert_not_called()
 print("build host checks")
 PY
+uv run python - <<'PY'
+from contextlib import ExitStack
+import hashlib
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from lokay import h2, store, tick
+from lokay.types import Run
+
+env = {"LOKAY2_PROVIDER": "omniroute", "LOKAY2_MODEL": "gb10/current"}
+with TemporaryDirectory() as temporary, ExitStack() as stack:
+    root = Path(temporary)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(h2, "HOME", root))
+    stack.enter_context(patch.dict(os.environ, env))
+    stack.enter_context(patch.object(h2.git, "git", return_value="head"))
+    stack.enter_context(patch.object(h2.git, "detached_worktree"))
+    stack.enter_context(patch.object(h2.git, "worktree_remove"))
+    stack.enter_context(patch.object(h2.git, "worktree_patch", return_value=b"diff --git a/x b/x\n"))
+    def session(worktree, prompt, directory, **kwargs):
+        store.write_artifact(directory / "sessions/fresh.jsonl", json.dumps({"type": "message", "message": {
+            "role": "assistant", "stopReason": "stop"}}) + "\n")
+        return SimpleNamespace(returncode=0, stdout="summary", stderr="")
+    launched = stack.enter_context(patch.object(h2, "harness_session", side_effect=session))
+    adapter = h2.LokayAdapter("owner/repo", 1, root, "head", "Title", "Body")
+    directory = adapter.spec.runs_root / "executions" / hashlib.sha256(b"run").hexdigest()
+    store.write_artifact(directory / "sessions/old.jsonl", json.dumps({"type": "message", "message": {
+        "role": "assistant", "stopReason": "error", "errorMessage": "500 connection refused"}}) + "\n")
+    os.utime(directory / "sessions/old.jsonl", (1, 1))
+    store.write_artifact(directory / "patch.diff", "")
+    store.write_json(directory / "complete.json", {"run_id": "run", "start": "head"})
+    assert adapter.execute("owner/repo#1", h2.BASE, "run") == directory
+    assert launched.called, "complete rollout that ended on a model error is reused"
+    assert (directory / "patch.diff").read_bytes().strip()
+
+with TemporaryDirectory() as temporary, ExitStack() as stack:
+    root = Path(temporary)
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.dict(os.environ, env))
+    stack.enter_context(patch.object(tick, "repo_config", return_value={"test": []}))
+    stack.enter_context(patch.object(tick, "_repo_paths", return_value=(root, root)))
+    stack.enter_context(patch.object(tick, "_ensure_worktree"))
+    stack.enter_context(patch.object(tick, "base_branch", return_value="main"))
+    stack.enter_context(patch.object(tick, "git", return_value=""))
+    stack.enter_context(patch.object(tick, "git_head", return_value="head"))
+    stack.enter_context(patch.object(tick, "gh_json", return_value={"title": "Title", "body": "Body"}))
+    stack.enter_context(patch.object(tick, "published_cleanup"))
+    stack.enter_context(patch.object(tick, "needs_help", side_effect=lambda picked, reason, *args, **kwargs: {
+        "result": "failed", "reason": reason}))
+    picked = {"repo": "owner/repo", "issue": 1, "node": "build"}
+    empty = root / "patch.diff"
+    empty.write_text("")
+    store.state_update(picked["repo"], picked["issue"],
+                       _event={"action": "enter_node", "outcome": {"node": "build"}},
+                       issue_title="Title", issue_body="Body", difficulty="easy", h2_start="head",
+                       h2_context=hashlib.sha256(tick.dumps(["Title", "Body", "easy", []]).encode()).hexdigest(),
+                       h2_patch=str(empty), h2_summary="", h2_all_ran=True)
+    outcome = tick.act(Run.from_state({**store.state_read(picked["repo"], picked["issue"]), **picked})).outcome
+    assert outcome["reason"] == "harness2: empty patch without complete execution and summary evidence", outcome
+    assert store.state_read(picked["repo"], picked["issue"]).get("h2_patch") is None, "empty patch without evidence is reused by the next Build"
+print("model error rollout checks")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
