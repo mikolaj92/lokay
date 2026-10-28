@@ -1,0 +1,105 @@
+Using CPython 3.13.3
+Creating virtual environment at: /tmp/pr2336/.venv
+Resolved 6 packages in 3ms
+   Updating https://github.com/mikolaj92/harness2 (7a1139702bfdb05f7e2b6ecd5c83305065cd48eb)
+   Building lokay @ file:///private/tmp/pr2336
+Downloading pyright (5.9MiB)
+      Built lokay @ file:///private/tmp/pr2336
+ Downloaded pyright
+    Updated https://github.com/mikolaj92/harness2 (7a1139702bfdb05f7e2b6ecd5c83305065cd48eb)
+   Building harness2 @ git+https://github.com/mikolaj92/harness2@7a1139702bfdb05f7e2b6ecd5c83305065cd48eb
+      Built harness2 @ git+https://github.com/mikolaj92/harness2@7a1139702bfdb05f7e2b6ecd5c83305065cd48eb
+Prepared 6 packages in 1.73s
+Installed 6 packages in 34ms
+ + harness2==0.1.0 (from git+https://github.com/mikolaj92/harness2@7a1139702bfdb05f7e2b6ecd5c83305065cd48eb)
+ + lokay==0.1.0 (from file:///private/tmp/pr2336)
+ + nodeenv==1.11.0
+ + pyright==1.1.414
+ + pyyaml==6.0.3
+ + typing-extensions==4.16.0
+superseded checks: green
+guard self-edit keeps plan checks: green
+venv repair checks: ok
+patch bytes checks: green
+worktree junk checks: green
+junk keeps disk checks: green
+unlocated failure checks: green
+rule id checks: green
+uv cache outside os temp checks: green
+base merge checks: green
+samefile path checks: green
+orphaned worktree checks: green
+atomic worktree removal checks: green
+replan from base checks: green
+stale index lock checks: green
+worker version and binary cleanup checks: green
+poll interval checks: green
+merged state checks: green
+red main merge invariant: green
+red main subset checks: green
+full log checks: green
+base test checks: green
+log excerpt checks
+main inherited checks: green
+red main fairness checks: green
+fair pick checks: green
+red main children checks: green
+Fix dispute checks: green
+fix no change checks: green
+dispute exit checks: green
+gate exit checks: green
+Fix assertion checks: green
+weakened test assertion checks: green
+dead test checks: green
+moved test checks: green
+gate contract checks: green
+deleted files scope checks: green
+intent check: green
+declared scope check: green
+junk lens scope checks: green
+diff path checks: green
+reopen checks: green
+reopen all closed issues checks: green
+human close checks: green
+one harness2 per tick checks: green
+no tick budget checks
+ladder wait checks: green
+fresh start after closed PR checks: green
+issue refresh checks: green
+tested red checks: green
+mojo comment checks: green
+split before worktree checks: green
+issue-only too_big checks: green
+harness rule checks: green
+fix assertion base checks: green
+monitor loop checks: green
+stall alarm pick checks: green
+stalled repo alarm checks: green
+same patch park checks: green
+main recovery checks: green
+existing PR fix round limit checks: ok
+round limit keeps plan node: green
+split and label checks: green
+hygiene checks: green
+ledger and measure checks: green
+readiness checks: green
+merge token checks: green
+empty patch state checks: green
+red main exit checks: green
+dependency checks: green
+replan orphan checks: green
+no round limit checks: green
+one control checks: green
+pi alive checks
+build host checks
+model error rollout checks
+replay: 129/129 transitions ok
+decide: request bytes=6617 approx_tokens=2205
+decide: request bytes=6005 approx_tokens=2001
+decide: request bytes=5962 approx_tokens=1987
+decide: request bytes=6003 approx_tokens=2001
+decide: request bytes=6409 approx_tokens=2136
+decide: request bytes=5992 approx_tokens=1997
+decide: request bytes=6529 approx_tokens=2176
+replay: 0/0 transitions ok
+replay: 2/2 tick segments ok, 0 retired

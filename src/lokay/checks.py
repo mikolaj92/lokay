@@ -83,6 +83,8 @@ def local_tests(x: CheckInput) -> CheckResult:
     if baseline := x.ci.get("baseline"):
         reason += (f"; main {baseline['sha']}, command {baseline.get('argv')}: "
                    f"same failures {baseline.get('inherited', [])}; remaining failures are not on main")
+        if (probe := baseline.get("base_test")) and probe.get("passed"):
+            reason += f"; the failing tests pass on main {probe['sha']} with the same command"
     timeout = next((item["timeout"] for item in failures if item.get("timeout") is not None), None)
     if not passed and timeout is not None:
         reason = f"tests timed out after {timeout} s"

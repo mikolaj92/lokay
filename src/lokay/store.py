@@ -323,6 +323,30 @@ def main_status(home: Path | None = None) -> dict:
 def save_main_status(repo: str, status: dict) -> None:
     path = RUNS / repo.replace("/", "__") / "main.json"
     write_json(path, status)
+    baseline = status.get("baseline") or {}
+    recorded = baseline_path(repo, baseline.get("sha") or "")
+    if recorded is not None and not recorded.exists():
+        write_json(recorded, baseline)
+
+
+def baseline_path(repo: str, sha: str) -> Path | None:
+    if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._-]{0,63}", str(sha or "")):
+        return None
+    return RUNS / repo.replace("/", "__") / "baselines" / f"{sha}.json"
+
+
+def main_baseline(repo: str, sha: str) -> dict:
+    path = baseline_path(repo, sha)
+    return json.loads(path.read_text()) if path is not None and path.exists() else {}
+
+
+def save_base_test(repo: str, sha: str, record: dict) -> None:
+    path = baseline_path(repo, sha)
+    if path is None:
+        return
+    baseline = main_baseline(repo, sha)
+    if not baseline.get("base_test"):
+        write_json(path, {**baseline, "base_test": record})
 
 
 def repo_last_attempt(repo: str) -> float:
