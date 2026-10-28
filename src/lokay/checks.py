@@ -477,8 +477,28 @@ def diff_paths(x: CheckInput) -> CheckResult:
                        findings)
 
 
+def declared_scope(x: CheckInput) -> CheckResult:
+    declared = set()
+    for section in re.split(r"(?im)^#{1,6}\s*[^\n]*\b(?:pliki|files)\b[^\n]*$", x.plan)[1:]:
+        block = re.split(r"(?m)^#{1,6}\s", section, maxsplit=1)[0]
+        declared.update(path.removeprefix("./") for path in re.findall(
+            r"(?<![\w./-])(?:[\w.-]+/)*[\w.-]*\.[A-Za-z]\w*", block))
+    if not declared:
+        return CheckResult("declared_scope", "pass", "plan has no file list", ())
+    changed = sorted(path for block in x.diff.split("diff --git ")[1:]
+                     if (path := _diff_path(block)) is not None)
+    outside = [path for path in changed if path not in declared]
+    if outside:
+        return CheckResult("declared_scope", "fail",
+                           "changes outside declared scope: " + ", ".join(outside), tuple(
+                               Finding(path, 1, 1, "change outside declared scope", "declared_scope")
+                               for path in outside))
+    return CheckResult("declared_scope", "pass", "changes stay inside the plan file list", ())
+
+
 CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk, diff_paths,
-          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
+          no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs,
+          declared_scope]
 
 
 def run_checks(x: CheckInput) -> tuple[CheckResult, ...]:
