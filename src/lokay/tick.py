@@ -600,8 +600,10 @@ def refresh_body(repo: str, issue: int) -> dict:
     notes = (saved.get("verdict") or {}).get("notes") or []
     lens_notes = [parsed for note in notes
                   if isinstance(parsed := parse_finding(note), Note) and parsed.pytanie]
+    from lokay.review import legacy_rule
+
     for raw in saved.get("check_notes", []):
-        item = parse_finding(raw)
+        item = parse_finding(legacy_rule(raw))
         if isinstance(item, Finding):
             lens_notes.append(Note(item.lens, item.lens,
                                    f"{item.plik}:{item.linia_od}-{item.linia_do}: {item.zmiana}"))

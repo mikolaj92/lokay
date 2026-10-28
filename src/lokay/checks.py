@@ -39,11 +39,12 @@ def evidence(name: str, passed: bool, reason: str, failures: list[dict],
     findings = []
     if not passed:
         for failure in failures:
-            item = parse_finding(failure)
+            item = parse_finding({**failure, "rule_id": name})
             if isinstance(item, Finding):
                 line = item.linia_od or int(failure.get("linia") or 1)
                 findings.append(Finding(item.plik, line, item.linia_do or line,
-                                        fix_hint + (f": {details}" if details else ""), name))
+                                        fix_hint + (f": {details}" if details else ""), name,
+                                        rule_id=name))
     return CheckResult(name, "pass" if passed else "fail",
                        reason + (f": {details}" if details else ""), tuple(findings))
 
@@ -96,7 +97,8 @@ def merge_clean(x: CheckInput) -> CheckResult:
     from lokay.effects.git import merge_conflicts
 
     paths = merge_conflicts(x.worktree, x.sha)
-    findings = tuple(Finding(path, 1, 1, "resolve merge conflict", "merge_clean") for path in paths)
+    findings = tuple(Finding(path, 1, 1, "resolve merge conflict", "merge_clean", rule_id="merge_clean")
+                     for path in paths)
     return CheckResult("merge_clean", "fail" if findings else "pass",
                        "merge conflicts found" if findings else "merge is clean", findings)
 
@@ -108,7 +110,7 @@ def secrets(x: CheckInput) -> CheckResult:
         r"|(?i:api[_-]?key\s*[:=]\s*['\"][A-Za-z0-9_\-]{20,})"
     )
     findings = tuple(
-        Finding(path, number, number, "possible secret", "secrets")
+        Finding(path, number, number, "possible secret", "secrets", rule_id="secrets")
         for path, number, kind, text in diff_lines(x.diff)
         if kind == "+" and pattern.search(text)
     )
@@ -189,7 +191,7 @@ def no_new_comments(x: CheckInput) -> CheckResult:
             path, separator, line = location.rpartition(":")
             number = int(line) if separator and line.isdecimal() else 1
             findings.append(Finding(path if separator and line.isdecimal() else location,
-                                    number, number, hint, "no_new_comments"))
+                                    number, number, hint, "no_new_comments", rule_id="no_new_comments"))
         return CheckResult("no_new_comments", "fail", "; ".join(errors), tuple(findings))
     return CheckResult("no_new_comments", "pass", "no new comments or lint errors", ())
 
@@ -204,7 +206,7 @@ def no_unit_tests(x: CheckInput) -> CheckResult:
         return CheckResult("no_unit_tests", "fail", "new unit tests: " + ", ".join(paths), tuple(
             Finding(path, first_added.get(path, 1), first_added.get(path, 1),
                     "add a replay fixture under fixtures/replay" if x.repo.rsplit("/", 1)[-1] == "lokay" else hint,
-                    "no_unit_tests") for path, hint in paths.items()))
+                    "no_unit_tests", rule_id="no_unit_tests") for path, hint in paths.items()))
     return CheckResult("no_unit_tests", "pass", "no new unit tests", ())
 
 
@@ -226,7 +228,7 @@ def deleted_files(x: CheckInput) -> CheckResult:
         reason = (f"deleted files not named by the issue or plan: {len(unapproved)} "
                   f"({', '.join(unapproved[:5])})")
         return CheckResult("deleted_files", "fail", reason, tuple(
-            Finding(path, 1, 1, reason, "deleted_files") for path in unapproved))
+            Finding(path, 1, 1, reason, "deleted_files", rule_id="deleted_files") for path in unapproved))
     return CheckResult("deleted_files", "pass",
                        "deleted files named by the issue or plan" if deleted else "no deleted files", ())
 
@@ -271,7 +273,8 @@ def weakened_tests(x: CheckInput) -> CheckResult:
     unapproved = sorted(path for path in changed if not named_test(path, x.issue_body))
     if unapproved:
         reason = "existing test changed but the issue body does not name it: " + ", ".join(unapproved)
-        findings = tuple(Finding(path, 1, 1, reason, "weakened_tests") for path in unapproved)
+        findings = tuple(Finding(path, 1, 1, reason, "weakened_tests", rule_id="weakened_tests")
+                         for path in unapproved)
         return CheckResult("weakened_tests", "fail", reason, findings)
     if not changed:
         return CheckResult("weakened_tests", "pass", "no existing tests changed", ())
@@ -306,7 +309,7 @@ def _count_weakened_tests(x: CheckInput, dead=frozenset(), moved=None) -> CheckR
             reason = f"Removes {removed} test assertions: {path}"
             line = max(1, change["-"][0][0])
             reasons.append(reason)
-            findings.append(Finding(path, line, line, reason, "weakened_tests"))
+            findings.append(Finding(path, line, line, reason, "weakened_tests", rule_id="weakened_tests"))
     return CheckResult("weakened_tests", "fail" if findings else "pass",
                        "; ".join(reasons) if findings else "no test assertions removed", tuple(findings))
 
@@ -328,7 +331,7 @@ def encoded_rewrite(x: CheckInput) -> CheckResult:
                 if decoded != text and decoded in removed:
                     findings.append(Finding(path, number, number,
                                             "Text was percent-encoded instead of changed; keep the original or make a real change.",
-                                            "encoded_rewrite"))
+                                            "encoded_rewrite", rule_id="encoded_rewrite"))
     return CheckResult("encoded_rewrite", "fail" if findings else "pass",
                        "percent-encoded rewrites found" if findings else "no percent-encoded rewrites", tuple(findings))
 
@@ -343,7 +346,8 @@ def intent(x: CheckInput) -> CheckResult:
         paths = sorted({token[2:] for line in x.diff.splitlines() if line.startswith("diff --git ")
                         for token in shlex.split(line)[2:]})
         findings = tuple(Finding(path, 1, 1,
-                                 "issue needs a code change; implement it instead of editing docs", "intent")
+                                 "issue needs a code change; implement it instead of editing docs", "intent",
+                                 rule_id="intent")
                          for path in paths)
         return CheckResult("intent", "fail", "docs/plan only instead of code: " + ", ".join(signals), findings)
     return CheckResult("intent", "pass", "no code intent mismatch", ())
@@ -371,7 +375,8 @@ def docs(x: CheckInput) -> CheckResult:
     if sum(change["net"] for change in changes.values()) > 0:
         return CheckResult("docs", "fail", "documentation expanded: " + "; ".join(
             f"{path}: +{change['net']} net lines" for path, change in expanded), tuple(
-                Finding(path, change["line"], change["line"], "shorten: docs must not grow", "docs")
+                Finding(path, change["line"], change["line"], "shorten: docs must not grow", "docs",
+                        rule_id="docs")
                 for path, change in expanded))
     return CheckResult("docs", "pass", "no documentation expansion", ())
 
@@ -414,7 +419,7 @@ def lockfile(x: CheckInput) -> CheckResult:
         message = "uv.lock is out of date with pyproject.toml: run `uv lock`"
         findings = tuple(Finding(name, 1, 1, message if Path(name).name == "uv.lock" else
                                  "lockfile drift during setup or tests: review and commit the lockfile",
-                                 "lockfile") for name in sorted(drifted))
+                                 "lockfile", rule_id="lockfile") for name in sorted(drifted))
         return CheckResult("lockfile", "fail", "; ".join(sorted(drifted)) + ": " + message, findings)
     if locks and not available:
         errors.append("uv lock checks unavailable: uv not found")
@@ -459,7 +464,8 @@ def junk(x: CheckInput) -> CheckResult:
             continue
         if is_artifact(path, x.worktree):
             paths.add(path)
-    findings = tuple(Finding(path, 1, 1, "remove generated junk file", "junk") for path in sorted(paths))
+    findings = tuple(Finding(path, 1, 1, "remove generated junk file", "junk", rule_id="junk")
+                     for path in sorted(paths))
     return CheckResult("junk", "fail" if findings else "pass",
                        "generated junk files: " + ", ".join(sorted(paths)) if findings else "no generated junk files",
                        findings)
@@ -473,7 +479,8 @@ def diff_paths(x: CheckInput) -> CheckResult:
         if not path or Path(path).is_absolute() or ".." in Path(path).parts or path in seen:
             invalid.append(path)
         seen.add(path)
-    findings = tuple(Finding(path, 1, 1, "invalid diff path", "diff_paths") for path in invalid)
+    findings = tuple(Finding(path, 1, 1, "invalid diff path", "diff_paths", rule_id="diff_paths")
+                     for path in invalid)
     return CheckResult("diff_paths", "fail" if findings else "pass",
                        "invalid diff paths: " + ", ".join(invalid) if findings else "diff paths are valid",
                        findings)
@@ -493,7 +500,8 @@ def declared_scope(x: CheckInput) -> CheckResult:
     if outside:
         return CheckResult("declared_scope", "fail",
                            "changes outside declared scope: " + ", ".join(outside), tuple(
-                               Finding(path, 1, 1, "change outside declared scope", "declared_scope")
+                               Finding(path, 1, 1, "change outside declared scope", "declared_scope",
+                                       rule_id="declared_scope")
                                for path in outside))
     return CheckResult("declared_scope", "pass", "changes stay inside the plan file list", ())
 

@@ -54,7 +54,7 @@ def request(round: dict) -> tuple[dict, dict]:
                 match = re.search(r"([^\s]+):(\d+)-(\d+)$", question["instructions"])
                 if match:
                     path, start, end = match.groups()
-                    locations[qid] = to_dict(Finding(path, int(start), int(end)))
+                    locations[qid] = to_dict(Finding(path, int(start), int(end), rule_id="diff_paths"))
     if not questions or len({item["id"] for item in questions}) != len(questions):
         raise ValueError("missing or duplicate review questions")
     return {"state": states, "questions": questions}, locations

@@ -89,7 +89,8 @@ def hunks(diff: str) -> list[dict]:
             elif line.startswith("-"):
                 current["deleted"] += 1
     return [{"plik": row["path"], "linia_od": row["start"] if row["start"] is not None else 1,
-             "linia_do": row["end"], "added": row["added"], "deleted": row["deleted"], "body": row["body"]}
+             "linia_do": row["end"], "added": row["added"], "deleted": row["deleted"], "body": row["body"],
+             "rule_id": "diff_paths"}
             for row in rows.values()]
 
 
@@ -127,6 +128,11 @@ def rule_ids() -> frozenset[str]:
     from lokay.checks import CHECKS
 
     return frozenset(check.__name__ for check in CHECKS) | frozenset(rule_catalog().values())
+
+
+def legacy_rule(row: dict) -> dict:
+    lens = parse_finding({**row, "rule_id": "diff_paths"}).lens
+    return {**row, "rule_id": row.get("rule_id") or rule_catalog().get(lens, lens)}
 
 
 def validate_verdict(outcome: dict) -> dict:
@@ -430,7 +436,8 @@ def recompute_verdict(sha: str, saved: dict) -> dict | None:
         result if isinstance(result, CheckResult) else CheckResult(
             **{**result, "findings": tuple(
                 finding if isinstance(finding, Finding) else Finding(
-                    **{**finding, "lenses": tuple(finding.get("lenses") or ())})
+                    **{**finding, "lenses": tuple(finding.get("lenses") or ()),
+                       "rule_id": finding.get("rule_id") or result["name"]})
                 for finding in result["findings"])})
         for result in inputs["results"])
     dismissed = saved.get("dispute_dismissed") or {}
