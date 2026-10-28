@@ -4399,6 +4399,61 @@ with TemporaryDirectory() as temporary, ExitStack() as stack:
 print("build host checks")
 PY
 uv run python - <<'PY'
+import json
+import os
+import signal
+import subprocess
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import store, tick
+from lokay.effects import maintenance
+
+def alive(pgid):
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+down = {"decision_host": "ok", "build_host": "fail"}
+up = {"decision_host": "ok", "build_host": "ok"}
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory, "LOKAY2_WORKER": "0"}))
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    stack.enter_context(patch.object(maintenance, "sweep"))
+    stack.enter_context(patch.object(tick, "load_repos", return_value=[]))
+    report = stack.enter_context(patch.object(tick, "probes", return_value=up))
+    hung = subprocess.Popen(["sleep", "600"], start_new_session=True)
+    (root / "procs-1.json").write_text(json.dumps([hung.pid]))
+    try:
+        report.return_value = down
+        assert tick.pick()["reason"] == "host_down"
+        assert alive(hung.pid)
+        report.return_value = up
+        tick.pick()
+        hung.poll()
+        assert not alive(hung.pid), "pi run started before host_down still holds a slot"
+        assert hung.pid not in json.loads((root / "procs-1.json").read_text())
+        fresh = subprocess.Popen(["sleep", "600"], start_new_session=True)
+        (root / "procs-1.json").write_text(json.dumps([fresh.pid]))
+        try:
+            tick.pick()
+            assert alive(fresh.pid)
+        finally:
+            os.killpg(fresh.pid, signal.SIGKILL)
+            fresh.wait()
+    finally:
+        if hung.poll() is None:
+            os.killpg(hung.pid, signal.SIGKILL)
+            hung.wait()
+print("hostdead checks: green")
+PY
+uv run python - <<'PY'
 from contextlib import ExitStack
 import hashlib
 import json

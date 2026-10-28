@@ -49,7 +49,7 @@ The service uses the checkout SHA as the heartbeat version after self-update;
 manual runs use the installed package version.
 
 GitHub calls use 60 seconds; setup/local CI use 600 seconds.
-Timed-out process groups are killed. Output draining and process reaping share
+Timed-out process groups are killed, as are runs alive at host_down once the host returns, from all workers' procs-*.json registries. Output draining and process reaping share
 a five-second cleanup budget. Closed-issue cleanup saves dirty/unpushed changes in `cleanup.patch`, records `cleanup=done|failed` once, and never retries.
 
 Ready repositories are ordered by their latest persisted attempt, oldest first.
