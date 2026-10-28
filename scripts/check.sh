@@ -2037,6 +2037,28 @@ with TemporaryDirectory() as directory:
 print("junk lens scope checks: green")
 PY
 uv run python - <<'PY'
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay.checks import CHECKS, CheckInput, diff_paths, junk
+from lokay.types import Finding
+
+block = "diff --git a/{0} b/{0}\n--- a/{0}\n+++ b/{0}\n@@ -1 +1 @@\n-old\n+new\n"
+with TemporaryDirectory() as directory:
+    def run(diff):
+        return diff_paths(CheckInput("owner/repo", 1, "head", "", "", diff, [], {}, Path(directory)))
+    valid = run(block.format("src/x.py"))
+    assert valid.status == "pass" and valid.findings == (), valid
+    assert CHECKS.index(diff_paths) == CHECKS.index(junk) + 1, CHECKS
+    parent = run(block.format("../etc/x.py"))
+    assert parent.findings == (Finding("../etc/x.py", 1, 1, "invalid diff path", "diff_paths"),), parent
+    assert parent.status == "fail", parent
+    twice = run(block.format("src/x.py") * 2)
+    assert twice.findings == (Finding("src/x.py", 1, 1, "invalid diff path", "diff_paths"),), twice
+    assert twice.status == "fail", twice
+print("diff path checks: green")
+PY
+uv run python - <<'PY'
 from lokay import graph
 from lokay.types import PLAN_RESET, Run, event_record, parse_event
 
