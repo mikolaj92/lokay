@@ -92,7 +92,7 @@ def compatible_checks(actual, expected) -> Any:
 
 def compatible_state(actual: dict, expected: dict) -> dict:
     actual = actual.copy()
-    for key in ("check_inputs", "fix_rounds", "fix_limit_hits"):
+    for key in ("check_inputs", "fix_rounds", "fix_limit_hits", "check_places"):
         if key not in expected:
             actual.pop(key, None)
     return compatible_checks(actual, expected)

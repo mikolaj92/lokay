@@ -270,6 +270,20 @@ def dismissed_key(row: dict) -> list:
             item.lens if "pytanie" in row else None]
 
 
+def place_key(row: dict) -> tuple:
+    rule = row.get("rule_id") or ""
+    if rule == "local_tests":
+        from lokay.review import test_failures
+
+        return (rule, *sorted(test_failures(row.get("log") or "")))
+    item = parse_finding({**row, "rule_id": rule or "check"})
+    return (rule, item.plik) if isinstance(item, Finding) and item.plik else (rule,)
+
+
+def check_places(outcome: dict) -> list[tuple]:
+    return sorted({place_key(row) for row in outcome.get("uwagi") or ()})
+
+
 def to_dict(item: Finding | Note) -> dict:
     if item._raw is not None:
         raw = dict(item._raw)

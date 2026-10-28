@@ -8,6 +8,7 @@ from lokay.gates import gate_rows
 from lokay.types import (
     PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Reopened, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, RepoSnapshot, Snapshot, Pick, pr_number,
+    check_places,
 )
 
 
@@ -112,6 +113,7 @@ def step(run: Run, event: Event) -> Run:
                 fields.update(node="check", verdict=None)
         case Checked():
             fields["node"] = outcome["result"]
+            fields["check_places"] = {"sha": outcome.get("sha"), "keys": check_places(outcome)}
             if outcome["result"] == "fix":
                 rounds = current.get("fix_rounds", 0) + 1
                 fields["fix_rounds"] = rounds
