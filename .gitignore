@@ -17,3 +17,4 @@ config.yaml
 .lokay/*
 !.lokay/approach.md
 .lokay/localize.json
+*.log
