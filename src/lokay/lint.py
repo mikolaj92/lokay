@@ -98,9 +98,13 @@ def lint_diff(diff: str, head: str, cwd: Path, lokay_rules: bool, neutral=None) 
                     errors.append(f"{path}: recorded tick fixture changed -> never edit recordings; adjust replay matching in src/lokay/effects/replay.py")
     added = {}
     for path, number, kind, text in diff_lines(diff):
-        if kind == "+" and lokay_rules and path.startswith("src/") and (
-                "--add" + "-label" in text
-                or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)):
+        if (kind == "+" and lokay_rules and path.startswith("src/")
+                and path != "src/lokay/effects/gh.py"
+                and ("--add" + "-label" in text
+                     or re.search(r"['\"]label['\"]\s*,\s*['\"]create['\"]", text)
+                     or re.search(r"['\"]--json['\"]\s*,\s*['\"][^'\"]*\blabels\b", text)
+                     or re.search(r"labels\[\]=", text)
+                     or re.search(r"(?:==|!=|\bin\b)\s*['\"]lokay-(?:parked|infeasible)['\"]|['\"]lokay-(?:parked|infeasible)['\"]\s*(?:==|!=|\bin\b)", text))):
             errors.append(f"{path}:{number}: label state -> use persisted state or a body marker")
         if kind != "+" or not path.endswith((".py", ".mojo", ".🔥")):
             continue
