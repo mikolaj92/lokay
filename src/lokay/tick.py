@@ -538,12 +538,13 @@ def pick(env: dict[str, str] | None = None) -> dict:
                         resumed = {}
                         if pr:
                             branch = pr["headRefName"]
-                            labelled = any(label["name"] == "lokay-parked" for label in pr.get("labels", []))
-                            if labelled:
+                            try:
                                 gh_ok([
                                     "pr", "edit", str(pr["number"]), "--repo", name,
                                     "--remove-label", "lokay-parked",
                                 ], error="park label removal failed", include_stdout=True)
+                            except RuntimeError:
+                                pass
                             if saved.get("result") == "parked":
                                 resumed = store.escalation_fields(saved)
                                 resumed.pop("node")
