@@ -1068,6 +1068,44 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
 print("full log checks: green")
 PY
 uv run python - <<'PY'
+import os
+from contextlib import ExitStack
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from lokay import checks, main_guard, review, store
+
+with TemporaryDirectory() as directory, ExitStack() as stack:
+    root = Path(directory)
+    stack.enter_context(patch.dict(os.environ, {"LOKAY_STATE_DIR": directory, "HOME": directory}))
+    for key, value in (("HOME", root), ("RUNS", root / "runs"), ("LOCKS", root / "locks")):
+        stack.enter_context(patch.object(store, key, value))
+    argv = ["pytest"]
+    env = "browserType.launch: Executable doesn't exist; run playwright install"
+    pr_log = "1 passed\nFAILED tests/test_ui.py::test_page - " + env
+    ci = {"sha": "S", "argv": argv, "result": "red", "tested": True, "executed": 2, "ci": "no_ci",
+          "notes": [], "log": pr_log, "failed": [{"warstwa": "pytest", "plik": "", "log": pr_log}]}
+    main_ci = {"sha": "MAIN", "argv": argv, "result": "red", "tested": False, "executed": 0, "ci": "no_ci",
+               "notes": [], "log": env, "failed": [{"warstwa": "setup", "plik": "", "log": env}]}
+    main = {"status": "red", "baseline": {"sha": "MAIN", "argv": argv, "ci": main_ci}}
+    stack.enter_context(patch.object(main_guard, "check_main", return_value=main))
+    stack.enter_context(patch.object(main_guard, "run_repo_tests",
+                                     return_value={**main_ci, "log": pr_log, "tested": True}))
+    compared = main_guard.local_baseline("owner/repo", root, ci)
+    x = checks.CheckInput("owner/repo", 1, "S", "", "", "", [], compared, root)
+    verdict = review.verdict("S", compared, [], (checks.local_tests(x), checks.ci_green(x)))
+    assert verdict["result"] != "fix", verdict
+    assert compared["baseline"]["inherited"] == ["tests/test_ui.py::test_page"], compared
+    assert store.main_status()["owner/repo"]["status"] == "red", store.main_status()
+    green = {"status": "green", "baseline": {"sha": "MAIN2", "argv": argv,
+             "ci": {**main_ci, "sha": "MAIN2", "result": "green", "tested": True, "failed": [], "log": "2 passed"}}}
+    store.save_main_status("owner/repo", main)
+    store.save_main_status("owner/repo", green)
+    assert store.main_baseline("owner/repo", "MAIN")["ci"]["failed"][0]["warstwa"] == "setup"
+print("base test checks: green")
+PY
+uv run python - <<'PY'
 from pathlib import Path
 from tempfile import TemporaryDirectory
 

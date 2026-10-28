@@ -10,7 +10,7 @@ from pathlib import Path
 from lokay.config import repo as repo_config
 from lokay.effects.gh import gh_json, gh_ok, fit_body
 from lokay.effects.git import git, base_branch, worktree_remove
-from lokay.store import main_status, save_main_status
+from lokay.store import main_baseline, main_status, save_base_test, save_main_status
 from lokay.types import Finding, parse_finding
 
 TITLE = "lokay: main czerwony"
@@ -100,7 +100,10 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     ci = baseline["ci"]
     tested = ci.get("tested") is True
     lock = baseline["lockfile"]
-    status = ("red" if lock["status"] == "fail" or (tested and ci["result"] != "green")
+    base_test = {} if tested else main_baseline(repo, sha).get("base_test") or {}
+    if base_test:
+        baseline = {**baseline, "base_test": base_test}
+    status = ("red" if lock["status"] == "fail" or (tested and ci["result"] != "green") or base_test
               else "green" if tested and lock["status"] == "pass" else "unknown")
     if revision:
         return {"status": status, "baseline": baseline}
@@ -124,7 +127,8 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
             if isinstance(item := parse_finding(raw), Finding))
         body = (f"Main {status}. Napraw przez Plan → Build → Check → Fix → Merge.\n"
                 f"Culprit: {dumps(culprit)} · tested SHA: `{sha}`\n\n"
-                f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
+                + (f"Testy na bazie: {dumps(base_test.get('failed', []))}\n\n" if base_test else "")
+                + f"Diff:\n```diff\n{diff[:12000]}\n```\n\n"
                 f"Test log (tested={ci.get('tested', False)}):\n```\n{ci['log'][-12000:]}\n```\n\n"
                 f"Lock checks ({lock['status']}):\n```\n{lock['reason']}\n{lock_log}\n```")
         if result["exhausted_sha"] != sha:
@@ -156,26 +160,64 @@ def check_main(repo: str, clone_path: Path, merge_sha: str | None = None, pr: in
     return result
 
 
-def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = None) -> dict:
+def base_tests(repo: str, clone_path: Path, baseline: dict, failures: set[str], config: dict | None = None) -> dict:
+    from lokay.effects.git import git_try, worktree_remove
+    from lokay.setup import prepare_dependencies
+
+    argv = list(baseline.get("argv") or [])
+    names = sorted(item for item in failures if "::" in item or item.endswith(".py"))
+    if not argv or "-c" in argv or not any("pytest" in token for token in argv) or not names:
+        return {}
+    sha = baseline.get("sha") or ""
+    probe_config = {"name": repo, "test": [*argv, *names],
+                    "test_timeout": (config or {}).get("test_timeout", 600)}
+    with tempfile.TemporaryDirectory(prefix="lokay-base-test-") as temporary:
+        worktree = Path(temporary) / "checkout"
+        code, _, _ = git_try(clone_path, "worktree", "add", "--detach", str(worktree), sha, timeout=60)
+        if code:
+            worktree = clone_path
+        try:
+            prepare_dependencies(worktree, probe_config, 0)
+            return {"sha": sha, "argv": probe_config["test"], **run_repo_tests(probe_config, sha, worktree)}
+        finally:
+            if worktree != clone_path:
+                cleanup = worktree_remove(clone_path, worktree)
+                if cleanup["result"] != "removed":
+                    raise RuntimeError(cleanup.get("error") or "worktree cleanup failed")
+
+
+def local_baseline(repo: str, clone_path: Path, ci: dict, *, base: str | None = None,
+                   config: dict | None = None) -> dict:
     from lokay.review import log_excerpt, test_failures
 
     main = check_main(repo, clone_path, base=base)["baseline"]
-    if (ci.get("tested") is not True
-            or main["ci"].get("tested") is not True or main["ci"]["result"] != "red") or any(
-        item.get("warstwa") == "setup" for item in main["ci"].get("failed", [])
-    ):
-        return ci
-    if ci.get("argv") != main.get("argv"):
+    if ci.get("tested") is not True or ci.get("argv") != main.get("argv"):
         return ci
     failures = test_failures(ci["log"])
-    inherited = test_failures(main["ci"]["log"])
-    if not failures or not inherited:
+    if not failures:
         return ci
+    probe = {}
+    if main["ci"].get("tested") is True and main["ci"]["result"] == "red":
+        inherited = test_failures(main["ci"]["log"])
+    else:
+        probe = base_tests(repo, clone_path, main, failures, config)
+        if not probe:
+            return ci
+        inherited = {item for item in test_failures(probe.get("log", "")) if item in failures}
+        if inherited:
+            record = {"sha": main.get("sha"), "argv": probe["argv"], "failed": sorted(inherited),
+                      "log": log_excerpt(probe.get("log", ""))}
+            save_main_status(repo, {**main_status().get(repo, {}), "status": "red",
+                                    "checked_at": time.time(), "baseline": {**main, "base_test": record}})
+            save_base_test(repo, main.get("sha") or "", record)
     novel = sorted(failures - inherited)
     failed = [{"warstwa": "tests", "plik": item, "log": log_excerpt(ci["log"]),
                "on_main": False} for item in novel]
-    return {**ci, "baseline": {"sha": main["sha"], "argv": main.get("argv"),
-                              "failures": sorted(inherited),
-                              "inherited": sorted(failures & inherited)},
-            "result": "red" if novel else "green", "failed": failed,
-            "tested": ci.get("tested", False) or not novel}
+    baseline = {"sha": main["sha"], "argv": main.get("argv"),
+                "failures": sorted(inherited), "inherited": sorted(failures & inherited)}
+    if probe:
+        baseline["base_test"] = {"sha": main.get("sha"), "argv": probe["argv"],
+                                 "failed": sorted(inherited),
+                                 "passed": probe.get("result") == "green"}
+    return {**ci, "baseline": baseline, "result": "red" if novel else "green",
+            "failed": failed, "tested": ci.get("tested", False) or not novel}
