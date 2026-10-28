@@ -8,7 +8,7 @@ from lokay.gates import gate_rows
 from lokay.types import (
     PLAN_RESET, Run, Event, EnteredNode, Planned, Synthesized, Built, Checked, Merged, Closed, Reopened, Failed,
     Retried, FixToBuild, Published, Fixed, RedMain, Updated, Dispatched, Progress, RepoSnapshot, Snapshot, Pick, pr_number,
-    check_places,
+    check_places, parse_finding,
 )
 
 
@@ -27,6 +27,17 @@ def same_patch(state: dict, diff_fingerprint: str) -> bool:
 
 def red_main_allows(status: dict, issue: int, children: list) -> bool:
     return status.get("status") != "red" or issue == status.get("issue") or issue in children
+
+
+def question_rows(rows) -> bool:
+    from lokay.review import rule_catalog
+
+    kinds = rule_catalog()
+    rules = {rule: kind for kind, rule in kinds.items()}
+    return bool(rows) and all(
+        (parse_finding(row).lens or row.get("warstwa") or rules.get(row.get("rule_id"))) in kinds
+        and row.get("warstwa") in (None, "", "scope")
+        for row in rows)
 
 
 def reopen_pr_allowed(state: dict, pr: dict, issue_open: bool) -> bool:
@@ -118,9 +129,15 @@ def step(run: Run, event: Event) -> Run:
             fields["check_places"] = {"sha": outcome.get("sha"), "keys": places}
             repeated = ({tuple(key) for key in places}
                         == {tuple(key) for key in previous.get("keys") or ()})
-            if (outcome["result"] == "fix" and repeated and previous.get("sha") and outcome.get("sha")
-                    and previous["sha"] != outcome["sha"] and gate_rows(outcome.get("uwagi"))):
+            after_fix = bool(previous.get("sha") and outcome.get("sha")
+                             and previous["sha"] != outcome["sha"])
+            if (outcome["result"] == "fix" and repeated and after_fix
+                    and gate_rows(outcome.get("uwagi"))):
                 fields.update(node="plan", **deepcopy(PLAN_RESET), reason="same rule at same place after Fix")
+            elif (outcome["result"] == "fix" and repeated and after_fix
+                  and question_rows(outcome.get("uwagi"))):
+                fields.update(node="check", dispute_pending=True,
+                              reason="same LLM question at same place after Fix")
             elif outcome["result"] == "fix":
                 rounds = current.get("fix_rounds", 0) + 1
                 fields["fix_rounds"] = rounds

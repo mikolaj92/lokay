@@ -4592,6 +4592,8 @@ assert gate["node"] == "plan" and gate["pr"] == 7, gate
 assert gate["reason"] == "same rule at same place after Fix", gate["reason"]
 other = loop(finding("weakened_tests", "tests/a.py", 3), finding("weakened_tests", "tests/b.py", 3))
 assert other["node"] == "fix", other
+lens = loop(finding("llm_docs", "README.md", 10), finding("llm_docs", "README.md", 12))
+assert lens["node"] not in ("fix", "plan"), lens
 print("same rule checks: green")
 PY
 uv run lokay replay fixtures/replay/
