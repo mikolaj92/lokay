@@ -1349,6 +1349,28 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                                   f"Check: same patch after replan, diff={diff_fingerprint}, parked until origin/{base} moves from {main_sha}")
                     return {"result": "same_patch", "reason": "same patch after replan", "same_main_sha": main_sha}
                 state_update(picked["repo"], picked["issue"], replan_diff_fingerprint=None)
+        if pending == "check" and saved.get("dispute_pending"):
+            def dispute_plan(rows):
+                prompt = replan_prompt(
+                    picked,
+                    "same LLM question at same place after Fix; revise the plan against every finding of that rule.",
+                    rows, sha)
+                state_update(picked["repo"], picked["issue"],
+                             _event={"action": "replan"}, plan_prompt=prompt,
+                             fix_counts=[], diff_fingerprint=None, dispute_pending=False)
+                rounds_append(picked["repo"], picked["issue"], "Dispute upheld -> Plan")
+                return "continue", (sha, "plan", verdict)
+
+            dispute = finish.dispute(picked, sha, verdict, diff, head, dispute_plan)
+            if dispute is not None:
+                signal, outcome = dispute
+                if signal == "return":
+                    return outcome
+                sha, pending, verdict = outcome
+                continue
+            state_update(picked["repo"], picked["issue"], dispute_pending=False)
+            pending = "fix"
+            continue
         if pending == "fix" and verdict:
             signal, outcome = finish.fix(
                 picked, worktree, branch, sha, verdict, diff, head, diff_fingerprint, repo,
