@@ -1,0 +1,1 @@
+gitdir: /Users/mini-m4-0/Developer/datasource-kit/main/.git/worktrees/main-wt-113

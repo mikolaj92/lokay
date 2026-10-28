@@ -1,0 +1,261 @@
+diff --git a/README.md b/README.md
+index 8b98912..f7d56ba 100644
+--- a/README.md
++++ b/README.md
+@@ -404,8 +404,8 @@ recording policy are its own responsibility.
+ 
+ This boundary intentionally does **not** create or finalize runs, mint IDs,
+ retry, checkpoint, persist business data, clean results, or manage result
+-lifetimes. The optional Fala execution and artifact adapters are separate; neither
+-is imported by the dependency-free core.
++lifetimes. The optional Fala execution adapter is not imported by the
++dependency-free core.
+ 
+ ## Install
+ 
+@@ -418,7 +418,7 @@ Core has no third-party runtime dependencies. Optional integrations are lazy:
+ 
+ ```bash
+ pip install "datasource-kit[profiles]"   # YAML profile loading
+-pip install "datasource-kit[fala]"       # Fala execution + artifact adapters
++pip install "datasource-kit[fala]"       # Fala execution adapter
+ pip install "datasource-kit[fastapi]"    # FastAPI control-plane router
+ ```
+ 
+diff --git a/pyproject.toml b/pyproject.toml
+index 27da8f3..705960e 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -16,7 +16,6 @@ dependencies = []
+ datasource-kit = "datasource_kit.cli:main"
+ 
+ [project.optional-dependencies]
+-# Blob/artifact resolution and in-process journal recording only.
+ # Fala is GitHub-only (name = "fala"); the PEP 508 URL keeps pip off the
+ # unrelated PyPI project of the same name. Adapter needs record_in_process
+ # (Fala 0.7.28+).
+diff --git a/src/datasource_kit/adapters/fala.py b/src/datasource_kit/adapters/fala.py
+index 87a4561..120b6e5 100644
+--- a/src/datasource_kit/adapters/fala.py
++++ b/src/datasource_kit/adapters/fala.py
+@@ -1,23 +1,17 @@
+-"""Optional Fala execution and artifact adapters."""
++"""Optional Fala execution adapter."""
+ 
+ from __future__ import annotations
+ 
+ from collections.abc import Callable, Mapping
+-from io import BytesIO
+ from os import PathLike
+-from pathlib import Path
+-from typing import Any, BinaryIO, Protocol, TypeVar
++from typing import Any, Protocol, TypeVar
+ 
+ from datasource_kit.execution import ExecutionRequest
+-from datasource_kit.protocols import ArtifactStore
+ 
+-__all__ = ["FalaArtifactStore", "FalaExecutionBackend"]
++__all__ = ["FalaExecutionBackend"]
+ 
+ _T = TypeVar("_T")
+ 
+-_INSTALL_HINT = (
+-    "FalaArtifactStore requires the 'fala' extra: pip install datasource-kit[fala]"
+-)
+ _EXECUTION_INSTALL_HINT = (
+     "FalaExecutionBackend requires the 'fala' extra: pip install datasource-kit[fala]"
+ )
+@@ -25,28 +19,6 @@ _EXECUTION_CAPABILITY_ERROR = (
+     "FalaExecutionBackend requires Fala 0.7.28 or newer with the public "
+     "record_in_process API"
+ )
+-_BLOB_KIND = "blob"
+-_PAYLOAD_FILENAME = "payload.bin"
+-
+-
+-class _FalaArtifactRef(Protocol):
+-    uri: str
+-
+-
+-class _FalaArtifactRefFactory(Protocol):
+-    def __call__(self, *, kind: str, uri: str) -> object: ...
+-
+-
+-class _FalaFileArtifactStore(Protocol):
+-    def put_fileobj(
+-        self,
+-        *,
+-        kind: str,
+-        fileobj: BinaryIO,
+-        filename: str,
+-    ) -> _FalaArtifactRef: ...
+-
+-    def resolve(self, artifact: object) -> Path: ...
+ 
+ 
+ class _RecordInProcess(Protocol):
+@@ -99,30 +71,3 @@ class FalaExecutionBackend:
+             inputs=request.inputs,
+             metadata=request.metadata,
+         )
+-
+-
+-class FalaArtifactStore(ArtifactStore):
+-    """Thin ``ArtifactStore`` adapter over Fala's file artifact store."""
+-
+-    def __init__(self, root: str | PathLike[str]) -> None:
+-        try:
+-            from fala.artifacts import ArtifactRef, FileArtifactStore
+-        except ImportError as exc:
+-            raise ImportError(_INSTALL_HINT) from exc
+-
+-        self._artifact_ref: _FalaArtifactRefFactory = ArtifactRef
+-        self._store: _FalaFileArtifactStore = FileArtifactStore(Path(root))
+-
+-    def store(self, payload: bytes) -> str:
+-        """Store bytes in Fala and return the content-addressed artifact URI."""
+-        artifact = self._store.put_fileobj(
+-            kind=_BLOB_KIND,
+-            fileobj=BytesIO(payload),
+-            filename=_PAYLOAD_FILENAME,
+-        )
+-        return artifact.uri
+-
+-    def resolve(self, ref: str) -> bytes:
+-        """Resolve a Fala artifact URI and return the payload bytes."""
+-        artifact = self._artifact_ref(kind=_BLOB_KIND, uri=ref)
+-        return self._store.resolve(artifact).read_bytes()
+diff --git a/src/datasource_kit/adapters/fastapi.py b/src/datasource_kit/adapters/fastapi.py
+index d97d7fb..567b135 100644
+--- a/src/datasource_kit/adapters/fastapi.py
++++ b/src/datasource_kit/adapters/fastapi.py
+@@ -1,8 +1,7 @@
+ """Optional FastAPI adapter: an ``APIRouter`` over :class:`WorkerControlPlane`.
+ 
+-Mirrors the ``fala`` artifact-store adapter (and, in the consuming host, the
+-my-auth / my-usermanager pattern): the third-party dependency is imported
+-lazily inside the factory, so importing this module never pulls in FastAPI.
++Following the consuming host's my-auth / my-usermanager pattern, the dependency
++is imported lazily inside the factory, so importing this module never pulls in FastAPI.
+ Install the extra to use it::
+ 
+     pip install datasource-kit[fastapi]
+diff --git a/tests/adapters/test_fala_artifact_store.py b/tests/adapters/test_fala_artifact_store.py
+index 7c58a05..3019118 100644
+--- a/tests/adapters/test_fala_artifact_store.py
++++ b/tests/adapters/test_fala_artifact_store.py
+@@ -1,24 +1,13 @@
+ from __future__ import annotations
+ 
+ import builtins
+-import hashlib
+ import sys
+-import types
+-from pathlib import Path
+-from typing import BinaryIO, Final
+ 
+ import pytest
+ 
+ 
+-_INSTALL_HINT: Final = (
+-    "FalaArtifactStore requires the 'fala' extra: "
+-    "pip install datasource-kit[fala]"
+-)
+-
+-
+ def _block_fala_imports(monkeypatch: [REDACTED] -> None:
+     monkeypatch.delitem(sys.modules, "fala", raising=False)
+-    monkeypatch.delitem(sys.modules, "fala.artifacts", raising=False)
+     real_import = builtins.__import__
+ 
+     def guarded_import(
+@@ -35,50 +24,6 @@ def _block_fala_imports(monkeypatch: [REDACTED] -> None:
+     monkeypatch.setattr(builtins, "__import__", guarded_import)
+ 
+ 
+-class _FakeArtifactRef:
+-    def __init__(self, *, kind: str, uri: str) -> None:
+-        self.kind = kind
+-        self.uri = uri
+-
+-
+-class _FakeFileArtifactStore:
+-    def __init__(self, root: str | Path) -> None:
+-        self.root = Path(root)
+-        self._payloads: dict[str, bytes] = {}
+-
+-    def put_fileobj(
+-        self,
+-        *,
+-        kind: str,
+-        fileobj: BinaryIO,
+-        filename: str,
+-        artifact_id: str | None = None,
+-        metadata: dict[str, object] | None = None,
+-    ) -> _FakeArtifactRef:
+-        payload = fileobj.read()
+-        digest = hashlib.sha256(payload).hexdigest()
+-        uri = f"fala-artifact://sha256/{digest}"
+-        self._payloads[uri] = payload
+-        return _FakeArtifactRef(kind=kind, uri=uri)
+-
+-    def resolve(self, artifact: _FakeArtifactRef) -> Path:
+-        digest = artifact.uri.removeprefix("fala-artifact://sha256/")
+-        target = self.root / "blobs" / "sha256" / digest[:2] / digest
+-        target.parent.mkdir(parents=True, exist_ok=True)
+-        target.write_bytes(self._payloads[artifact.uri])
+-        return target
+-
+-
+-def _install_fake_fala(monkeypatch: [REDACTED] -> None:
+-    package = types.ModuleType("fala")
+-    artifacts = types.ModuleType("fala.artifacts")
+-    artifacts.ArtifactRef = _FakeArtifactRef
+-    artifacts.FileArtifactStore = _FakeFileArtifactStore
+-    package.artifacts = artifacts
+-    monkeypatch.setitem(sys.modules, "fala", package)
+-    monkeypatch.setitem(sys.modules, "fala.artifacts", artifacts)
+-
+-
+ def test_importing_core_and_adapters_when_fala_missing(
+     monkeypatch: [REDACTED],
+ ) -> None:
+@@ -92,38 +37,3 @@ def test_importing_core_and_adapters_when_fala_missing(
+     # Then: import succeeds without touching fala.
+     assert datasource_kit.__name__ == "datasource_kit"
+     assert adapters.__name__ == "datasource_kit.adapters"
+-
+-
+-def test_fala_artifact_store_requires_fala_extra_when_missing(
+-    monkeypatch: [REDACTED],
+-) -> None:
+-    # Given: the adapter module is importable, but fala itself is not.
+-    from datasource_kit.adapters.fala import FalaArtifactStore
+-
+-    _block_fala_imports(monkeypatch)
+-
+-    # When / Then: constructing the adapter raises the install hint.
+-    with pytest.raises(ImportError) as exc_info:
+-        FalaArtifactStore("unused")
+-    assert str(exc_info.value) == _INSTALL_HINT
+-
+-
+-def test_fala_artifact_store_round_trips_bytes_through_fala(
+-    monkeypatch: [REDACTED],
+-    tmp_path: Path,
+-) -> None:
+-    # Given: a fala-compatible FileArtifactStore implementation is importable.
+-    _install_fake_fala(monkeypatch)
+-    from datasource_kit import ArtifactStore
+-    from datasource_kit.adapters.fala import FalaArtifactStore
+-
+-    store = FalaArtifactStore(tmp_path)
+-
+-    # When: payload bytes are stored and resolved through the adapter.
+-    ref = store.store(b"payload")
+-    resolved = store.resolve(ref)
+-
+-    # Then: the adapter satisfies the kit protocol and returns the original bytes.
+-    assert isinstance(store, ArtifactStore)
+-    assert ref.startswith("fala-artifact://sha256/")
+-    assert resolved == b"payload"

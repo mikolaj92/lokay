@@ -92,11 +92,16 @@ def extract(source: Path, directory: Path, repo: str, issue: int, prefix: str) -
     diff = diffs[-1]["attempts"][-1]["stdout"]
     base = diffs[-1]["argv"][2].removeprefix("origin/").removesuffix("...HEAD")
     gh = next(effect["argv"][0] for effect in calls if Path(effect.get("argv", [""])[0]).name == "gh")
-    decision_effect = next(effect for effect in calls if "requests" in effect)
-    decision = decision_effect["input"]["state"]
-    wire = decision_effect["requests"][0]["body"]
-    run = Path(decision["diff_path"]).parent
-    home = run.parents[2]
+    decision_effect = next((effect for effect in calls if "requests" in effect), None)
+    if decision_effect is None:
+        home = Path("/home/lokay")
+        run = home / "runs" / repo / str(issue)
+        wire = {}
+    else:
+        decision = decision_effect["input"]["state"]
+        wire = decision_effect["requests"][0]["body"]
+        run = Path(decision["diff_path"]).parent
+        home = run.parents[2]
     diff_path = str(run / "check-input.patch")
     test_outputs = [row["effect"]["attempts"][-1] for row in rows
                     if first["seq"] < row["seq"] < last["seq"] and row.get("call")
@@ -140,7 +145,7 @@ def extract(source: Path, directory: Path, repo: str, issue: int, prefix: str) -
     selected = [row for row in rows if first["seq"] <= row["seq"] <= last["seq"]
                 and row["kind"] in ("call", "transition")]
     manifest = {"entry": "check", "api": "chat" if "messages" in wire else "tensorfold" if "input" in wire else "mini",
-                "model": wire.get("model", ""), "repo": {"name": repo, "clone_path": str(root), "test": tests,
+                "model": wire.get("model", "") if wire else "", "repo": {"name": repo, "clone_path": str(root), "test": tests,
                 "merge": "on", "syntax_only": ci.get("syntax_only", False)}, "issue": issue,
                 "gh": gh, "time": first["event"]["ts"], "paths": {str(home): "home/.lokay",
                 str(root.parent): "worktree"}, "before": first["before"], "base": base,
@@ -157,6 +162,19 @@ def extract(source: Path, directory: Path, repo: str, issue: int, prefix: str) -
             store.write_artifact(staging / name, text)
             files[target] = name
         store.write_segment(directory, staging, {**manifest, "files": files}, selected)
+
+
+SOURCES = ("escape_check", "revert", "reopen", "red_main", "fix_pr", "clean")
+
+
+def bad_case(case: Path) -> tuple[Path, dict]:
+    meta = json.loads(case.read_text())
+    if meta.get("source") not in SOURCES or meta.get("expected") not in ("fix", "merge"):
+        raise ValueError(f"invalid bad case {case}")
+    segment_path = case.parent / meta.get("segment", "segment.jsonl")
+    if not segment_path.is_file():
+        raise ValueError(f"missing bad case segment {segment_path}")
+    return segment_path, meta
 
 
 def main(argv: list[str]) -> int:
@@ -184,6 +202,38 @@ def main(argv: list[str]) -> int:
             return 0
         if filters.tick is not None:
             raise ValueError("--tick requires --extract")
+        cases = sorted(source.glob("*/case.json")) if source.is_dir() else []
+        if cases:
+            from lokay import store
+            from lokay.effects.replay import Mismatch, segment
+
+            if filters.rerecord is not None:
+                if filters.rerecord.exists():
+                    raise ValueError("--rerecord directory already exists")
+                for case in cases:
+                    segment_path, meta = bad_case(case)
+                    with segment_path.open() as stream:
+                        rows = [json.loads(line) for line in stream]
+                    target = filters.rerecord / case.parent.name
+                    segment(segment_path, rows, rerecord=target)
+                    store.write_json(target / "case.json", {**meta, "segment": "segment.jsonl"})
+                print(f"replay: re-recorded {len(cases)} bad cases")
+                return 0
+            for case in cases:
+                segment_path, meta = bad_case(case)
+                with segment_path.open() as stream:
+                    rows = [json.loads(line) for line in stream]
+                try:
+                    outcome = segment(segment_path, rows)
+                except Mismatch as exc:
+                    raise ValueError(f"{case}: {exc}") from None
+                if outcome.get("result") != meta["expected"]:
+                    print(f"replay: {case} expected {meta['expected']} got {outcome.get('result')}",
+                          file=sys.stderr)
+                    return 1
+                ticks += 1
+            print(f"replay: {ticks} bad cases ok")
+            return 0
         if filters.rerecord is not None and (source.is_dir() or not source.with_suffix(".json").is_file()):
             raise ValueError("--rerecord requires a single segment path")
         if filters.rerecord is not None and filters.rerecord.exists():

@@ -95,7 +95,7 @@ def compatible_state(actual: dict, expected: dict) -> dict:
     return compatible_checks(actual, expected)
 
 
-def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> None:
+def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> dict:
     tick = import_module("lokay.tick")
     pi = import_module("lokay.effects.pi")
     gh = import_module("lokay.effects.gh")
@@ -405,3 +405,4 @@ def segment(path: Path, rows: list[dict], *, rerecord: Path | None = None) -> No
         if rerecord is not None:
             store.write_segment(rerecord, path.parent, {**manifest, "outcome": relocate(outcome, True)},
                                 relocate(recorded, True))
+        return outcome
