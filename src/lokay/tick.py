@@ -27,7 +27,8 @@ from lokay.effects.gh import gh_json, gh_ok, fit_body, auth_status, host_ops, op
 from lokay.effects.retry import retry
 from lokay.store import acquire_lock, release_lock, lock_path
 from lokay.effects.pi import (OneHarnessRunDone, cleanup_process_groups, kill_process_groups,
-                       process_groups, run_process, tick_harness_started)
+                       process_groups, recover_host_down, record_host_down, run_process,
+                       tick_harness_started)
 from lokay.store import repo_attempt, repo_last_attempt, rounds_append, run_dir, state_read, state_update
 
 
@@ -234,7 +235,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
     report = probes(env)
     if not host_ready(report):
         failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
+        record_host_down(failed)
         return {"result": "idle", "reason": "host_down", "failed": failed}
+    recover_host_down()
     child = os.environ if env is None else env
     repos_file = child.get("LOKAY2_REPOS_FILE")
     only_repo = child.get("LOKAY2_REPO")

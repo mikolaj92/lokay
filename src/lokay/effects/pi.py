@@ -59,13 +59,47 @@ def kill_process_groups(pgids: Sequence[int]) -> None:
     save_process_groups()
 
 
+def read_process_group_registry(path: Path) -> list[int]:
+    saved = json.loads(path.read_text())
+    if not isinstance(saved, list) or any(type(pgid) is not int or pgid <= 1 or pgid == os.getpgrp() for pgid in saved):
+        raise ValueError("invalid process group registry")
+    return saved
+
+
+def registered_process_groups() -> dict[Path, list[int]]:
+    directory = store.process_groups_path().parent
+    return {path: read_process_group_registry(path) for path in sorted(directory.glob("procs*.json"))}
+
+
+def record_host_down(failed: str) -> None:
+    if store.host_down():
+        return
+    pgids = sorted({pgid for saved in registered_process_groups().values() for pgid in saved})
+    store.save_host_down(failed, pgids)
+    store.log_event("host_down", failed=failed, pgids=pgids)
+
+
+def recover_host_down() -> None:
+    saved = store.host_down()
+    if not saved:
+        return
+    registries = registered_process_groups()
+    doomed = sorted(set(saved.get("pgids") or ())
+                    & {pgid for pgids in registries.values() for pgid in pgids})
+    for path, pgids in registries.items():
+        remaining = [pgid for pgid in pgids if pgid not in doomed]
+        if remaining != pgids:
+            store.write_json(path, remaining)
+    if doomed:
+        kill_process_groups(doomed)
+    store.clear_host_down()
+    store.log_event("host_recovered", pgids=doomed, down_at=saved.get("down_at"))
+
+
 def cleanup_process_groups() -> None:
     path = store.process_groups_path()
     if path.exists():
-        saved = json.loads(path.read_text())
-        if not isinstance(saved, list) or any(type(pgid) is not int or pgid <= 1 or pgid == os.getpgrp() for pgid in saved):
-            raise ValueError("invalid process group registry")
-        for pgid in saved:
+        for pgid in read_process_group_registry(path):
             process_groups.setdefault(pgid, None)
     kill_process_groups(list(process_groups))
 

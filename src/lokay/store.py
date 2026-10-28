@@ -639,6 +639,23 @@ def save_process_groups(pgids: list[int]) -> None:
     write_text_atomic(process_groups_path(), json.dumps(pgids))
 
 
+def host_down_path() -> Path:
+    return process_groups_path().parent / "host.json"
+
+
+def host_down() -> dict:
+    path = host_down_path()
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def save_host_down(failed: str, pgids: list[int]) -> None:
+    write_json(host_down_path(), {"down_at": time.time(), "failed": failed, "pgids": pgids})
+
+
+def clear_host_down() -> None:
+    remove_file(host_down_path())
+
+
 @contextmanager
 def shared_file_lock(path: Path):
     import fcntl
