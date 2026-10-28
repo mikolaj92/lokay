@@ -113,8 +113,15 @@ def step(run: Run, event: Event) -> Run:
                 fields.update(node="check", verdict=None)
         case Checked():
             fields["node"] = outcome["result"]
-            fields["check_places"] = {"sha": outcome.get("sha"), "keys": check_places(outcome)}
-            if outcome["result"] == "fix":
+            places = check_places(outcome)
+            previous = current.get("check_places") or {}
+            fields["check_places"] = {"sha": outcome.get("sha"), "keys": places}
+            repeated = ({tuple(key) for key in places}
+                        == {tuple(key) for key in previous.get("keys") or ()})
+            if (outcome["result"] == "fix" and repeated and previous.get("sha") and outcome.get("sha")
+                    and previous["sha"] != outcome["sha"] and gate_rows(outcome.get("uwagi"))):
+                fields.update(node="plan", **deepcopy(PLAN_RESET), reason="same rule at same place after Fix")
+            elif outcome["result"] == "fix":
                 rounds = current.get("fix_rounds", 0) + 1
                 fields["fix_rounds"] = rounds
                 if rounds >= FIX_ROUND_LIMIT and not gate_rows(outcome.get("uwagi")):

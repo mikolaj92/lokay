@@ -21,7 +21,7 @@ from lokay.effects import maintenance
 from lokay.effects.git import base_branch, merge_base_or_restart, restart_from_base, push, worktree_remove
 from lokay.effects.git import git, git_bytes, git_try, head as git_head
 
-from lokay.types import Finding, Note, parse_finding
+from lokay.types import Finding, Note, finding_summary, parse_finding
 from lokay.config import load_repos, repo as repo_config
 from lokay.effects.gh import gh_json, gh_ok, fit_body, auth_status, host_ops, open_issues, open_pr_for, pr_closed_by_factory
 from lokay.effects.retry import retry
@@ -1410,24 +1410,32 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         derived = graph.step(store.load(picked["repo"], picked["issue"]),
                              Checked(time.time(), outcome=verdict)).state
         pending = derived["node"]
-        findings = [finding for entry in derived.get("check_history", [])
-                    for finding in entry.get("findings", [])]
         if pending == "plan":
             from lokay.retro import publish
 
             split = derived.get("split_pending", False)
+            same_place = derived.get("reason") == "same rule at same place after Fix"
+            findings = [finding for entry in derived.get("check_history", [])
+                        for finding in entry.get("findings", [])]
+            if same_place:
+                rules = {key[0] for key in derived["check_places"]["keys"]}
+                findings = [finding_summary(row) for row in verdict.get("uwagi") or []
+                            if row.get("rule_id") in rules]
             prompt = replan_prompt(
                 picked,
                 ("Split this issue into smaller tasks against every finding below. " if split else "")
-                + f"Check→Fix did not converge in {graph.FIX_ROUND_LIMIT} rounds; revise the plan against every finding below.",
+                + ("same rule at same place after Fix; revise the plan against every finding of that rule."
+                   if same_place else f"Check→Fix did not converge in {graph.FIX_ROUND_LIMIT} rounds; revise the plan against every finding below."),
                 findings, sha)
             prompt += "\n\nEvery Check finding:\n" + dumps(findings, ensure_ascii=False)
             state_update(picked["repo"], picked["issue"],
                          _event={"action": "verdict", "outcome": verdict}, plan_prompt=prompt)
             _retry(picked, "plan", publish)
             rounds_append(picked["repo"], picked["issue"],
-                          "Fix round limit → split" if split else f"Fix round limit → Plan (hit {derived['fix_limit_hits']})")
-            store.log_event("fix_round_limit", hit=derived["fix_limit_hits"], repo=picked["repo"], issue=picked["issue"],
+                          "Fix round limit → split" if split
+                          else "Same rule at same place after Fix → Plan" if same_place
+                          else f"Fix round limit → Plan (hit {derived['fix_limit_hits']})")
+            store.log_event("fix_round_limit", hit=derived.get("fix_limit_hits", 0), repo=picked["repo"], issue=picked["issue"],
                             rounds=rounds, reason=derived["reason"])
             if split:
                 return _split_issue(picked, clone_path)

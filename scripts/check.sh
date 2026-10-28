@@ -4577,6 +4577,21 @@ assert place_key({"rule_id": "ci_green", "plik": ""}) == ("ci_green",)
 state = step(Run.from_state({"repo": "o/r", "issue": 1, "node": "check"}),
              Checked(0, {}, {"result": "fix", "sha": "S", "uwagi": [row]})).state
 assert state["check_places"] == {"sha": "S", "keys": check_places({"uwagi": [row]})}, state["check_places"]
+
+def finding(rule, path, line):
+    return {"rule_id": rule, "name": rule, "plik": path, "linia_od": line, "linia_do": line}
+
+def loop(*uwagi):
+    saved = {"repo": "o/r", "issue": 1, "node": "check", "pr": 7, "sha": "A",
+             "check_places": {"sha": "A", "keys": check_places({"uwagi": [uwagi[0]]})}}
+    return step(Run.from_state(saved),
+                Checked(0, {}, {"result": "fix", "sha": "B", "uwagi": list(uwagi)})).state
+
+gate = loop(finding("weakened_tests", "tests/a.py", 3), finding("weakened_tests", "tests/a.py", 40))
+assert gate["node"] == "plan" and gate["pr"] == 7, gate
+assert gate["reason"] == "same rule at same place after Fix", gate["reason"]
+other = loop(finding("weakened_tests", "tests/a.py", 3), finding("weakened_tests", "tests/b.py", 3))
+assert other["node"] == "fix", other
 print("same rule checks: green")
 PY
 uv run lokay replay fixtures/replay/
