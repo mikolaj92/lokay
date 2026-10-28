@@ -3366,14 +3366,14 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
                 assert f"Lokay parent: #1; split: 0; task: {index}" in args[args.index("--body") + 1].splitlines()
         assert publisher.call_count == hits + 1
     with ExitStack() as checks:
-        for hits in (1, 2, 5):
+        for hits in (0, 1, 2, 5):
             derived = graph.step(Run.from_state({"pr": 7, "node": "check",
                 "fix_rounds": graph.FIX_ROUND_LIMIT - 1, "fix_limit_hits": hits}),
                 Checked(1, outcome=verdict)).state
             assert derived["node"] == "plan" and derived["fix_rounds"] == 0, derived
             assert derived["fix_limit_hits"] == hits + 1 and derived["pr"] == 7, derived
-            assert not derived.get("split_pending"), derived
-            assert "children" not in derived and "split_tasks" not in derived, derived
+            assert bool(derived.get("split_pending")) == (hits >= 1), derived
+            assert derived.get("split_tasks") is None and list(derived.get("children") or []) == [], derived
         calls.clear()
         splitter.reset_mock()
         picked_pr = {"repo": name, "issue": 3}
@@ -3383,11 +3383,11 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
                            check_history=[{"sha": sha, "findings": findings}])
         result = tick._finish(picked_pr, root, "lokay/3", sha, [])
         saved = store.state_read(name, 3)
-        assert result == {"result": "pending", "next": "plan"}, result
-        assert saved["pr"] == 7 and saved["node"] == "plan", saved
-        assert "Split this issue" not in saved["plan_prompt"], saved["plan_prompt"]
-        assert calls == [], calls
-        splitter.assert_not_called()
+        assert len(result["children"]) == 2 and saved["awaiting"] == "children", saved
+        assert saved["pr"] == 7 and saved["node"] == "plan" and not saved["split_pending"], saved
+        assert "Split this issue" in saved["plan_prompt"], saved["plan_prompt"]
+        assert [args[:2] for args in calls] == [["issue", "create"]] * 2, calls
+        assert all(item["uzasadnienie"] in splitter.call_args.args[0] for item in findings)
         store.state_update(name, 3, split_pending=True)
         split_issue = checks.enter_context(patch.object(tick, "_split_issue"))
         sentinel = RuntimeError("normal prepare path reached")
@@ -3398,6 +3398,8 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
             assert exc is sentinel, exc
         else:
             raise AssertionError("normal prepare path not reached")
+        calls.clear()
+        splitter.reset_mock()
         ensure.assert_called_once_with(picked_pr)
         split_issue.assert_not_called()
         splitter.assert_not_called()
@@ -3411,8 +3413,8 @@ with TemporaryDirectory() as directory, ExitStack() as stack:
                                check_history=[{"sha": sha, "findings": findings}])
             result = tick._finish(picked_pr, root, "lokay/3", sha, [])
             saved = store.state_read(name, 3)
-            assert result == {"result": "pending", "next": "plan"}, result
-            assert saved["node"] == "plan" and saved["pr"] == 7, saved
+            assert result is split_issue.return_value, result
+            assert saved["node"] == "plan" and saved["pr"] == 7 and saved["split_pending"], saved
             snapshot = Snapshot(repos=(RepoSnapshot(name=name, prs=(), issues=(), states={3: saved}),),
                                 now=store.last_activity(saved) + 301)
             assert graph.pick(snapshot) is None

@@ -118,7 +118,7 @@ def step(run: Run, event: Event) -> Run:
                 rounds = current.get("fix_rounds", 0) + 1
                 fields["fix_rounds"] = rounds
                 if rounds >= FIX_ROUND_LIMIT and not gate_rows(outcome.get("uwagi")):
-                    if current.get("pr") is not None or current.get("fix_limit_hits", 0) == 0:
+                    if current.get("fix_limit_hits", 0) == 0:
                         fields.update(node="plan", **deepcopy(PLAN_RESET), fix_rounds=0,
                                       fix_limit_hits=current.get("fix_limit_hits", 0) + 1, result="pending",
                                       reason=f"fix round limit: {FIX_ROUND_LIMIT} Check→Fix rounds")

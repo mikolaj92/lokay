@@ -1415,7 +1415,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if pending == "plan":
             from lokay.retro import publish
 
-            split = derived.get("fix_limit_hits", 0) >= 2 and derived.get("pr") is None
+            split = derived.get("split_pending", False)
             prompt = replan_prompt(
                 picked,
                 ("Split this issue into smaller tasks against every finding below. " if split else "")
