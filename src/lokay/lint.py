@@ -79,7 +79,7 @@ def unit_test_hints(diff: str, neutral=None) -> dict[str, str]:
                "remove the added test code; never remove, merge or weaken existing assertions")
         for path in sorted({path for path in paths if is_test(path, added_lines.get(path, ()))
                             and not Path(path).is_absolute() and ".." not in Path(path).parts
-                            and not any(Path(path).parts[i:i + 2] in {("fixtures", "replay"), ("fixtures", "ticks")}
+                            and not any(Path(path).parts[i:i + 2] in {("fixtures", "replay"), ("fixtures", "ticks"), ("fixtures", "badcases")}
                                         for i in range(len(Path(path).parts) - 1))})
     }
 

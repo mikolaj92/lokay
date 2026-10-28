@@ -4466,5 +4466,23 @@ with TemporaryDirectory() as temporary, ExitStack() as stack:
     assert store.state_read(picked["repo"], picked["issue"]).get("h2_patch") is None, "empty patch without evidence is reused by the next Build"
 print("model error rollout checks")
 PY
+uv run python - <<'PY'
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+from lokay import checks, replay
+
+root = Path("fixtures/badcases")
+cases = [json.loads(path.read_text()) for path in sorted(root.glob("*/case.json"))]
+sources = {case["source"] for case in cases}
+assert {"escape_check", "fix_pr", "clean"} <= sources, sources
+assert all(case["expected"] == "merge" for case in cases if case["source"] == "clean")
+assert all(case["expected"] != "merge" for case in cases if case["source"] != "clean")
+assert replay.main([str(root)]) == 0
+with patch.object(checks, "CHECKS", ()):
+    assert replay.main([str(root)]) != 0
+print("bad cases checks")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/

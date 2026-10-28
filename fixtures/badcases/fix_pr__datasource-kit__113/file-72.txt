@@ -1,0 +1,3 @@
+Lokay parent: #96; split: 0; task: 0
+
+Zweryfikuj aktualny kod i dostępne API Fali. Usuń FalaArtifactStore oraz jego eksporty, przykłady użycia i testy podstawiające fikcyjny moduł fala.artifacts. Zachowaj ogólny protokół ArtifactStore i FalaExecutionBackend. Usuń wyłącznie nieaktualne odniesienia w dokumentacji; nie usuwaj niezwiązanych informacji o instalacji, uwierzytelnianiu ani sterowaniu procesami w adapterze FastAPI. Nie dodawaj komentarzy, docstringów ani testów jednostkowych. Uruchom istniejące testy bez zmiany źródła zależności Fala. Kryterium odbioru: kod nie importuje fala.artifacts, nie udostępnia fikcyjnego adaptera i zachowuje dotychczasowe działanie backendu wykonania. Zadanie można scalić niezależnie od aktualizacji zależności.
