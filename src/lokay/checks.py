@@ -240,7 +240,7 @@ def weakened_tests(x: CheckInput) -> CheckResult:
             continue
         match = re.fullmatch(r'("a/(?:\\.|[^"])*"|a/.*?) ("b/(?:\\.|[^"])*"|b/.*)', header[0])
         if match is None:
-            raise ValueError("invalid diff path")
+            continue
         path = match[1]
         if path.startswith('"'):
             path = ast.literal_eval(path)
@@ -452,7 +452,7 @@ def junk(x: CheckInput) -> CheckResult:
             continue
         path = _diff_path(block)
         if path is None:
-            raise ValueError("invalid diff path")
+            continue
         if Path(path).is_absolute() or ".." in Path(path).parts:
             continue
         if is_artifact(path, x.worktree):
@@ -463,7 +463,21 @@ def junk(x: CheckInput) -> CheckResult:
                        findings)
 
 
-CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk,
+def diff_paths(x: CheckInput) -> CheckResult:
+    invalid = []
+    seen = set()
+    for block in re.split(r"(?m)(?=^diff --git )", x.diff)[1:]:
+        path = _diff_path(block) or ""
+        if not path or Path(path).is_absolute() or ".." in Path(path).parts or path in seen:
+            invalid.append(path)
+        seen.add(path)
+    findings = tuple(Finding(path, 1, 1, "invalid diff path", "diff_paths") for path in invalid)
+    return CheckResult("diff_paths", "fail" if findings else "pass",
+                       "invalid diff paths: " + ", ".join(invalid) if findings else "diff paths are valid",
+                       findings)
+
+
+CHECKS = [ci_green, local_tests, merge_clean, lockfile, secrets, junk, diff_paths,
           no_new_comments, no_unit_tests, weakened_tests, deleted_files, encoded_rewrite, intent, docs]
 
 
