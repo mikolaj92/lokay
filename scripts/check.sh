@@ -4562,5 +4562,20 @@ with patch.object(checks, "CHECKS", ()):
     assert replay.main([str(root)]) != 0
 print("bad cases checks")
 PY
+uv run python - <<'PY'
+from lokay.graph import step
+from lokay.types import Checked, Run, check_places, place_key
+
+row = {"rule_id": "secrets", "plik": "src/app.py", "linia_od": 3, "linia_do": 3}
+assert place_key(row) == place_key({**row, "linia_od": 8, "linia_do": 9}) == ("secrets", "src/app.py")
+assert place_key({**row, "plik": "src/other.py"}) != place_key(row)
+assert place_key({"rule_id": "local_tests", "log": "FAILED tests/test_app.py::test_one - boom"}) == (
+    "local_tests", "tests/test_app.py::test_one")
+assert place_key({"rule_id": "ci_green", "plik": ""}) == ("ci_green",)
+state = step(Run.from_state({"repo": "o/r", "issue": 1, "node": "check"}),
+             Checked(0, {}, {"result": "fix", "sha": "S", "uwagi": [row]})).state
+assert state["check_places"] == {"sha": "S", "keys": check_places({"uwagi": [row]})}, state["check_places"]
+print("same rule checks: green")
+PY
 uv run lokay replay fixtures/replay/
 uv run lokay replay fixtures/ticks/
