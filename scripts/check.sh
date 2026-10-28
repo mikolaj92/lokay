@@ -1343,7 +1343,7 @@ from lokay.effects import git
 
 picked = {"repo": "owner/repo", "issue": 1}
 sha, new_sha = "old-head", "new-head"
-verdict = {"result": "fix", "uwagi": [{"pytanie": "checks", "plik": "src/x.py", "log": "failure"}]}
+verdict = {"result": "fix", "uwagi": [{"pytanie": "checks", "plik": "src/x.py", "log": "failure", "rule_id": "local_tests"}]}
 reason = "Fix made no progress; revise the plan."
 for changed, stalled in ((False, False), (True, False), (False, True)):
     saved = {"node": "fix", "sha": sha, "issue_title": "Repair", "issue_body": "Repair x",
@@ -1419,14 +1419,15 @@ from lokay.types import Run, dismissed_key, parse_event
 picked = {"repo": "owner/repo", "issue": 1}
 sha = "checked-head"
 findings = [{"pytanie": kind, "plik": "src/x.py", "linia_od": 1, "linia_do": 1,
-             "zmiana": "already resolved"} for kind in ("correctness", "scope")]
+             "zmiana": "already resolved", "rule_id": "llm_" + kind} for kind in ("correctness", "scope")]
 for choice, checks, failure, eligible in (
     ("false", "green", False, True), ("true", "green", False, True),
     ("false", "red", False, False), ("false", "green", True, False),
     ("false", "remote-red", False, False), ("false", "rechecked", False, False),
     ("false", "stale", False, False),
 ):
-    rows = findings + ([{"warstwa": "tests", "plik": "src/x.py", "log": "failure"}] if failure else [])
+    rows = findings + ([{"warstwa": "tests", "plik": "src/x.py", "log": "failure", "rule_id": "local_tests"}]
+                        if failure else [])
     verdict = {"result": "fix", "sha": sha, "uwagi": rows}
     saved = {"node": "fix", "sha": sha, "issue_title": "Repair", "issue_body": "Repair x",
              "local_ci": {"sha": "old" if checks == "stale" else sha,
@@ -1503,9 +1504,10 @@ from lokay.types import Checked, Run, parse_event
 
 picked = {"repo": "owner/repo", "issue": 1}
 rows = [{"pytanie": "no_new_comments", "plik": "src/x.py", "linie": [1, 1],
-         "zmiana": "docstring -> delete it"},
+         "zmiana": "docstring -> delete it", "rule_id": "no_new_comments"},
         {"lens": "weakened_tests", "plik": "tests/existing.py", "linia_od": 1,
-         "zmiana": "existing test changed but the issue body does not name it"}]
+         "zmiana": "existing test changed but the issue body does not name it",
+         "rule_id": "weakened_tests"}]
 for mode in ("empty", "changed", "mixed", "stalled"):
     with TemporaryDirectory() as directory, ExitStack() as stack:
         root = Path(directory)
@@ -1540,9 +1542,9 @@ for mode in ("empty", "changed", "mixed", "stalled"):
             generated.write_text("generated = True\n")
             git.git(worktree, "add", "--", "src/x.py", "tests/existing.py", "generated.py")
             git.git(worktree, "commit", "-m", "Gate examples")
-            cases = [{"name": "junk", "plik": "src/x.py"},
-                     {"lens": "junk", "plik": "tests/existing.py"},
-                     {"lens": "no_unit_tests", "plik": "generated.py"}]
+            cases = [{"name": "junk", "plik": "src/x.py", "rule_id": "junk"},
+                     {"lens": "junk", "plik": "tests/existing.py", "rule_id": "junk"},
+                     {"lens": "no_unit_tests", "plik": "generated.py", "rule_id": "no_unit_tests"}]
             git.revert_gates(worktree, git.gate_tasks(worktree, "main", git.head(worktree), cases))
             assert source.read_text() == "value = 1\n"
             assert test.read_text() == original_test and not generated.exists()
@@ -1553,7 +1555,8 @@ for mode in ("empty", "changed", "mixed", "stalled"):
         git.git(worktree, "commit", "-m", "Change")
         sha = git.head(worktree)
         findings = rows + ([{"pytanie": "check_correctness", "plik": "src/x.py",
-                             "linia_od": 2, "zmiana": "wrong value"}] if mode == "mixed" else [])
+                             "linia_od": 2, "zmiana": "wrong value", "rule_id": "llm_correctness"}]
+                           if mode == "mixed" else [])
         verdict = {"sha": sha, "result": "fix", "uwagi": findings}
         saved = {"node": "fix", "sha": sha, "issue_title": "Repair", "issue_body": "Repair x",
                  "no_progress": 6 if mode == "stalled" else 0,
@@ -1620,7 +1623,9 @@ for mode in ("empty", "changed", "mixed", "stalled"):
                                  "same", {}, worktree, "main", lambda: "new diff", lambda: None)
             assert resumed == result and git.head(worktree) == new_sha
             harness.assert_called_once()
-for findings, expected in ((rows, "fix"), (rows + [{"pytanie": "check_correctness", "plik": "src/x.py"}], "plan")):
+for findings, expected in ((rows, "fix"),
+                           (rows + [{"pytanie": "check_correctness", "plik": "src/x.py",
+                                     "rule_id": "llm_correctness"}], "plan")):
     for hits in (0, 1):
         run = graph.step(Run.from_state({"node": "check", "fix_rounds": graph.FIX_ROUND_LIMIT - 1,
                                         "fix_limit_hits": hits}),
@@ -1628,9 +1633,11 @@ for findings, expected in ((rows, "fix"), (rows + [{"pytanie": "check_correctnes
         assert run.state["node"] == expected, run.state
         assert bool(run.state.get("split_pending")) == (expected == "plan" and hits == 1)
 gate_uwagi = [{"pytanie": "weakened_tests", "plik": "tests/test_version.py", "linie": [36, 36],
-               "zmiana": "Removes 2 test assertions: tests/test_version.py", "uzasadnienie": ""}]
+               "zmiana": "Removes 2 test assertions: tests/test_version.py", "uzasadnienie": "",
+               "rule_id": "weakened_tests"}]
 for findings, expected in ((gate_uwagi, None),
-                           ([{"pytanie": "scope", "zmiana": "Restore the requested behavior"}],
+                           ([{"pytanie": "scope", "zmiana": "Restore the requested behavior",
+                              "rule_id": "llm_scope"}],
                             {"result": "pending", "next": "plan"})):
     saved = {"node": "fix", "fix_history": [{} for _ in range(6)], "no_progress": 6,
              "ladder_since": 1, "verdict": {"uwagi": findings}}
@@ -2028,7 +2035,8 @@ with TemporaryDirectory() as directory:
     assert result.status == "fail", result
     assert "docs/plan only instead of code" in result.reason, result
     assert result.findings == (Finding("README.md", 1, 1,
-        "issue needs a code change; implement it instead of editing docs", "intent"),)
+        "issue needs a code change; implement it instead of editing docs", "intent",
+        rule_id="intent"),)
     with patch("lokay.effects.git.merge_conflicts", return_value=[]), \
             patch("lokay.lint.git_output", return_value=""):
         assert any(row.name == "intent" and row.status == "fail" for row in run_checks(x))
@@ -2063,7 +2071,7 @@ with TemporaryDirectory() as directory:
     result = declared_scope(replace(x, diff=diff.replace("src/app.py", "src/other.py")))
     assert result.status == "fail", result
     assert result.findings == (Finding("src/other.py", 1, 1, "change outside declared scope",
-                                       "declared_scope"),), result.findings
+                                       "declared_scope", rule_id="declared_scope"),), result.findings
 print("declared scope check: green")
 PY
 uv run python - <<'PY'
@@ -2112,12 +2120,27 @@ with TemporaryDirectory() as directory:
     assert valid.status == "pass" and valid.findings == (), valid
     assert CHECKS.index(diff_paths) == CHECKS.index(junk) + 1, CHECKS
     parent = run(block.format("../etc/x.py"))
-    assert parent.findings == (Finding("../etc/x.py", 1, 1, "invalid diff path", "diff_paths"),), parent
+    assert parent.findings == (Finding("../etc/x.py", 1, 1, "invalid diff path", "diff_paths",
+                                       rule_id="diff_paths"),), parent
     assert parent.status == "fail", parent
     twice = run(block.format("src/x.py") * 2)
-    assert twice.findings == (Finding("src/x.py", 1, 1, "invalid diff path", "diff_paths"),), twice
+    assert twice.findings == (Finding("src/x.py", 1, 1, "invalid diff path", "diff_paths",
+                                      rule_id="diff_paths"),), twice
     assert twice.status == "fail", twice
 print("diff path checks: green")
+PY
+uv run python - <<'PY'
+from lokay.types import parse_finding
+
+for raw in ({"plik": "src/x.py", "zmiana": "value = 1"}, {"plik": "src/x.py", "rule_id": ""}):
+    try:
+        parse_finding(raw)
+    except ValueError:
+        continue
+    raise AssertionError(f"finding without rule_id parsed: {raw}")
+assert parse_finding({"plik": "src/x.py", "rule_id": "diff_paths"}).rule_id == "diff_paths"
+assert parse_finding({"pytanie": "docs", "note": "done"}).lens == "docs"
+print("finding rule id checks: green")
 PY
 uv run python - <<'PY'
 from lokay import graph

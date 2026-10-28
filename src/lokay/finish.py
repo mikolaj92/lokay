@@ -224,7 +224,10 @@ def lenses(picked, worktree, base, sha, saved, diff, rows, ci, rounds):
     check_notes = state_read(picked["repo"], picked["issue"]).get("check_notes", [])
     history = saved.get("check_history", [])
     previous = history[-1] if history and history[-1].get("sha") != sha else {}
-    previous_fingerprints = {tuple(finding_fingerprint(row)) for row in previous.get("findings", [])}
+    from lokay.review import legacy_rule
+
+    previous_fingerprints = {tuple(finding_fingerprint(legacy_rule(row)))
+                             for row in previous.get("findings", [])}
     amplified = []
     for key in sorted(multilens, key=lambda row: tuple("" if value is None else str(value) for value in row)):
         findings = groups[key]

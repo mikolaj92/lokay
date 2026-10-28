@@ -71,6 +71,9 @@ def compatible_checks(actual, expected) -> Any:
     actual = actual.copy()
     if "rule_id" not in expected:
         actual.pop("rule_id", None)
+    elif not expected["rule_id"]:
+        actual.pop("rule_id", None)
+        expected.pop("rule_id")
     if "main_sha" not in expected and actual.get("main_sha") is None:
         actual.pop("main_sha", None)
     for key in actual.keys() & expected.keys():

@@ -193,7 +193,7 @@ class Finding:
     zmiana: str = ""
     lens: str = ""
     lenses: tuple[str, ...] = ()
-    rule_id: str = field(default="", kw_only=True)
+    rule_id: str = field(kw_only=True)
     _raw: dict | None = field(default=None, repr=False, compare=False, kw_only=True)
 
 
@@ -225,9 +225,12 @@ def parse_finding(raw: dict) -> Finding | Note:
             return 0
 
     lens = text("pytanie") or text("lens")
+    rule = text("rule_id")
     if text("plik"):
+        if not rule:
+            raise ValueError(f"finding without rule_id: {text('plik')}")
         return Finding(text("plik"), line("linia_od"), line("linia_do"), text("zmiana"), lens,
-                       tuple(raw.get("lenses") or ()), rule_id=text("rule_id"), _raw=dict(raw))
+                       tuple(raw.get("lenses") or ()), rule_id=rule, _raw=dict(raw))
     return Note(lens, text("pytanie"), text("note"), _raw=dict(raw))
 
 
