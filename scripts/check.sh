@@ -2006,6 +2006,29 @@ assert "docs/plan only instead of code" in CATEGORIES
 print("intent check: green")
 PY
 uv run python - <<'PY'
+from dataclasses import replace
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from lokay.checks import CHECKS, CheckInput, declared_scope
+from lokay.types import Finding
+
+diff = ("diff --git a/src/app.py b/src/app.py\n--- a/src/app.py\n+++ b/src/app.py\n"
+        "@@ -1 +1 @@\n-old\n+new\n")
+with TemporaryDirectory() as directory:
+    x = CheckInput("owner/repo", 1, "head", "", "## Pliki\n\n- `src/app.py`: fix it\n", diff, [],
+                   {}, Path(directory))
+    assert declared_scope in CHECKS
+    result = declared_scope(x)
+    assert result.status == "pass" and result.findings == (), result
+    assert declared_scope(replace(x, plan="## Cel\n\nNo files here.")).reason == "plan has no file list"
+    result = declared_scope(replace(x, diff=diff.replace("src/app.py", "src/other.py")))
+    assert result.status == "fail", result
+    assert result.findings == (Finding("src/other.py", 1, 1, "change outside declared scope",
+                                       "declared_scope"),), result.findings
+print("declared scope check: green")
+PY
+uv run python - <<'PY'
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
