@@ -3459,7 +3459,8 @@ for parked in (True, False):
             remote.assert_called_once()
             assert remote.call_args.args[0][-2:] == ["--remove-label", "lokay-parked"]
         if parked:
-            remote.assert_not_called()
+            remote.assert_called_once()
+            assert remote.call_args.args[0][-2:] == ["--remove-label", "lokay-parked"]
 
 for line, rejected in (("args = ['--add-label', 'lokay-x']", True),
                        ('args = ["label", "create", "lokay-x"]', True),
