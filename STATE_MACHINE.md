@@ -141,7 +141,7 @@ Stan JSON zastępuje plik przez plik tymczasowy. Rounds są dopisywane osobno.
 Nie jest to transakcja obejmująca Git, GitHub, stan i logi.[S12]
 Budżet domyślny to 2700 s. Deadline zaczyna się przed wyborem pracy.
 Pi działa do zakończenia procesu, bez limitu ciszy i czasu. Pozostałe procesy zachowują timeout operacji do 3600 s; sprzątanie procesu ma dodatkowe 5 s.[S2][S7][S8]
-Limit 8 rund Check→Fix: wyłącznie deterministyczne uwagi bramek → Fix; pozostałe: pierwsze trafienie → Plan; drugie → podział issue, awaiting=children; PR pozostaje otwarty, difficulty bez too_big; oba → retro.
+Limit 8 rund Check→Fix: wyłącznie deterministyczne uwagi bramek → Fix; pozostałe: pierwsze trafienie → Plan; drugie → podział issue, awaiting=children; PR pozostaje otwarty, difficulty bez too_big; oba → retro. Ten sam `check_places` po Fix z innym sha → Plan bez kolejnej rundy Fix; Plan dostaje wszystkie uwagi tej reguły.
 Operacje plikowe i sprzątanie guardów nie mają twardego wspólnego limitu czasu.[S7]
 
 `test: []` daje local green z tested=false i notatką. Brak GitHub checks daje no_ci, nie green; anulowany CheckRun jest pomijany tylko przy nieanulowanym CheckRun z tym samym workflowName i name.
